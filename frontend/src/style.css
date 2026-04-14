@@ -1,0 +1,803 @@
+@import "highlight.js/styles/github.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI",
+        "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+
+    /* VS Code Light+ 颜色主题 */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 12%;
+
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 12%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 50%;
+
+    --accent: 210 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 210 100% 50%;
+
+    --radius: 0.25rem;
+
+    /* VS Code 特定颜色 */
+    --vscode-sidebar: 210 14% 92%;
+    --vscode-activitybar: 210 16% 88%;
+    --vscode-titlebar: 210 12% 94%;
+    --vscode-tab-active: 0 0% 100%;
+    --vscode-tab-inactive: 0 0% 96%;
+    --vscode-panel: 0 0% 100%;
+    --vscode-statusbar: 207 100% 44%;
+    --vscode-statusbar-foreground: 0 0% 98%;
+    --vscode-chrome-foreground: 220 14% 18%;
+    --vscode-chrome-muted: 220 10% 38%;
+    --vscode-chrome-hover: 210 18% 82%;
+    --vscode-chrome-active: 210 18% 78%;
+    --vscode-chrome-border: 210 14% 80%;
+    --vscode-selection: 210 100% 50%;
+    --vscode-selection-opacity: 0.18;
+    --vscode-line-highlight: 210 100% 50%;
+    --vscode-line-highlight-opacity: 0.04;
+    --vscode-scrollbar: 0 0% 75%;
+    --vscode-scrollbar-hover: 0 0% 60%;
+
+    /* Legacy color tokens for backward compatibility */
+    --color-bg-primary: hsl(var(--background));
+    --color-bg-secondary: hsl(var(--card));
+    --color-bg-tertiary: hsl(var(--secondary));
+    --color-bg-hover: hsl(0 0% 92%);
+    --color-border: hsl(var(--border));
+    --color-border-light: hsl(0 0% 92%);
+    --color-surface-strong: hsl(var(--card));
+    --color-surface-muted: hsl(var(--secondary));
+
+    --color-accent: hsl(var(--primary));
+    --color-accent-hover: hsl(210 100% 45%);
+    --color-accent-light: hsla(var(--primary) / 0.12);
+    --color-accent-soft: hsla(var(--primary) / 0.18);
+
+    --color-text-primary: hsl(var(--foreground));
+    --color-text-secondary: hsl(0 0% 40%);
+    --color-text-muted: hsl(var(--muted-foreground));
+
+    --color-user-bubble: hsl(210 100% 96%);
+    --color-ai-bubble: hsl(0 0% 100%);
+
+    --color-success: hsl(145 63% 42%);
+    --color-warning: hsl(45 93% 47%);
+    --color-error: hsl(0 84% 60%);
+
+    --header-height: 35px;
+    --sidebar-width: 48px;
+    --shell-gap: 0px;
+    --content-max-width: none;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.1);
+    --shadow-glow: 0 0 0 1px rgba(0, 122, 204, 0.15);
+  }
+
+  .dark {
+    /* VS Code Dark+ 颜色主题 */
+    --background: 0 0% 12%;
+    --foreground: 0 0% 88%;
+
+    --card: 0 0% 15%;
+    --card-foreground: 0 0% 88%;
+
+    --popover: 0 0% 15%;
+    --popover-foreground: 0 0% 88%;
+
+    --primary: 210 100% 60%;
+    --primary-foreground: 0 0% 12%;
+
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 88%;
+
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 55%;
+
+    --accent: 210 100% 60%;
+    --accent-foreground: 0 0% 12%;
+
+    --destructive: 0 63% 50%;
+    --destructive-foreground: 0 0% 88%;
+
+    --border: 0 0% 22%;
+    --input: 0 0% 22%;
+    --ring: 210 100% 60%;
+
+    /* VS Code Dark+ 特定颜色 */
+    --vscode-sidebar: 220 13% 10%;
+    --vscode-activitybar: 220 13% 12%;
+    --vscode-titlebar: 220 13% 14%;
+    --vscode-tab-active: 0 0% 15%;
+    --vscode-tab-inactive: 0 0% 12%;
+    --vscode-panel: 0 0% 12%;
+    --vscode-statusbar: 207 100% 38%;
+    --vscode-statusbar-foreground: 0 0% 96%;
+    --vscode-chrome-foreground: 0 0% 92%;
+    --vscode-chrome-muted: 0 0% 68%;
+    --vscode-chrome-hover: 220 13% 19%;
+    --vscode-chrome-active: 220 13% 22%;
+    --vscode-chrome-border: 220 12% 18%;
+    --vscode-selection: 210 100% 60%;
+    --vscode-selection-opacity: 0.2;
+    --vscode-line-highlight: 210 100% 60%;
+    --vscode-line-highlight-opacity: 0.08;
+    --vscode-scrollbar: 0 0% 35%;
+    --vscode-scrollbar-hover: 0 0% 45%;
+
+    /* Legacy color tokens for backward compatibility */
+    --color-bg-primary: hsl(var(--background));
+    --color-bg-secondary: hsl(var(--card));
+    --color-bg-tertiary: hsl(var(--secondary));
+    --color-bg-hover: hsl(0 0% 22%);
+    --color-border: hsl(var(--border));
+    --color-border-light: hsl(0 0% 22%);
+    --color-surface-strong: hsl(var(--card));
+    --color-surface-muted: hsl(var(--secondary));
+
+    --color-text-primary: hsl(var(--foreground));
+    --color-text-secondary: hsl(0 0% 65%);
+    --color-text-muted: hsl(var(--muted-foreground));
+
+    --color-user-bubble: hsl(210 50% 25%);
+    --color-ai-bubble: hsl(0 0% 15%);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 0 1px rgba(0, 122, 204, 0.25);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    height: 100%;
+    width: 100%;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+    background: transparent;
+    border: 1px solid #D9D9D9;
+}
+
+/* 滚动条样式 - VS Code 风格 */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: hsl(var(--vscode-scrollbar));
+    border-radius: 0;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--vscode-scrollbar-hover));
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+/* 深色模式滚动条 */
+.dark ::-webkit-scrollbar-thumb {
+    background: hsl(var(--vscode-scrollbar));
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--vscode-scrollbar-hover));
+}
+
+/* Markdown 渲染样式 */
+.markdown-content {
+    line-height: 1.75;
+    word-break: break-word;
+}
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+    font-weight: 600;
+    margin: 1.25em 0 0.5em;
+    color: var(--color-text-primary);
+}
+.markdown-content h1 {
+    font-size: 1.35em;
+}
+.markdown-content h2 {
+    font-size: 1.2em;
+}
+.markdown-content h3 {
+    font-size: 1.05em;
+}
+
+.markdown-content p {
+    margin: 0.5em 0;
+}
+.markdown-content ul,
+.markdown-content ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+}
+.markdown-content li {
+    margin: 0.2em 0;
+}
+.markdown-content pre {
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 1em;
+    overflow-x: auto;
+    margin: 0.75em 0;
+    position: relative;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+}
+.markdown-content code {
+    font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+    font-size: 0.875em;
+}
+.markdown-content p code,
+.markdown-content li code {
+    background: var(--color-accent-light);
+    color: var(--color-accent-hover);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    border: 1px solid var(--color-accent-light);
+}
+.markdown-content blockquote {
+    border-left: 3px solid var(--color-accent);
+    padding-left: 1em;
+    margin: 0.75em 0;
+    color: var(--color-text-secondary);
+}
+.markdown-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75em 0;
+    font-size: 0.9em;
+}
+.markdown-content th {
+    background: var(--color-bg-tertiary);
+    padding: 0.5em 0.75em;
+    border: 1px solid var(--color-border);
+    text-align: left;
+    font-weight: 600;
+}
+.markdown-content td {
+    padding: 0.5em 0.75em;
+    border: 1px solid var(--color-border);
+}
+.markdown-content tr:nth-child(even) {
+    background: var(--color-bg-secondary);
+}
+.markdown-content a {
+    color: var(--color-accent);
+    text-decoration: none;
+}
+.markdown-content a:hover {
+    text-decoration: underline;
+}
+.markdown-content hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1em 0;
+}
+
+/* 深色模式 Markdown 样式 */
+.dark .markdown-content pre {
+    background: hsl(0 0% 8%);
+    border-color: hsl(var(--border));
+}
+
+.dark .markdown-content th {
+    background: hsl(0 0% 18%);
+}
+
+.dark .markdown-content tr:nth-child(even) {
+    background: hsl(var(--muted) / 0.3);
+}
+
+.dark .markdown-content p code,
+.dark .markdown-content li code {
+    background: hsl(var(--primary) / 0.15);
+    color: hsl(var(--primary));
+    border-color: hsl(var(--primary) / 0.2);
+}
+
+.dark .markdown-content h1,
+.dark .markdown-content h2,
+.dark .markdown-content h3,
+.dark .markdown-content h4 {
+    color: hsl(var(--foreground));
+}
+
+.dark .markdown-content blockquote {
+    color: hsl(var(--muted-foreground));
+}
+
+.dark .markdown-content td {
+    border-color: hsl(215 27% 30%);
+}
+
+.dark .markdown-content a {
+    color: hsl(var(--primary));
+}
+
+/* 深色模式输入框 placeholder */
+.dark input::placeholder,
+.dark textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+}
+
+/* 深色模式选中状态 */
+.dark ::selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--foreground));
+}
+
+/* 打字机光标 */
+@keyframes blink {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0;
+    }
+}
+.typing-cursor::after {
+    content: "▋";
+    display: inline-block;
+    animation: blink 1s infinite;
+    color: var(--color-accent);
+    font-size: 0.9em;
+    margin-left: 2px;
+}
+
+/* 消息淡入动画 */
+@keyframes messageIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.message-enter {
+    animation: messageIn 0.25s ease-out;
+}
+
+/* 脉冲点动画 */
+@keyframes pulse-dot {
+    0%,
+    80%,
+    100% {
+        transform: scale(0.6);
+        opacity: 0.4;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+.dot-1 {
+    animation: pulse-dot 1.2s infinite 0s;
+}
+.dot-2 {
+    animation: pulse-dot 1.2s infinite 0.2s;
+}
+.dot-3 {
+    animation: pulse-dot 1.2s infinite 0.4s;
+}
+
+/* 侧边栏折叠动画 */
+.sidebar-transition {
+    transition: width 0.2s ease-out;
+}
+
+/* 空状态淡入动画 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.animate-fade-in {
+    animation: fadeIn 0.35s ease-out;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+    transform: translateY(4px);
+}
+
+/* 按钮基础样式 */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 0.95rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    transition: all 0.16s ease;
+    cursor: pointer;
+    border: 1px solid transparent;
+    outline: none;
+    line-height: 1.2;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, #3b82f6 0%, #2f6fe4 100%);
+    color: white;
+    border-color: color-mix(in srgb, var(--color-accent) 78%, #1d4ed8);
+    box-shadow: 0 1px 2px rgba(59, 130, 246, 0.16);
+}
+.btn-primary:hover {
+    background: linear-gradient(180deg, #2563eb 0%, #245fd8 100%);
+    box-shadow: 0 6px 14px rgba(59, 130, 246, 0.16);
+}
+
+.btn-secondary {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+}
+.btn-secondary:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #dc2626;
+}
+.btn-danger:hover {
+    background: #dc2626;
+}
+
+.btn-success {
+    background: #059669;
+    color: #ffffff;
+    border-color: #047857;
+}
+.btn-success:hover {
+    background: #047857;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--color-text-secondary);
+}
+.btn-ghost:hover {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.btn-icon {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: var(--radius-md);
+}
+
+.input,
+.input-field {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    transition: all 0.15s ease;
+    outline: none;
+}
+
+/* 输入框基础样式 */
+.input:focus,
+.input-field:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+.input::placeholder,
+.input-field::placeholder {
+    color: var(--color-text-muted);
+}
+
+/* 卡片样式 */
+.card {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.surface-panel {
+    background: var(--color-surface-strong);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.surface-muted {
+    /* background: var(--color-surface-muted); */
+    /* border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent); */
+}
+
+.dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.dialog-section {
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.dialog-section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1rem;
+    color: hsl(var(--muted-foreground));
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.dialog-helper {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: hsl(var(--muted-foreground));
+}
+
+.dialog-note {
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.65);
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: hsl(var(--muted-foreground));
+}
+
+.page-shell {
+    height: 100%;
+    width: 100%;
+    padding: 6px;
+}
+
+.page-frame {
+    height: 100%;
+    display: flex;
+    gap: var(--shell-gap);
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+}
+
+.page-panel {
+    border-radius: var(--radius-xl);
+}
+
+.page-scroll {
+    overflow-y: auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
+}
+
+.section-description {
+    margin-top: 4px;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.info-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.status-pill.success {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border-color: rgba(16, 185, 129, 0.18);
+}
+
+.status-pill.warning {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border-color: rgba(245, 158, 11, 0.18);
+}
+
+.status-pill.danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border-color: rgba(239, 68, 68, 0.18);
+}
+
+.status-pill.neutral {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+    border-color: var(--color-border);
+}
+
+.metric-card {
+    padding: 12px;
+    border-radius: var(--radius-xl);
+}
+
+.subtle-grid {
+    position: relative;
+}
+
+.subtle-grid::before {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    .page-shell {
+        padding: 6px;
+    }
+
+    .page-frame {
+        gap: 8px;
+    }
+}
+
+/* 徽章样式 */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 9999px;
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+}
+
+/* 颜色主题选择器样式 */
+.color-theme-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.color-theme-btn:hover {
+    transform: scale(1.1);
+}
+
+.color-theme-btn.active {
+    border-color: var(--color-text-primary);
+    box-shadow: 0 0 0 2px var(--color-bg-primary);
+}
+
+.color-theme-btn.active::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}

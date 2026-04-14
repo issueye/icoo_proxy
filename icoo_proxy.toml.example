@@ -1,0 +1,15 @@
+[claw_connection]
+api_base = 'http://localhost:16789'
+ws_host = 'localhost'
+ws_port = '16789'
+ws_path = '/ws'
+user_id = 'user-1'
+
+[gateway]
+listen_port = 16790
+log_level = 'info'
+retry_count = 2
+retry_interval_ms = 500
+
+[agent_process]
+binary_path = ''
