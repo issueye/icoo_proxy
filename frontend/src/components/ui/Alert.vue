@@ -10,13 +10,12 @@ const props = defineProps({
 })
 
 const alertVariants = cva(
-  "relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",
+  "alert-box",
   {
     variants: {
       variant: {
-        default: "bg-background text-foreground",
-        destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+        default: "alert-box--default",
+        destructive: "alert-box--destructive",
       },
     },
     defaultVariants: {
@@ -34,3 +33,36 @@ const alertVariants = cva(
     <slot />
   </div>
 </template>
+
+<style scoped>
+.alert-box {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-12) var(--space-14);
+  background: var(--ui-bg-surface-muted);
+  color: var(--color-text-primary);
+}
+
+.alert-box--default {
+  border-color: var(--ui-border-default);
+  background: var(--ui-bg-surface-muted);
+}
+
+.alert-box--destructive {
+  border-color: color-mix(in srgb, var(--color-danger) 32%, white);
+  background: color-mix(in srgb, var(--color-danger) 8%, white);
+  color: var(--color-danger);
+}
+
+.alert-box :deep(svg) {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+}
+
+.alert-box :deep(svg ~ *) {
+  padding-left: 28px;
+}
+</style>

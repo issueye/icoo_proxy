@@ -1,9 +1,6 @@
 <template>
   <div class="logs-view app-page">
-    <PageHeader
-      title="请求日志"
-      description="集中查看请求入口、供应商、状态码、延迟和载荷详情，采用典型桌面日志视图组织排障信息。"
-    >
+    <PageHeader title="请求日志">
       <template #actions>
         <button class="btn btn-secondary" @click="handleRefreshLogs" :disabled="gatewayStore.logsLoading">
           <RefreshCw :size="14" :class="{ spinning: gatewayStore.logsLoading }" />
@@ -39,13 +36,7 @@
           <p>{{ gatewayStore.logsLoading ? '系统正在同步最新日志。' : '启动网关并发起一次请求后，这里会显示转发记录。' }}</p>
         </div>
 
-        <DataTable
-          v-else
-          :columns="columns"
-          :data="filteredLogs"
-          row-key="id"
-          @row-click="handleSelectLog"
-        >
+        <DataTable v-else :columns="columns" :data="filteredLogs" row-key="id" @row-click="handleSelectLog">
           <template #cell-createdAt="{ value }">
             <span class="table-mono">{{ formatTimestamp(value) }}</span>
           </template>
@@ -74,10 +65,8 @@
           </template>
 
           <template #cell-statusCode="{ value }">
-            <StatusBadge
-              :status="value >= 500 ? 'error' : value >= 400 ? 'warning' : 'success'"
-              :label="String(value)"
-            />
+            <StatusBadge :status="value >= 500 ? 'error' : value >= 400 ? 'warning' : 'success'"
+              :label="String(value)" />
           </template>
 
           <template #cell-durationMs="{ value }">
@@ -100,8 +89,7 @@
             </div>
             <StatusBadge
               :status="selectedLog.statusCode >= 500 ? 'error' : selectedLog.statusCode >= 400 ? 'warning' : 'success'"
-              :label="`${selectedLog.statusCode}`"
-            />
+              :label="`${selectedLog.statusCode}`" />
           </div>
 
           <div class="detail-summary">
@@ -137,7 +125,8 @@
 
           <div v-if="selectedLog.upstreamBase || selectedLog.upstreamPath" class="settings-note">
             <div class="field-label">上游目标</div>
-            <div class="settings-help table-mono">{{ [selectedLog.upstreamBase, selectedLog.upstreamPath].filter(Boolean).join('') }}</div>
+            <div class="settings-help table-mono">{{ [selectedLog.upstreamBase,
+            selectedLog.upstreamPath].filter(Boolean).join('') }}</div>
           </div>
 
           <details v-if="selectedLog.requestPayload" class="detail-section" open>
@@ -403,8 +392,13 @@ onMounted(async () => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 1080px) {

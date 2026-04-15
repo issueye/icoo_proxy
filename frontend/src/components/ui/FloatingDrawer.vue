@@ -54,7 +54,7 @@ function handleScrimClick() {
       :style="{ '--drawer-width': width }"
     >
       <div class="floating-drawer__header">
-        <div>
+        <div class="floating-drawer__heading">
           <div v-if="kicker" class="settings-kicker">{{ kicker }}</div>
           <h3 class="floating-drawer__title">{{ title }}</h3>
           <p v-if="description" class="panel-description">{{ description }}</p>
@@ -64,11 +64,10 @@ function handleScrimClick() {
         </button>
       </div>
 
-      <div v-if="$slots.summary" class="floating-drawer__summary">
-        <slot name="summary" />
-      </div>
-
       <div class="floating-drawer__body">
+        <div v-if="$slots.summary" class="floating-drawer__summary">
+          <slot name="summary" />
+        </div>
         <slot />
       </div>
 
@@ -89,17 +88,19 @@ function handleScrimClick() {
 
 .floating-drawer {
   position: fixed;
-  top: 56px;
-  right: 16px;
-  bottom: 16px;
+  top: 4px;
+  right: 4px;
+  bottom: 0;
   z-index: 40;
-  width: min(var(--drawer-width), calc(100vw - 32px));
+  height: calc(100% - 8px);
+  width: min(var(--drawer-width), 100vw);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: 0;
   border: 1px solid var(--ui-border-default);
-  border-radius: var(--radius-md);
+  border-right: none;
+  border-bottom: none;
+  border-radius: var(--radius-drawer);
   background: var(--ui-bg-surface);
   box-shadow: var(--shadow-dialog);
   overflow: hidden;
@@ -109,37 +110,53 @@ function handleScrimClick() {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-12);
+  padding: var(--drawer-header-padding);
+  border-bottom: 1px solid var(--ui-border-default);
+  background: var(--ui-bg-surface);
+  flex-shrink: 0;
+}
+
+.floating-drawer__heading {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 .floating-drawer__title {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.25;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
   color: var(--color-text-primary);
-}
-
-.floating-drawer__summary,
-.floating-drawer__body {
-  padding: 14px;
-  border: 1px solid var(--ui-border-default);
-  border-radius: var(--radius-md);
-  background: var(--ui-bg-surface-muted);
 }
 
 .floating-drawer__body {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--section-gap);
+  padding: var(--drawer-body-padding);
+  background: var(--ui-bg-surface);
+}
+
+.floating-drawer__summary {
+  display: grid;
+  gap: var(--space-10);
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 
 .floating-drawer__footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--control-gap);
+  padding: var(--drawer-footer-padding);
+  border-top: 1px solid var(--ui-border-default);
+  background: var(--ui-bg-surface);
+  flex-shrink: 0;
 }
 
 .drawer-fade-enter-active,
@@ -166,13 +183,17 @@ function handleScrimClick() {
 @media (max-width: 1180px) {
   .floating-drawer {
     top: 52px;
-    right: 12px;
-    bottom: 12px;
-    width: min(var(--drawer-width), calc(100vw - 24px));
+    width: min(var(--drawer-width), 100vw);
   }
 }
 
 @media (max-width: 720px) {
+  .floating-drawer {
+    top: 48px;
+    left: 0;
+    width: 100vw;
+  }
+
   .floating-drawer__footer {
     flex-direction: column;
     align-items: stretch;

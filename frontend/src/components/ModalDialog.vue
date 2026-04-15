@@ -19,9 +19,9 @@
                 <!-- 头部 -->
                 <div
                     v-if="showHeader"
-                        class="modal-shell__header flex items-center justify-between px-4 py-3 border-b border-border"
-                        :class="{ 'sticky top-0 z-10': scrollable }"
-                    >
+                    class="modal-shell__header"
+                    :class="{ 'sticky top-0 z-10': scrollable }"
+                >
                     <div class="flex items-center gap-2.5">
                         <!-- 图标插槽 -->
                         <slot name="icon">
@@ -45,7 +45,7 @@
 
                 <!-- 内容区域 -->
                 <div
-                    class="modal-shell__body flex-1 overflow-y-auto"
+                    class="modal-shell__body"
                     :class="[contentClass, { 'modal-shell__body--overflow-visible': allowOverflow }]"
                 >
                     <slot />
@@ -54,7 +54,7 @@
                 <!-- 底部按钮 -->
                 <div
                     v-if="showFooter"
-                    class="modal-shell__footer flex gap-2 px-4 py-3 border-t border-border"
+                    class="modal-shell__footer"
                     :class="[
                         footerAlignClass,
                         { 'sticky bottom-0 z-10': scrollable },
@@ -262,7 +262,7 @@ function handleConfirm() {
 }
 
 .modal-shell {
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-dialog);
     border: 1px solid var(--ui-border-default);
     background: var(--ui-bg-surface);
     box-shadow: var(--shadow-dialog);
@@ -280,6 +280,23 @@ function handleConfirm() {
 .modal-shell__header,
 .modal-shell__footer {
     background: var(--ui-bg-surface-muted);
+    border-color: var(--ui-border-default);
+}
+
+.modal-shell__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: var(--dialog-header-padding);
+    border-bottom: 1px solid var(--ui-border-default);
+}
+
+.modal-shell__footer {
+    display: flex;
+    gap: var(--control-gap);
+    padding: var(--dialog-footer-padding);
+    border-top: 1px solid var(--ui-border-default);
 }
 
 .modal-shell__icon {
@@ -295,7 +312,9 @@ function handleConfirm() {
 
 .modal-shell__body {
     background: var(--ui-bg-surface);
-    padding: 1.5rem;
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--dialog-body-padding);
 }
 
 .modal-shell__body--overflow-visible {

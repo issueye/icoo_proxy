@@ -4,8 +4,15 @@ import { cn } from "@/lib/utils"
 
 <template>
   <div
-    :class="cn('page-surface rounded-md text-card-foreground', $attrs.class)"
+    :class="cn('card-surface page-surface text-card-foreground', $attrs.class)"
   >
     <slot />
   </div>
 </template>
+
+<style scoped>
+.card-surface {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+</style>

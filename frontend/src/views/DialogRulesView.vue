@@ -2,7 +2,6 @@
   <div class="dialog-rules-view app-page">
     <PageHeader
       title="对话规则"
-      description="用双栏工作区管理分流规则：左侧查看列表和启用状态，右侧编辑当前规则的匹配条件与目标路由。"
       :icon="MessageSquareText"
     >
       <template #actions>
@@ -20,16 +19,12 @@
     <div class="rules-workspace">
       <section class="rules-list-panel">
         <div class="panel-head">
-          <div>
-            <h3 class="section-title">规则列表</h3>
-            <p class="panel-description">优先级越高越先匹配，未设置目标模型时沿用供应商原始映射。</p>
-          </div>
+          <h3 class="section-title">规则列表</h3>
           <span class="panel-chip">{{ routeRuleDrafts.length }} 条</span>
         </div>
 
         <div v-if="routeRuleDrafts.length === 0" class="empty-state">
           <div class="empty-title">暂未配置自定义规则</div>
-          <p>新增规则后，可按模型名或消息内容把请求转发到指定供应商。</p>
           <button class="btn btn-primary" type="button" @click="addRouteRule">
             <Plus :size="14" />
             添加第一条规则
@@ -60,14 +55,12 @@
       <section class="rules-editor-panel">
         <div v-if="!selectedRule" class="empty-state rules-editor-empty">
           <div class="empty-title">请选择一条规则</div>
-          <p>从左侧选择已有规则，或新建一条规则开始编辑。</p>
         </div>
 
         <template v-else>
           <div class="panel-head">
             <div>
               <h3 class="section-title">规则详情</h3>
-              <p class="panel-description">编辑匹配方式、目标供应商和目标模型。</p>
             </div>
             <div class="editor-actions">
               <label class="toggle-chip">
@@ -112,7 +105,6 @@
 
           <div class="rules-note settings-note settings-note--accent">
             <div class="field-label">编辑提示</div>
-            <div class="settings-help">规则保存时会自动忽略没有匹配内容或未选择目标供应商的条目。</div>
           </div>
         </template>
       </section>

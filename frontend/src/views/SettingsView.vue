@@ -5,9 +5,7 @@
                 <div class="settings-sidebar-top">
                     <div class="settings-sidebar-header">
                         <div>
-                            <div class="settings-kicker">System</div>
                             <div class="section-title">设置中心</div>
-                            <p class="settings-sidebar-description">管理外观、基础信息与桌面使用体验。</p>
                         </div>
                         <button @click="router.back()" class="btn btn-secondary btn-icon">
                             <ArrowLeftIcon :size="18" />
@@ -40,11 +38,7 @@
             <main class="settings-main surface-panel page-panel">
                 <div class="settings-main-inner">
                     <div class="settings-hero surface-muted">
-                        <div>
-                            <div class="settings-kicker">Workspace</div>
-                            <div class="section-title">{{ currentMenuLabel }}</div>
-                            <p class="settings-section-description">按照统一规范维护桌面工具的外观和基础信息。</p>
-                        </div>
+                        <div class="section-title">{{ currentMenuLabel }}</div>
                         <div class="settings-hero-badges">
                             <span class="info-chip">
                                 <PaletteIcon :size="12" />

@@ -1,9 +1,6 @@
 <template>
   <div class="gateway-view app-page">
-    <PageHeader
-      title="网关总览"
-      description="统一管理网关状态、监听地址、入口鉴权与调试示例，整体以稳定可读的桌面工作区形式组织。"
-    >
+    <PageHeader title="网关总览">
       <template #actions>
         <button class="btn btn-secondary" @click="handleRefresh" :disabled="gatewayStore.loading">
           <RefreshCw :size="14" :class="{ spinning: gatewayStore.loading }" />
@@ -38,10 +35,7 @@
     <div class="gateway-grid">
       <section class="panel-card">
         <div class="panel-head">
-          <div>
-            <h3 class="section-title">网关控制</h3>
-            <p class="panel-description">执行启动、停止、模型刷新和入口地址复制等主流程操作。</p>
-          </div>
+          <h3 class="section-title">网关控制</h3>
         </div>
 
         <div class="control-layout">
@@ -75,34 +69,25 @@
 
       <section class="panel-card">
         <div class="panel-head">
-          <div>
-            <h3 class="section-title">诊断提示</h3>
-            <p class="panel-description">优先提示会影响接入与转发的关键问题。</p>
-          </div>
+          <h3 class="section-title">诊断提示</h3>
         </div>
 
         <div class="diagnostic-list">
           <div class="diagnostic-item" :class="{ warning: !gatewayStore.running }">
             <StatusBadge :status="gatewayStore.running ? 'success' : 'warning'" :label="gatewayStore.running ? '网关正在监听请求' : '网关尚未启动'" />
-            <p>{{ gatewayStore.running ? '服务已经进入监听状态，可直接通过兼容接口接入。' : '启动网关后，/v1 路径才会对外提供兼容接口。' }}</p>
           </div>
           <div class="diagnostic-item" :class="{ warning: gatewayStore.providerCount === 0 }">
             <StatusBadge :status="gatewayStore.providerCount > 0 ? 'success' : 'warning'" :label="gatewayStore.providerCount > 0 ? '已配置供应商' : '尚未配置供应商'" />
-            <p>{{ gatewayStore.providerCount > 0 ? '当前已存在可管理的上游供应商。' : '请先添加至少一个供应商，否则网关无法转发模型请求。' }}</p>
           </div>
           <div class="diagnostic-item" :class="{ warning: gatewayStore.models.length === 0 }">
             <StatusBadge :status="gatewayStore.models.length > 0 ? 'success' : 'warning'" :label="gatewayStore.models.length > 0 ? '模型列表已同步' : '模型尚未刷新'" />
-            <p>{{ gatewayStore.models.length > 0 ? '模型可用列表已经同步到本地管理界面。' : '刷新模型后，外部调用才能更容易判断当前可用模型。' }}</p>
           </div>
         </div>
       </section>
 
       <section class="panel-card panel-card--wide">
         <div class="panel-head">
-          <div>
-            <h3 class="section-title">访问鉴权</h3>
-            <p class="panel-description">使用标准表单布局维护访问 Key，并明确当前启用状态。</p>
-          </div>
+          <h3 class="section-title">访问鉴权</h3>
           <StatusBadge
             :status="gatewayStore.gatewayConfig.authKey ? 'info' : 'neutral'"
             :label="gatewayStore.gatewayConfig.authKey ? '已启用鉴权' : '未启用鉴权'"
@@ -110,13 +95,7 @@
         </div>
 
         <div class="auth-layout">
-          <div class="auth-aside">
-            <div class="auth-aside-title">使用说明</div>
-            <p class="panel-description">留空表示关闭鉴权。启用后，兼容支持 `Authorization: Bearer` 与 `x-api-key` 两种方式。</p>
-          </div>
-
           <div class="auth-form">
-            <label class="form-label">鉴权 Key</label>
             <div class="auth-input-shell">
               <input
                 v-model="authKeyDraft"
@@ -143,10 +122,7 @@
 
       <section class="panel-card panel-card--wide">
         <div class="panel-head">
-          <div>
-            <h3 class="section-title">接口调用示例</h3>
-            <p class="panel-description">使用标签切换不同兼容接口，避免连续堆叠多个大块代码区域。</p>
-          </div>
+          <h3 class="section-title">接口调用示例</h3>
         </div>
 
         <div class="example-tabs">

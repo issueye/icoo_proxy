@@ -1,22 +1,13 @@
 <template>
     <section class="settings-section">
         <div class="settings-section-heading">
-            <div>
-                <div class="settings-kicker">Appearance</div>
-                <h2 class="settings-section-title">外观设置</h2>
-                <p class="settings-section-description">
-                    统一主题模式、受控强调色与桌面控件预览，整体保持 Windows 风格的清晰秩序感。
-                </p>
-            </div>
+            <h2 class="settings-section-title">外观设置</h2>
             <div class="info-chip">当前主题 · {{ themeLabel }}</div>
         </div>
 
         <div class="settings-card">
             <div class="settings-card-head">
-                <div>
-                    <div class="settings-card-title">主题模式</div>
-                    <p class="settings-card-description">浅色适合日常配置，深色适合长时间监控与日志查看。</p>
-                </div>
+                <div class="settings-card-title">主题模式</div>
             </div>
 
             <div class="settings-segment">
@@ -39,10 +30,7 @@
 
         <div class="settings-card">
             <div class="settings-card-head">
-                <div>
-                    <div class="settings-card-title">强调色</div>
-                    <p class="settings-card-description">只保留少量受控方案，避免高饱和换肤破坏专业工具感。</p>
-                </div>
+                <div class="settings-card-title">强调色</div>
             </div>
 
             <div class="settings-swatch-grid">
@@ -64,10 +52,7 @@
 
         <div class="settings-card settings-card--soft">
             <div class="settings-card-head">
-                <div>
-                    <div class="settings-card-title">控件预览</div>
-                    <p class="settings-card-description">检查按钮、状态标签和进度条是否维持统一的桌面控件质感。</p>
-                </div>
+                <div class="settings-card-title">控件预览</div>
             </div>
 
             <div class="settings-preview-grid">

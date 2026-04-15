@@ -1,13 +1,7 @@
 <template>
     <section class="settings-section">
         <div class="settings-section-heading">
-            <div>
-                <div class="settings-kicker">About</div>
-                <h2 class="settings-section-title">关于</h2>
-                <p class="settings-section-description">
-                    当前应用版本、定位与基础识别信息。
-                </p>
-            </div>
+            <h2 class="settings-section-title">关于</h2>
         </div>
 
         <div class="settings-card">
@@ -20,9 +14,6 @@
                         <h3 class="text-sm font-semibold text-foreground">icoo_proxy</h3>
                         <span class="info-chip">v1.0.0</span>
                     </div>
-                    <p class="settings-card-description">
-                        本地 AI 网关管理工具。关于页只保留必要识别信息，延续桌面工具的克制表达。
-                    </p>
                 </div>
             </div>
         </div>

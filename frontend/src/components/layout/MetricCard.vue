@@ -31,23 +31,76 @@ const props = defineProps({
 
 <template>
   <div class="metric-card page-surface-soft">
-    <div class="flex items-center gap-3">
-      <!-- 图标 -->
+    <div class="metric-card__main">
       <div
         v-if="icon"
-        :class="cn('w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0', iconBg)"
+        :class="cn('metric-card__icon', iconBg)"
       >
         <component :is="icon" :size="18" :class="iconColor" />
       </div>
 
-      <!-- 数值和标签 -->
-      <div class="min-w-0 flex-1">
-        <p class="text-lg font-bold text-foreground truncate">{{ value }}</p>
-        <p class="text-xs text-muted-foreground truncate">{{ label }}</p>
-        <p v-if="description" class="text-[11px] text-muted-foreground mt-0.5 truncate">
+      <div class="metric-card__content">
+        <p class="metric-card__value">{{ value }}</p>
+        <p class="metric-card__label">{{ label }}</p>
+        <p v-if="description" class="metric-card__description">
           {{ description }}
         </p>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.metric-card {
+  min-width: 0;
+  padding: var(--panel-padding);
+}
+
+.metric-card__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.metric-card__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.metric-card__content {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.metric-card__value {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.metric-card__label,
+.metric-card__description {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metric-card__label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.metric-card__description {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+</style>

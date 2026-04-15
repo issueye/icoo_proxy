@@ -1,9 +1,6 @@
 <template>
   <div class="providers-view app-page">
-    <PageHeader
-      title="供应商管理"
-      description="使用表格管理供应商资产、接入模式、模型数量和运行状态，提升检索与编辑效率。"
-    >
+    <PageHeader title="供应商管理">
       <template #actions>
         <button class="btn btn-primary" @click="openAddDialog">
           <Plus :size="14" />
@@ -104,9 +101,7 @@
 
     <FloatingDrawer
       :visible="!!currentProvider"
-      kicker="Provider Models"
       title="模型设置"
-      description="管理当前供应商支持的模型与统一路由名映射。"
       @close="closeModelDrawer"
     >
       <template #summary>

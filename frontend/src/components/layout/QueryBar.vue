@@ -12,8 +12,8 @@ const props = defineProps({
 <template>
   <div
     :class="cn(
-      'query-bar toolbar-surface flex flex-wrap items-center content-start',
-      compact ? 'gap-2 p-2' : 'gap-3'
+      'query-bar toolbar-surface',
+      compact ? 'query-bar--compact' : ''
     )"
   >
     <slot />
@@ -21,21 +21,39 @@ const props = defineProps({
 </template>
 
 <style scoped>
+.query-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  align-content: flex-start;
+  gap: var(--control-gap);
+  padding: var(--space-10) var(--panel-padding);
+}
+
+.query-bar--compact {
+  padding: var(--space-8) var(--space-10);
+}
+
 .query-bar :deep(.query-bar-search) {
   flex: 0 0 auto;
-  width: min(100%, 15rem);
+  width: min(100%, 16rem);
   min-width: 0;
 }
 
 .query-bar :deep(.query-bar-filter) {
   flex: 0 0 auto;
-  width: min(100%, 11rem);
+  width: min(100%, 12rem);
   min-width: 0;
 }
 
 .query-bar :deep(.query-bar-search > *),
 .query-bar :deep(.query-bar-filter > *) {
   min-width: 0;
+}
+
+.query-bar :deep(.toolbar-field),
+.query-bar :deep(.field) {
+  gap: var(--space-6);
 }
 
 @media (max-width: 640px) {
