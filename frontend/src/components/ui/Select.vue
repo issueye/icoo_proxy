@@ -174,13 +174,13 @@ const hasValue = computed(() => {
 const selectSize = computed(() => {
   switch (props.size) {
     case "sm":
-      return "h-8 px-2.5 text-xs"
+      return "select-trigger--sm"
     case "default":
-      return "h-9 px-3 text-sm"
+      return "select-trigger--md"
     case "lg":
-      return "h-10 px-3.5 text-sm"
+      return "select-trigger--lg"
     default:
-      return "h-9 px-3 text-sm"
+      return "select-trigger--md"
   }
 })
 
@@ -294,7 +294,7 @@ onUnmounted(() => {
       <!-- 选中值显示 -->
       <div
         :class="cn(
-          'input-control flex items-center gap-1 truncate',
+          'input-control select-trigger flex items-center gap-1 truncate',
           selectSize,
           { 'text-muted-foreground': !isSelected }
         )"
@@ -322,12 +322,11 @@ onUnmounted(() => {
     </div>
 
     <!-- 描述文字 -->
-    <p v-if="description && !error" class="mt-1 text-xs text-muted-foreground">
+    <p v-if="description && !error" class="select-meta">
       {{ description }}
     </p>
 
-    <!-- 错误提示 -->
-    <p v-if="error" class="mt-1 text-xs text-error">
+    <p v-if="error" class="select-meta select-meta--error">
       {{ error }}
     </p>
 
@@ -337,12 +336,10 @@ onUnmounted(() => {
       :style="dropdownStyle"
       :class="cn(
         'absolute left-0 top-full z-50 mt-1 origin-top-left',
-        'border border-border rounded-md',
-        'bg-popover shadow-lg',
+        'select-dropdown',
         'max-h-60 overflow-y-auto'
       )"
     >
-      <!-- 搜索框 -->
       <div v-if="searchable" class="p-2 border-b border-border">
         <div class="input-shell">
           <Search :size="12" class="input-affix absolute left-2 top-1/2 -translate-y-1/2" />
@@ -350,47 +347,41 @@ onUnmounted(() => {
             v-model="searchQuery"
             type="text"
             placeholder="搜索..."
-            class="input-control h-7 pl-7 pr-2 text-xs"
+            class="input-control select-search-input"
             @click.stop
           />
         </div>
       </div>
 
-      <!-- 选项列表 -->
       <div class="py-1">
-        <!-- 分组显示 -->
         <template v-if="Object.keys(filteredGroupedOptions).length > 1 || ('__ungrouped__' in filteredGroupedOptions && Object.keys(filteredGroupedOptions).length > 1)">
           <template v-for="(options, group) in filteredGroupedOptions" :key="group">
-            <!-- 分组标题 -->
             <div
               v-if="group !== '__ungrouped__'"
-              class="px-3 py-1 text-[11px] font-medium text-muted-foreground truncate"
+              class="select-group-label"
             >
               {{ group }}
             </div>
-            <!-- 分组选项 -->
             <div
               v-for="option in options"
               :key="String(option.value)"
               :class="cn(
-                'flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-sm',
-                'hover:bg-accent hover:text-accent-foreground',
+                'select-option',
                 {
-                  'bg-accent/10 text-foreground': isSelectedValue(option.value),
+                  'select-option--selected': isSelectedValue(option.value),
                   'opacity-50 cursor-not-allowed': option.disabled,
                   'pl-6': group !== '__ungrouped__',
                 }
               )"
               @click.stop="selectOption(option)"
             >
-              <!-- 多选勾选框 -->
               <div
                 v-if="multiple"
                 :class="cn(
-                  'flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center',
+                  'select-check',
                   isSelectedValue(option.value)
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'border-border'
+                    ? 'select-check--selected'
+                    : ''
                 )"
               >
                 <Check v-if="isSelectedValue(option.value)" :size="12" />
@@ -400,29 +391,26 @@ onUnmounted(() => {
           </template>
         </template>
 
-        <!-- 无分组或搜索结果 -->
         <template v-else>
           <div
             v-for="option in filteredOptions"
             :key="String(option.value)"
             :class="cn(
-              'flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-sm',
-              'hover:bg-accent hover:text-accent-foreground',
+              'select-option',
               {
-                'bg-accent/10 text-foreground': isSelectedValue(option.value),
+                'select-option--selected': isSelectedValue(option.value),
                 'opacity-50 cursor-not-allowed': option.disabled,
               }
             )"
             @click.stop="selectOption(option)"
           >
-            <!-- 多选勾选框 -->
             <div
               v-if="multiple"
               :class="cn(
-                'flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center',
+                'select-check',
                 isSelectedValue(option.value)
-                  ? 'bg-primary border-primary text-primary-foreground'
-                  : 'border-border'
+                  ? 'select-check--selected'
+                  : ''
               )"
             >
               <Check v-if="isSelectedValue(option.value)" :size="12" />
@@ -431,10 +419,9 @@ onUnmounted(() => {
           </div>
         </template>
 
-        <!-- 无结果提示 -->
         <div
           v-if="filteredOptions.length === 0"
-          class="px-3 py-4 text-xs text-center text-muted-foreground truncate"
+          class="select-empty"
         >
           无匹配结果
         </div>
@@ -442,3 +429,93 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.select-trigger--sm {
+  height: 28px;
+}
+
+.select-trigger--md {
+  height: 30px;
+}
+
+.select-trigger--lg {
+  height: 34px;
+}
+
+.select-meta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.select-meta--error {
+  color: var(--color-error);
+}
+
+.select-dropdown {
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--ui-bg-surface);
+  box-shadow: var(--shadow-panel);
+}
+
+.select-group-label {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.select-option:hover {
+  background: var(--ui-bg-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.select-option--selected {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.select-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--ui-border-default);
+  border-radius: 4px;
+}
+
+.select-check--selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.select-search-input {
+  height: 28px;
+  padding-left: 28px;
+  padding-right: 8px;
+  font-size: 12px;
+}
+
+.select-empty {
+  padding: 14px 12px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+</style>

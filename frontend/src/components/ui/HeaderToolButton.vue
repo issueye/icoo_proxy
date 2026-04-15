@@ -37,11 +37,8 @@ function handleClick(event) {
   <button
     :class="cn(
       'header-tool-btn icon-btn inline-flex items-center justify-center h-7 w-8 p-0',
-      'bg-transparent text-muted-foreground border-none',
+      'bg-transparent border-none',
       'cursor-pointer transition-all duration-120',
-      'hover:text-foreground',
-      'active:bg-secondary',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       { 'opacity-50 cursor-not-allowed': disabled || loading },
       $attrs.class
     )"

@@ -53,7 +53,7 @@ function handleRowClick(row, index) {
     >
       <!-- 表头 -->
       <thead>
-        <tr :class="cn('text-muted-foreground')">
+        <tr class="data-table__header-row">
           <th
             v-for="col in columns"
             :key="col.key || col.title"
@@ -99,7 +99,7 @@ function handleRowClick(row, index) {
           :key="row[rowKey] || index"
           :class="cn(
             'border-t border-border transition-colors',
-            hoverable ? 'hover:bg-accent/35' : '',
+            hoverable ? 'data-table__row--hoverable' : '',
             size === 'sm' ? 'text-xs' : ''
           )"
           @click="handleRowClick(row, index)"
@@ -130,10 +130,10 @@ function handleRowClick(row, index) {
 
 <style scoped>
 .data-table-shell {
-  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-bg-secondary) 96%, white);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ui-bg-surface);
+  box-shadow: var(--shadow-rest);
 }
 
 .data-table {
@@ -145,11 +145,24 @@ function handleRowClick(row, index) {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: color-mix(in srgb, var(--color-bg-tertiary) 94%, white);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 92%, transparent);
+  height: 36px;
+  background: var(--ui-bg-surface-muted);
+  border-bottom: 1px solid var(--ui-border-default);
+  color: var(--color-text-muted);
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .data-table tbody tr:first-child td {
   border-top: 0;
+}
+
+.data-table tbody td {
+  height: 40px;
+  color: var(--color-text-secondary);
+}
+
+.data-table__row--hoverable:hover {
+  background: var(--ui-bg-surface-hover);
 }
 </style>

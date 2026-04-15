@@ -2,7 +2,6 @@
 import { cn } from "@/lib/utils"
 import PageHeader from "./PageHeader.vue"
 import QueryBar from "./QueryBar.vue"
-import Separator from "@/components/ui/Separator.vue"
 
 const props = defineProps({
   title: {
@@ -29,10 +28,8 @@ const props = defineProps({
 </script>
 
 <template>
-  <section class="management-page h-full flex flex-col min-h-0 p-1.5">
-    <!-- 固定头部区域 -->
-    <div class="flex-shrink-0">
-      <!-- 标题栏 -->
+  <section class="management-page">
+    <div class="management-page__header">
       <PageHeader
         :title="title"
         :description="description"
@@ -44,41 +41,58 @@ const props = defineProps({
         </template>
       </PageHeader>
 
-      <Separator v-if="$slots.metrics || $slots.filters" />
-
-      <!-- 指标卡片 -->
       <div
         v-if="$slots.metrics"
-        :class="cn('grid gap-2.5 py-2.5', compact ? 'grid-cols-2' : 'grid-cols-4')"
+        :class="cn('management-page__metrics', compact ? 'grid-cols-2' : 'grid-cols-4')"
       >
         <slot name="metrics" />
       </div>
 
-      <Separator v-if="$slots.metrics && $slots.filters" />
-
-      <!-- 筛选栏 -->
-      <div v-if="$slots.filters" class="py-2.5">
+      <div v-if="$slots.filters" class="management-page__filters">
         <QueryBar :compact="compact">
           <slot name="filters" />
         </QueryBar>
       </div>
 
-      <Separator v-if="$slots.footer" />
-
-      <!-- 底部操作区 -->
-      <div v-if="$slots.footer" class="py-2.5">
+      <div v-if="$slots.footer" class="management-page__footer">
         <slot name="footer" />
       </div>
     </div>
 
-    <!-- 内容区域 -->
-    <div class="flex-1 min-h-0" :class="contentClass">
+    <div class="management-page__body" :class="contentClass">
       <slot />
     </div>
   </section>
 </template>
 
 <style scoped>
+.management-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  gap: 14px;
+}
+
+.management-page__header {
+  flex-shrink: 0;
+}
+
+.management-page__metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.management-page__filters,
+.management-page__footer {
+  margin-top: 12px;
+}
+
+.management-page__body {
+  flex: 1;
+  min-height: 0;
+}
+
 @media (max-width: 960px) {
   .grid-cols-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));

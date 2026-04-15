@@ -4,16 +4,16 @@
       <div class="header-drag-region">
         <div class="app-brand">
           <div class="brand-mark">IC</div>
-          <span class="app-title">icoo_proxy</span>
+          <div class="brand-copy">
+            <span class="app-title">icoo_proxy</span>
+            <span class="app-subtitle">{{ currentModule }}</span>
+          </div>
         </div>
         <div class="header-tools">
-          <div class="header-divider"></div>
-
-          <!-- 主题切换 -->
           <div class="relative theme-menu-wrap" ref="themeMenuRef">
             <HeaderToolButton
               @click="showThemeMenu = !showThemeMenu"
-              :title="`切换主题 (${themeStore.theme === 'light' ? '浅色' : '深色'})`"
+              :title="`外观设置 (${themeStore.theme === 'light' ? '浅色' : '深色'})`"
             >
               <Sun v-if="themeStore.theme === 'light'" :size="14" />
               <Moon v-else :size="14" />
@@ -22,7 +22,7 @@
             <Transition name="fade">
               <div v-if="showThemeMenu" class="theme-menu">
                 <div class="theme-menu-section">
-                  <div class="theme-menu-label">主题模式</div>
+                  <div class="theme-menu-label">显示模式</div>
                   <div class="theme-mode-switch">
                     <button
                       @click="themeStore.setTheme('light')"
@@ -42,7 +42,7 @@
                 </div>
 
                 <div class="theme-menu-section">
-                  <div class="theme-menu-label">颜色主题</div>
+                  <div class="theme-menu-label">强调色</div>
                   <div class="theme-color-grid">
                     <button
                       v-for="color in colorList"
@@ -59,11 +59,7 @@
             </Transition>
           </div>
 
-          <!-- 刷新按钮 -->
-          <HeaderToolButton
-            @click="handleRefresh"
-            title="刷新页面"
-          >
+          <HeaderToolButton @click="handleRefresh" title="刷新页面">
             <RefreshCw :size="14" />
           </HeaderToolButton>
         </div>
@@ -88,6 +84,7 @@
     </header>
     <div class="app-body">
       <aside class="sidebar">
+        <div class="sidebar-section-title">工作区</div>
         <nav class="sidebar-nav">
           <button
             v-for="item in menuItems"
@@ -97,7 +94,7 @@
             :class="{ active: isActive(item.path) }"
             :title="item.label"
           >
-            <component :is="item.icon" :size="22" />
+            <component :is="item.icon" :size="16" />
             <span class="nav-item-label">{{ item.label }}</span>
           </button>
         </nav>
@@ -108,7 +105,7 @@
             :class="{ active: isActive('/settings') }"
             title="设置"
           >
-            <Settings :size="22" />
+            <Settings :size="16" />
             <span class="nav-item-label">设置</span>
           </button>
         </div>
@@ -127,12 +124,13 @@
       <div class="footer-left">
         <StatusBadge
           :status="gatewayStore.running ? 'success' : 'error'"
-          :label="gatewayStore.running ? `网关 :${gatewayStore.port}` : '网关未启动'"
+          :label="gatewayStore.running ? `网关运行中 · :${gatewayStore.port}` : '网关未启动'"
           title="网关状态"
         />
+        <span class="footer-meta">监听地址 127.0.0.1:{{ gatewayStore.port }}</span>
       </div>
       <div class="footer-right">
-        <span class="footer-label">AI Gateway</span>
+        <span class="footer-label">icoo_proxy Desktop</span>
       </div>
     </footer>
 
@@ -171,6 +169,13 @@ const showThemeMenu = ref(false);
 const themeMenuRef = ref(null);
 const colorList = computed(() => themeStore.getColorThemeList());
 let statusTimer = null;
+
+const currentModule = computed(() => {
+  const current = [...menuItems, { path: "/settings", label: "设置" }].find((item) =>
+    item.path === "/" ? route.path === "/" : route.path.startsWith(item.path)
+  );
+  return current?.label || "工作区";
+});
 
 function handleRefresh() {
   window.location.reload();
@@ -246,9 +251,7 @@ function handleClose() {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 4%, transparent), transparent 200px),
-    var(--color-bg-primary);
+  background: var(--ui-bg-window);
 }
 
 .custom-header {
@@ -256,9 +259,9 @@ function handleClose() {
   align-items: center;
   justify-content: space-between;
   height: var(--header-height);
-  background: hsl(var(--vscode-titlebar));
-  border-bottom: 1px solid hsl(var(--vscode-chrome-border));
-  color: hsl(var(--vscode-chrome-foreground));
+  background: var(--ui-bg-toolbar);
+  border-bottom: 1px solid var(--ui-border-default);
+  color: var(--color-text-primary);
   user-select: none;
 }
 
@@ -267,7 +270,7 @@ function handleClose() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 14px;
   padding-left: 16px;
   height: 100%;
   --wails-draggable: drag;
@@ -281,40 +284,43 @@ function handleClose() {
   --wails-draggable: no-drag;
 }
 
-.header-divider {
-  width: 1px;
-  height: 16px;
-  background: hsl(var(--vscode-chrome-border));
-  margin: 0 4px;
-}
-
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .brand-mark {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--color-accent), #0ea5e9);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 92%, white), var(--color-accent));
   color: white;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.14);
+  box-shadow: var(--shadow-rest);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.06em;
 }
 
+.brand-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .app-title {
   font-size: 13px;
-  font-weight: 800;
-  color: hsl(var(--vscode-chrome-foreground));
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  color: var(--color-text-primary);
   white-space: nowrap;
+}
+
+.app-subtitle {
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 
 .theme-menu {
@@ -323,10 +329,10 @@ function handleClose() {
   top: calc(100% + 8px);
   width: 228px;
   padding: 12px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ui-border-default);
+  background: var(--ui-bg-surface);
+  box-shadow: var(--shadow-dialog);
   z-index: 50;
 }
 
@@ -353,18 +359,27 @@ function handleClose() {
   justify-content: center;
   gap: 6px;
   height: 30px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ui-border-default);
+  background: var(--ui-bg-surface);
   color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 600;
 }
 
 .theme-mode-switch button.active {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #fff;
+  background: var(--color-accent-soft);
+  border-color: color-mix(in srgb, var(--color-accent) 24%, var(--ui-border-default));
+  color: var(--color-accent);
+}
+
+.theme-mode-switch button:hover {
+  background: var(--ui-bg-surface-hover);
+}
+
+.theme-mode-switch button.active:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
 }
 
 .theme-color-grid {
@@ -378,7 +393,7 @@ function handleClose() {
   height: 32px;
   border-radius: 999px;
   border: 2px solid transparent;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .theme-color-dot:hover {
@@ -386,7 +401,8 @@ function handleClose() {
 }
 
 .theme-color-dot.active {
-  border-color: var(--color-text-primary);
+  border-color: var(--ui-bg-surface);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
 
 .window-controls {
@@ -403,14 +419,14 @@ function handleClose() {
   height: var(--header-height);
   border: none;
   background: transparent;
-  color: hsl(var(--vscode-chrome-muted));
+  color: var(--color-text-muted);
   cursor: pointer;
   transition: background-color 0.12s, color 0.12s;
 }
 
 .control-btn:hover {
-  background: hsl(var(--vscode-chrome-hover));
-  color: hsl(var(--vscode-chrome-foreground));
+  background: var(--ui-bg-surface-hover);
+  color: var(--color-text-primary);
 }
 
 .close-btn:hover {
@@ -422,65 +438,73 @@ function handleClose() {
   display: flex;
   flex: 1;
   overflow: hidden;
-  background: transparent;
+  background: var(--ui-bg-window);
 }
 
 .sidebar {
   width: var(--sidebar-width);
-  background: hsl(var(--vscode-activitybar));
-  border-right: 1px solid hsl(var(--vscode-chrome-border));
+  background: var(--ui-bg-sidebar);
+  border-right: 1px solid var(--ui-border-default);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 8px 8px 10px;
+  padding: 14px 10px 12px;
+}
+
+.sidebar-section-title {
+  padding: 0 10px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  padding: 2px 0 4px;
+  padding: 0;
   gap: 4px;
 }
 
 .nav-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   position: relative;
-  gap: 5px;
+  gap: 10px;
   width: 100%;
-  min-height: 60px;
+  min-height: 38px;
+  padding: 0 10px;
   margin: 0 auto;
-  color: hsl(var(--vscode-chrome-muted));
+  color: var(--color-text-secondary);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .nav-item:hover {
-  color: hsl(var(--vscode-chrome-foreground));
-  background: hsl(var(--vscode-chrome-hover));
-  border-color: color-mix(in srgb, hsl(var(--vscode-chrome-border)) 80%, transparent);
+  color: var(--color-text-primary);
+  background: var(--ui-bg-surface-hover);
+  border-color: var(--ui-border-subtle);
 }
 
 .nav-item.active {
-  color: hsl(var(--vscode-chrome-foreground));
-  background: hsl(var(--vscode-chrome-active));
-  border-color: color-mix(in srgb, var(--color-accent) 16%, hsl(var(--vscode-chrome-border)));
-  box-shadow: var(--shadow-sm);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-color: color-mix(in srgb, var(--color-accent) 22%, var(--ui-border-default));
+  box-shadow: var(--shadow-rest);
 }
 
 .nav-item.active::before {
   content: '';
   position: absolute;
-  left: 50%;
-  top: 0;
-  transform: translateX(-50%);
-  width: 20px;
-  height: 2px;
+  left: -10px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
   background: var(--color-accent);
   border-radius: 999px;
 }
@@ -488,34 +512,26 @@ function handleClose() {
 .sidebar-foot {
   padding-top: 10px;
   display: flex;
-  justify-content: center;
-  border-top: 1px solid hsl(var(--vscode-chrome-border));
+  justify-content: stretch;
+  border-top: 1px solid var(--ui-border-default);
 }
 
 .nav-item-label {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.01em;
 }
 
 .nav-item:focus-visible {
-  outline: 1px solid var(--color-accent);
-  outline-offset: -1px;
-}
-
-.sidebar-foot .nav-item:focus-visible {
-  outline: 1px solid var(--color-accent);
-  outline-offset: -1px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 
 .main-content {
   flex: 1;
   overflow: hidden;
   min-width: 0;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 3%, transparent), transparent 180px),
-    var(--color-bg-primary);
+  background: var(--ui-bg-app);
 }
 
 /* 底部状态栏 */
@@ -523,11 +539,11 @@ function handleClose() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 24px;
-  padding: 0 8px;
-  background: hsl(var(--vscode-statusbar));
-  color: hsl(var(--vscode-statusbar-foreground));
-  border-top: 1px solid hsl(var(--vscode-chrome-border));
+  min-height: 26px;
+  padding: 0 10px;
+  background: var(--ui-bg-statusbar);
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--ui-border-default);
   user-select: none;
 }
 
@@ -540,20 +556,19 @@ function handleClose() {
 
 .footer-label {
   font-size: 11px;
-  font-weight: 700;
-  opacity: 0.8;
+  font-weight: 600;
+}
+
+.footer-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 /* 底部状态栏徽章适配 */
 .app-footer :deep(div[role="status"]) {
-  height: 18px !important;
-  padding: 0 4px !important;
+  height: 20px !important;
+  padding: 0 6px !important;
   font-size: 10px !important;
-  color: inherit;
-}
-
-.app-footer :deep(div[role="status"] > div:first-child) {
-  background: currentColor !important;
 }
 
 .fade-slide-enter-active,
@@ -572,19 +587,40 @@ function handleClose() {
 }
 
 .custom-header :deep(.header-tool-btn) {
-  color: hsl(var(--vscode-chrome-muted));
+  color: var(--color-text-muted);
 }
 
 .custom-header :deep(.header-tool-btn:hover) {
-  color: hsl(var(--vscode-chrome-foreground));
-  background: hsl(var(--vscode-chrome-hover));
+  color: var(--color-text-primary);
+  background: var(--ui-bg-surface-hover);
 }
 
 .custom-header :deep(.header-tool-btn:active) {
-  background: hsl(var(--vscode-chrome-active));
+  background: var(--ui-bg-surface-active);
 }
 
 .custom-header :deep(.header-tool-btn:focus-visible) {
-  box-shadow: 0 0 0 1px hsl(var(--ring));
+  box-shadow: var(--shadow-focus);
+}
+
+@media (max-width: 860px) {
+  .sidebar {
+    width: 76px;
+  }
+
+  .sidebar-section-title,
+  .app-subtitle,
+  .footer-meta {
+    display: none;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .nav-item-label {
+    display: none;
+  }
 }
 </style>

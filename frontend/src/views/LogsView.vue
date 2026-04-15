@@ -2,25 +2,26 @@
   <div class="logs-view app-page">
     <PageHeader
       title="请求日志"
-      description="集中查看请求入口、转发目标、错误回包和参数明细，便于排障和追踪。"
+      description="集中查看请求入口、供应商、状态码、延迟和载荷详情，采用典型桌面日志视图组织排障信息。"
     >
       <template #actions>
         <button class="btn btn-secondary" @click="handleRefreshLogs" :disabled="gatewayStore.logsLoading">
-          <RefreshCw :size="14" :class="{ spinning: gatewayStore.logsLoading }" /> 刷新日志
+          <RefreshCw :size="14" :class="{ spinning: gatewayStore.logsLoading }" />
+          刷新日志
         </button>
       </template>
     </PageHeader>
 
-    <div class="logs-toolbar">
-      <div class="toolbar-left">
-        <label class="toolbar-label">
-          查询条数
-          <select v-model.number="logLimit" class="toolbar-select">
+    <section class="toolbar-surface logs-toolbar">
+      <div class="toolbar-group">
+        <div class="toolbar-field">
+          <label class="toolbar-label">查询条数</label>
+          <select v-model.number="logLimit" class="form-input toolbar-select" @change="handleRefreshLogs">
             <option :value="20">20</option>
             <option :value="50">50</option>
             <option :value="100">100</option>
           </select>
-        </label>
+        </div>
 
         <label class="toggle-chip">
           <input v-model="showErrorsOnly" type="checkbox">
@@ -31,103 +32,168 @@
       <div class="toolbar-summary">
         <span class="toolbar-chip">{{ filteredLogs.length }} 条</span>
         <span class="toolbar-chip">{{ errorCount }} 失败</span>
-        <span class="toolbar-chip">网关 {{ gatewayStore.running ? '运行中' : '未启动' }}</span>
         <span class="toolbar-chip">端口 {{ gatewayStore.port }}</span>
       </div>
-    </div>
+    </section>
 
-    <div v-if="filteredLogs.length === 0" class="empty-state">
-      {{ gatewayStore.logsLoading ? '正在加载请求日志...' : '暂时还没有请求记录' }}
-    </div>
+    <div class="logs-workspace">
+      <section class="logs-table-panel">
+        <div v-if="filteredLogs.length === 0" class="empty-state">
+          <div class="empty-title">{{ gatewayStore.logsLoading ? '正在加载请求日志...' : '暂时还没有请求记录' }}</div>
+          <p>{{ gatewayStore.logsLoading ? '系统正在同步最新日志。' : '启动网关并发起一次请求后，这里会显示转发记录。' }}</p>
+        </div>
 
-    <div v-else class="request-log-list">
-      <div
-        v-for="log in filteredLogs"
-        :key="log.id"
-        class="request-log-card"
-        :class="{ 'request-log-card--error': log.statusCode >= 400 }"
-      >
-        <div class="request-log-top">
-          <div class="request-log-main">
+        <DataTable
+          v-else
+          :columns="columns"
+          :data="filteredLogs"
+          row-key="id"
+          @row-click="handleSelectLog"
+        >
+          <template #cell-createdAt="{ value }">
+            <span class="table-mono">{{ formatTimestamp(value) }}</span>
+          </template>
+
+          <template #cell-path="{ row }">
+            <div class="path-cell">
+              <span class="path-method">{{ row.method }}</span>
+              <span class="path-value">{{ row.path }}</span>
+            </div>
+          </template>
+
+          <template #cell-providerName="{ row }">
+            <div class="provider-cell">
+              <span class="provider-primary">{{ row.providerName || '未知供应商' }}</span>
+              <span class="provider-secondary">{{ row.providerType || '未标识类型' }}</span>
+            </div>
+          </template>
+
+          <template #cell-model="{ row }">
+            <div class="provider-cell">
+              <span class="provider-primary">{{ row.model || '未识别模型' }}</span>
+              <span v-if="row.targetModel && row.targetModel !== row.model" class="provider-secondary">
+                → {{ row.targetModel }}
+              </span>
+            </div>
+          </template>
+
+          <template #cell-statusCode="{ value }">
             <StatusBadge
-              :status="log.statusCode >= 500 ? 'error' : log.statusCode >= 400 ? 'warning' : 'success'"
-              :label="`${log.statusCode}`"
+              :status="value >= 500 ? 'error' : value >= 400 ? 'warning' : 'success'"
+              :label="String(value)"
             />
-            <div class="request-log-heading">
-              <div class="request-log-model-row">
-                <span class="request-log-model">{{ log.model || '未识别模型' }}</span>
-                <span v-if="log.targetModel && log.targetModel !== log.model" class="request-log-target">
-                  → {{ log.targetModel }}
-                </span>
-              </div>
-              <div class="request-log-subline">
-                <span>{{ log.method }} {{ log.path }}</span>
-                <span v-if="log.providerName">· {{ log.providerName }}</span>
-                <span v-if="log.providerType">· {{ log.providerType }}</span>
-                <span v-if="log.endpointMode">· {{ log.endpointMode }}</span>
-                <span v-if="log.clientIP">· {{ log.clientIP }}</span>
-              </div>
+          </template>
+
+          <template #cell-durationMs="{ value }">
+            <span class="table-mono">{{ value }} ms</span>
+          </template>
+        </DataTable>
+      </section>
+
+      <aside class="logs-detail-panel">
+        <div v-if="!selectedLog" class="empty-state logs-detail-empty">
+          <div class="empty-title">请选择一条日志</div>
+          <p>点击左侧表格中的任意一行，查看请求参数、上游目标和响应详情。</p>
+        </div>
+
+        <template v-else>
+          <div class="panel-head">
+            <div>
+              <h3 class="section-title">日志详情</h3>
+              <p class="panel-description">{{ selectedLog.method }} {{ selectedLog.path }}</p>
+            </div>
+            <StatusBadge
+              :status="selectedLog.statusCode >= 500 ? 'error' : selectedLog.statusCode >= 400 ? 'warning' : 'success'"
+              :label="`${selectedLog.statusCode}`"
+            />
+          </div>
+
+          <div class="detail-summary">
+            <div class="detail-item">
+              <span class="detail-label">时间</span>
+              <span class="detail-value">{{ formatTimestamp(selectedLog.createdAt) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">供应商</span>
+              <span class="detail-value">{{ selectedLog.providerName || '未知' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">模型</span>
+              <span class="detail-value">{{ selectedLog.model || '未识别模型' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">延迟</span>
+              <span class="detail-value">{{ selectedLog.durationMs }} ms</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">来源 IP</span>
+              <span class="detail-value">{{ selectedLog.clientIP || '--' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">模式</span>
+              <span class="detail-value">{{ getRequestMode(selectedLog) }}</span>
             </div>
           </div>
 
-          <div class="request-log-meta">
-            <span>{{ formatTimestamp(log.createdAt) }}</span>
-            <span>{{ log.durationMs }}ms</span>
+          <div v-if="selectedLog.errorMessage" class="detail-alert">
+            {{ selectedLog.errorMessage }}
           </div>
-        </div>
 
-        <div class="request-log-tags">
-          <span class="request-log-tag request-log-tag--mode">{{ getRequestMode(log) }}</span>
-          <span v-if="log.streaming" class="request-log-tag request-log-tag--accent">stream</span>
-          <span class="request-log-tag">{{ log.statusCode >= 400 ? '失败' : '成功' }}</span>
-          <span v-if="log.targetModel && log.targetModel !== log.model" class="request-log-tag">
-            已改写模型
-          </span>
-        </div>
+          <div v-if="selectedLog.upstreamBase || selectedLog.upstreamPath" class="settings-note">
+            <div class="field-label">上游目标</div>
+            <div class="settings-help table-mono">{{ [selectedLog.upstreamBase, selectedLog.upstreamPath].filter(Boolean).join('') }}</div>
+          </div>
 
-        <div v-if="log.errorMessage" class="request-log-error">
-          {{ log.errorMessage }}
-        </div>
+          <details v-if="selectedLog.requestPayload" class="detail-section" open>
+            <summary>请求参数</summary>
+            <pre>{{ formatPayload(selectedLog.requestPayload) }}</pre>
+          </details>
 
-        <div v-if="log.upstreamBase || log.upstreamPath" class="request-log-upstream">
-          <span class="request-log-upstream-label">上游目标</span>
-          <code>{{ [log.upstreamBase, log.upstreamPath].filter(Boolean).join('') }}</code>
-        </div>
+          <details v-if="selectedLog.responseHeaders" class="detail-section">
+            <summary>响应头</summary>
+            <pre>{{ formatPayload(selectedLog.responseHeaders) }}</pre>
+          </details>
 
-        <details v-if="log.requestPayload" class="request-log-body">
-          <summary>查看请求参数</summary>
-          <pre>{{ formatPayload(log.requestPayload) }}</pre>
-        </details>
-
-        <details v-if="log.responseHeaders" class="request-log-body">
-          <summary>查看响应头</summary>
-          <pre>{{ formatPayload(log.responseHeaders) }}</pre>
-        </details>
-
-        <details v-if="log.responsePayload" class="request-log-body">
-          <summary>查看响应数据</summary>
-          <pre>{{ formatPayload(log.responsePayload) }}</pre>
-        </details>
-      </div>
+          <details v-if="selectedLog.responsePayload" class="detail-section">
+            <summary>响应数据</summary>
+            <pre>{{ formatPayload(selectedLog.responsePayload) }}</pre>
+          </details>
+        </template>
+      </aside>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { RefreshCw } from 'lucide-vue-next';
 import { useGatewayStore } from '@/stores/gateway';
 import PageHeader from '@/components/layout/PageHeader.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
+import DataTable from '@/components/layout/DataTable.vue';
 
 const gatewayStore = useGatewayStore();
 const showErrorsOnly = ref(false);
 const logLimit = ref(50);
+const selectedLogId = ref(null);
+
+const columns = [
+  { key: 'createdAt', title: '时间', class: 'w-[148px]' },
+  { key: 'path', title: '请求' },
+  { key: 'providerName', title: '供应商' },
+  { key: 'model', title: '模型' },
+  { key: 'statusCode', title: '状态', class: 'w-[90px]' },
+  { key: 'durationMs', title: '延迟', class: 'w-[90px]' },
+];
 
 const filteredLogs = computed(() => {
   if (!showErrorsOnly.value) return gatewayStore.requestLogs;
   return gatewayStore.requestLogs.filter((item) => item.statusCode >= 400);
 });
+
+const selectedLog = computed(() =>
+  filteredLogs.value.find((item) => item.id === selectedLogId.value) || filteredLogs.value[0] || null
+);
 
 const errorCount = computed(() =>
   gatewayStore.requestLogs.filter((item) => item.statusCode >= 400).length
@@ -135,6 +201,13 @@ const errorCount = computed(() =>
 
 async function handleRefreshLogs() {
   await gatewayStore.fetchRequestLogs(logLimit.value);
+  if (!selectedLogId.value && gatewayStore.requestLogs.length > 0) {
+    selectedLogId.value = gatewayStore.requestLogs[0].id;
+  }
+}
+
+function handleSelectLog(log) {
+  selectedLogId.value = log.id;
 }
 
 function formatTimestamp(value) {
@@ -165,6 +238,16 @@ function getRequestMode(log) {
   return 'gateway';
 }
 
+watch(filteredLogs, (logs) => {
+  if (logs.length === 0) {
+    selectedLogId.value = null;
+    return;
+  }
+  if (!logs.some((item) => item.id === selectedLogId.value)) {
+    selectedLogId.value = logs[0].id;
+  }
+});
+
 onMounted(async () => {
   await gatewayStore.fetchStatus();
   await handleRefreshLogs();
@@ -172,179 +255,140 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.logs-toolbar,
-.request-log-card,
-.empty-state {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-secondary);
+.logs-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .logs-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-  padding: 14px 16px;
+  align-items: flex-end;
 }
 
-.toolbar-left,
-.toolbar-summary {
+.toolbar-field {
+  min-width: 120px;
+}
+
+.toolbar-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.logs-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) 380px;
+  gap: 16px;
+  min-height: 0;
+  flex: 1;
+}
+
+.logs-table-panel,
+.logs-detail-panel {
+  min-height: 0;
+}
+
+.logs-detail-panel {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ui-bg-surface);
+  box-shadow: var(--shadow-rest);
+  overflow-y: auto;
+}
+
+.logs-detail-empty {
+  min-height: 260px;
+}
+
+.empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.table-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.path-cell,
+.provider-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.path-method,
+.provider-primary,
+.detail-value {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.path-value,
+.provider-secondary,
+.detail-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.detail-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.empty-state {
-  padding: 28px;
-  text-align: center;
-  color: var(--color-text-muted);
-}
-
-.request-log-list {
+.detail-item {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.request-log-card {
-  padding: 16px;
-}
-
-.request-log-card--error {
-  border-color: color-mix(in srgb, #ef4444 40%, var(--color-border));
-  background: color-mix(in srgb, #ef4444 4%, var(--color-bg-secondary));
-}
-
-.request-log-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.request-log-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  min-width: 0;
-}
-
-.request-log-heading {
-  min-width: 0;
-}
-
-.request-log-model-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.request-log-model {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.request-log-target {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.request-log-subline {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--color-text-muted);
-}
-
-.request-log-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.request-log-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.request-log-tag {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: var(--color-bg-tertiary, var(--color-bg-primary));
-  color: var(--color-text-secondary);
-  font-size: 11px;
-}
-
-.request-log-tag--accent {
-  color: var(--color-accent);
-}
-
-.request-log-tag--mode {
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-tertiary, var(--color-bg-primary)));
-  color: var(--color-accent);
-  font-weight: 700;
-}
-
-.request-log-error {
-  margin-top: 12px;
+  gap: 4px;
   padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, #ef4444 8%, var(--color-bg-tertiary, var(--color-bg-primary)));
-  color: #b91c1c;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.request-log-upstream {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.request-log-upstream-label {
-  color: var(--color-text-muted);
-}
-
-.request-log-upstream code {
-  padding: 4px 8px;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-tertiary, var(--color-bg-primary));
-  color: var(--color-text-primary);
+  background: var(--ui-bg-surface-muted);
 }
 
-.request-log-body {
-  margin-top: 12px;
-  border-top: 1px solid var(--color-border);
+.detail-alert {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 20%, var(--ui-border-default));
+  border-radius: var(--radius-sm);
+  background: var(--ui-danger-soft);
+  color: var(--color-error);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.detail-section {
+  border-top: 1px solid var(--ui-border-subtle);
   padding-top: 12px;
 }
 
-.request-log-body summary {
+.detail-section summary {
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
 
-.request-log-body pre {
+.detail-section pre {
   margin: 10px 0 0;
   padding: 12px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-tertiary, var(--color-bg-primary));
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--ui-bg-surface-muted);
   color: var(--color-text-secondary);
   font-size: 12px;
   line-height: 1.6;
@@ -361,19 +405,20 @@ onMounted(async () => {
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 720px) {
-  .logs-view {
-    padding: 16px;
+@media (max-width: 1080px) {
+  .logs-workspace {
+    grid-template-columns: 1fr;
   }
+}
 
-  .logs-toolbar,
-  .request-log-top {
+@media (max-width: 720px) {
+  .logs-toolbar {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .request-log-meta {
-    white-space: normal;
+  .detail-summary {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -7,7 +7,7 @@
         >
             <!-- 遮罩层 -->
             <div
-                class="absolute inset-0 bg-slate-950/48 backdrop-blur-md transition-opacity"
+                class="absolute inset-0 modal-mask transition-opacity"
                 @click="handleMaskClick"
             />
 
@@ -19,18 +19,14 @@
                 <!-- 头部 -->
                 <div
                     v-if="showHeader"
-                        class="modal-shell__header flex items-center justify-between px-4 py-3 border-b border-border bg-secondary/70 backdrop-blur-sm"
+                        class="modal-shell__header flex items-center justify-between px-4 py-3 border-b border-border"
                         :class="{ 'sticky top-0 z-10': scrollable }"
                     >
                     <div class="flex items-center gap-2.5">
                         <!-- 图标插槽 -->
                         <slot name="icon">
                             <div v-if="icon" class="modal-shell__icon">
-                                <component
-                                    :is="icon"
-                                    :size="13"
-                                    class="text-accent"
-                                />
+                                <component :is="icon" :size="13" class="text-accent" />
                             </div>
                         </slot>
                         <h2 class="text-sm font-semibold text-foreground tracking-tight">
@@ -58,10 +54,10 @@
                 <!-- 底部按钮 -->
                 <div
                     v-if="showFooter"
-                    class="modal-shell__footer flex gap-2 px-4 py-3 border-t border-border bg-secondary/68"
+                    class="modal-shell__footer flex gap-2 px-4 py-3 border-t border-border"
                     :class="[
                         footerAlignClass,
-                        { 'sticky bottom-0 z-10 backdrop-blur-sm': scrollable },
+                        { 'sticky bottom-0 z-10': scrollable },
                     ]"
                 >
                     <slot name="footer">
@@ -262,26 +258,34 @@ function handleConfirm() {
 
 .modal-shell {
     border-radius: var(--radius-lg);
-    border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 3%, transparent), transparent 96px),
-        var(--color-bg-secondary);
-    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--ui-border-default);
+    background: var(--ui-bg-surface);
+    box-shadow: var(--shadow-dialog);
+}
+
+.modal-mask {
+    background: rgba(17, 24, 39, 0.26);
+    backdrop-filter: blur(4px);
+}
+
+.modal-shell__header,
+.modal-shell__footer {
+    background: var(--ui-bg-surface-muted);
 }
 
 .modal-shell__icon {
     width: 26px;
     height: 26px;
-    border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--color-accent) 10%, white);
-    border: 1px solid color-mix(in srgb, var(--color-accent) 18%, transparent);
+    border-radius: var(--radius-sm);
+    background: var(--color-accent-soft);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 18%, var(--ui-border-default));
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .modal-shell__body {
-    background: color-mix(in srgb, var(--color-bg-secondary) 94%, white);
+    background: var(--ui-bg-surface);
 }
 </style>
 

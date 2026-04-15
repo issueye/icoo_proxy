@@ -1,34 +1,19 @@
 <script setup>
-import { ref, computed, onMounted } from "vue"
-import { cn } from "@/lib/utils"
 import {
   ManagementPageLayout,
-  PageHeader,
   MetricCard,
-  QueryBar,
   DataTable,
 } from "@/components/layout"
 import {
   Button,
-  Badge,
   IconButton,
   SearchInput,
   Select,
-  Input,
-  Textarea,
-  Dialog,
-  Switch,
-  Separator,
 } from "@/components/ui"
 import {
   Plus,
   Edit,
   Trash2,
-  Search,
-  Loader2,
-  Check,
-  X,
-  Eye,
   RefreshCw,
 } from "lucide-vue-next"
 

@@ -1,55 +1,28 @@
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
 
-// 预定义的颜色主题
+// 受控的颜色主题，保持桌面工具风格而不过度花哨
 export const colorThemes = {
   blue: {
-    name: "清新蓝",
-    color: "#3b82f6",
-    hover: "#2563eb",
-    light: "rgba(59, 130, 246, 0.08)",
+    name: "Windows Blue",
+    color: "#0a64d8",
+    hover: "#005fcb",
+    pressed: "#0056b7",
+    soft: "#e8f1fe",
   },
-  purple: {
-    name: "优雅紫",
-    color: "#8b5cf6",
-    hover: "#7c3aed",
-    light: "rgba(139, 92, 246, 0.08)",
+  slate: {
+    name: "Slate",
+    color: "#3d6fb4",
+    hover: "#335f9b",
+    pressed: "#284f83",
+    soft: "#e9eff8",
   },
-  green: {
-    name: "自然绿",
-    color: "#10b981",
-    hover: "#059669",
-    light: "rgba(16, 185, 129, 0.08)",
-  },
-  orange: {
-    name: "活力橙",
-    color: "#f97316",
-    hover: "#ea580c",
-    light: "rgba(249, 115, 22, 0.08)",
-  },
-  pink: {
-    name: "浪漫粉",
-    color: "#ec4899",
-    hover: "#db2777",
-    light: "rgba(236, 72, 153, 0.08)",
-  },
-  cyan: {
-    name: "青碧色",
-    color: "#06b6d4",
-    hover: "#0891b2",
-    light: "rgba(6, 182, 212, 0.08)",
-  },
-  red: {
-    name: "热情红",
-    color: "#ef4444",
-    hover: "#dc2626",
-    light: "rgba(239, 68, 68, 0.08)",
-  },
-  indigo: {
-    name: "靛蓝色",
-    color: "#6366f1",
-    hover: "#4f46e5",
-    light: "rgba(99, 102, 241, 0.08)",
+  forest: {
+    name: "Forest",
+    color: "#1f7a57",
+    hover: "#176448",
+    pressed: "#11513a",
+    soft: "#e8f3ee",
   },
 };
 
@@ -92,7 +65,13 @@ export const useThemeStore = defineStore("theme", () => {
     if (colors) {
       document.documentElement.style.setProperty("--color-accent", colors.color);
       document.documentElement.style.setProperty("--color-accent-hover", colors.hover);
-      document.documentElement.style.setProperty("--color-accent-light", colors.light);
+      document.documentElement.style.setProperty("--color-accent-pressed", colors.pressed);
+      document.documentElement.style.setProperty("--color-accent-light", colors.soft);
+      document.documentElement.style.setProperty("--color-accent-soft", colors.soft);
+      document.documentElement.style.setProperty("--ui-accent", colors.color);
+      document.documentElement.style.setProperty("--ui-accent-hover", colors.hover);
+      document.documentElement.style.setProperty("--ui-accent-pressed", colors.pressed);
+      document.documentElement.style.setProperty("--ui-accent-soft", colors.soft);
     }
   };
 

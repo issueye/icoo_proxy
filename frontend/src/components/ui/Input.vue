@@ -82,13 +82,13 @@ const hasValue = computed(() => {
 const inputSize = computed(() => {
   switch (props.size) {
     case "sm":
-      return "h-8 px-2.5 text-xs"
+      return "input-control--sm"
     case "default":
-      return "h-9 px-3 text-sm"
+      return "input-control--md"
     case "lg":
-      return "h-10 px-3.5 text-sm"
+      return "input-control--lg"
     default:
-      return "h-9 px-3 text-sm"
+      return "input-control--md"
   }
 })
 
@@ -117,12 +117,10 @@ function togglePassword() {
 
 <template>
   <div class="w-full">
-    <!-- 标签 -->
     <Label v-if="label" :class="cn('mb-1.5')">
       {{ label }}
     </Label>
 
-    <!-- 输入框容器 -->
     <div
       :class="cn(
         'input-shell',
@@ -132,16 +130,12 @@ function togglePassword() {
         }
       )"
     >
-      <div
-        class="flex w-full items-center"
-      >
-        <!-- 前置内容 -->
+      <div class="flex w-full items-center">
         <span
           v-if="prefix"
-          class="input-affix pl-2.5 pr-1 text-xs"
+          class="input-affix input-affix--leading"
         >{{ prefix }}</span>
 
-        <!-- 输入框 -->
         <input
           v-bind="inputAttrs"
           :type="inputType"
@@ -153,14 +147,11 @@ function togglePassword() {
           @keydown="onKeydown"
           :class="cn(
             'input-control',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            'read-only:opacity-70',
             inputSize,
             attrs.class
           )"
         />
 
-        <!-- 清除按钮 -->
         <button
           v-if="clearable && hasValue && !disabled"
           type="button"
@@ -171,7 +162,6 @@ function togglePassword() {
           <X :size="14" />
         </button>
 
-        <!-- 密码显示切换 -->
         <button
           v-if="showPasswordToggle"
           type="button"
@@ -183,28 +173,62 @@ function togglePassword() {
           <EyeOff v-else :size="14" />
         </button>
 
-        <!-- 后置内容 -->
         <span
           v-if="suffix"
-          class="input-affix pr-2.5 pl-1 text-xs"
+          class="input-affix input-affix--trailing"
         >{{ suffix }}</span>
       </div>
     </div>
 
-    <!-- 描述文字 -->
     <p
       v-if="description && !error"
-      class="mt-1 text-xs text-muted-foreground"
+      class="input-meta"
     >
       {{ description }}
     </p>
 
-    <!-- 错误提示 -->
     <p
       v-if="error"
-      class="mt-1 text-xs text-error"
+      class="input-meta input-meta--error"
     >
       {{ error }}
     </p>
   </div>
 </template>
+
+<style scoped>
+.input-control--sm {
+  height: 28px;
+}
+
+.input-control--md {
+  height: 30px;
+}
+
+.input-control--lg {
+  height: 34px;
+}
+
+.input-affix--leading {
+  padding-left: 10px;
+  padding-right: 4px;
+  font-size: 12px;
+}
+
+.input-affix--trailing {
+  padding-left: 4px;
+  padding-right: 10px;
+  font-size: 12px;
+}
+
+.input-meta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.input-meta--error {
+  color: var(--color-error);
+}
+</style>

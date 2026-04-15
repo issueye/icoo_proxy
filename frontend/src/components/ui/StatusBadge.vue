@@ -23,7 +23,7 @@ const props = defineProps({
 })
 
 const statusVariants = cva(
-  "status-badge inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors duration-120",
+  "status-badge inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs font-semibold transition-colors duration-120",
   {
     variants: {
       status: {
@@ -65,36 +65,36 @@ const statusVariants = cva(
 <style scoped>
 .status-badge {
   border: 1px solid transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  min-height: 22px;
 }
 
 .status-badge--neutral {
-  background: color-mix(in srgb, var(--color-bg-tertiary) 92%, white);
-  border-color: color-mix(in srgb, var(--color-border) 92%, transparent);
+  background: var(--ui-bg-surface-muted);
+  border-color: var(--ui-border-default);
   color: var(--color-text-secondary);
 }
 
 .status-badge--success {
-  background: color-mix(in srgb, var(--color-success) 12%, white);
-  border-color: color-mix(in srgb, var(--color-success) 22%, transparent);
+  background: var(--ui-success-soft);
+  border-color: color-mix(in srgb, var(--color-success) 22%, var(--ui-border-default));
   color: var(--color-success);
 }
 
 .status-badge--warning {
-  background: color-mix(in srgb, var(--color-warning) 12%, white);
-  border-color: color-mix(in srgb, var(--color-warning) 22%, transparent);
-  color: #b45309;
+  background: var(--ui-warning-soft);
+  border-color: color-mix(in srgb, var(--color-warning) 22%, var(--ui-border-default));
+  color: var(--color-warning);
 }
 
 .status-badge--error {
-  background: color-mix(in srgb, var(--color-error) 12%, white);
-  border-color: color-mix(in srgb, var(--color-error) 22%, transparent);
-  color: #b91c1c;
+  background: var(--ui-danger-soft);
+  border-color: color-mix(in srgb, var(--color-error) 22%, var(--ui-border-default));
+  color: var(--color-error);
 }
 
 .status-badge--info {
-  background: color-mix(in srgb, var(--color-accent) 12%, white);
-  border-color: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  background: var(--color-accent-soft);
+  border-color: color-mix(in srgb, var(--color-accent) 20%, var(--ui-border-default));
   color: var(--color-accent);
 }
 
@@ -103,7 +103,7 @@ const statusVariants = cva(
   height: 0.45rem;
   border-radius: 999px;
   flex-shrink: 0;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
+  box-shadow: none;
 }
 
 .status-badge__dot--neutral { background: var(--color-text-muted); }

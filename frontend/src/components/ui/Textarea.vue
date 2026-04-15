@@ -78,7 +78,6 @@ function onInput(event) {
       {{ label }}
     </Label>
 
-    <!-- 文本框容器 -->
     <div class="relative">
       <textarea
         v-bind="textareaAttrs"
@@ -90,46 +89,96 @@ function onInput(event) {
         :maxlength="maxLength"
         @input="onInput"
         :class="cn(
-          'flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm',
-          'placeholder:text-muted-foreground',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring',
-          'transition-all',
-          'disabled:cursor-not-allowed disabled:opacity-50',
-          'read-only:opacity-70',
-          'resize-none',
+          'textarea-control',
           {
-            'border-error ring-1 ring-error': error,
+            'textarea-control--error': error,
           },
           attrs.class
         )"
       />
     </div>
 
-    <!-- 底部信息栏 -->
-    <div class="flex items-center justify-between mt-1">
-      <!-- 描述文字 -->
+    <div class="textarea-meta-row">
       <p
         v-if="description && !error"
-        class="text-xs text-muted-foreground"
+        class="textarea-meta"
       >
         {{ description }}
       </p>
 
-      <!-- 字符计数 -->
       <p
         v-if="maxLength"
-        class="text-xs text-muted-foreground"
+        class="textarea-meta"
       >
         {{ String(modelValue).length }}/{{ maxLength }}
       </p>
     </div>
 
-    <!-- 错误提示 -->
     <p
       v-if="error"
-      class="mt-1 text-xs text-error"
+      class="textarea-meta textarea-meta--error"
     >
       {{ error }}
     </p>
   </div>
 </template>
+
+<style scoped>
+.textarea-control {
+  display: flex;
+  width: 100%;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--ui-bg-surface);
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  resize: none;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.textarea-control::placeholder {
+  color: var(--color-text-muted);
+}
+
+.textarea-control:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.textarea-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: var(--ui-bg-surface-muted);
+}
+
+.textarea-control:read-only {
+  opacity: 0.8;
+}
+
+.textarea-control--error {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px rgba(196, 43, 28, 0.12);
+}
+
+.textarea-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.textarea-meta {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.textarea-meta--error {
+  margin-top: 6px;
+  color: var(--color-error);
+}
+</style>

@@ -1,7 +1,5 @@
 <script setup>
 import { cn } from "@/lib/utils"
-import Separator from "@/components/ui/Separator.vue"
-
 const props = defineProps({
   title: {
     type: String,
@@ -49,8 +47,10 @@ const props = defineProps({
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 
 .page-header__copy {
@@ -71,30 +71,31 @@ const props = defineProps({
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-md);
-  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-secondary));
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 18%, var(--ui-border-default));
+  background: var(--color-accent-soft);
+  box-shadow: var(--shadow-rest);
   flex-shrink: 0;
 }
 
 .page-header__title {
   margin: 0;
-  font-size: 1.28rem;
-  line-height: 1.1;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-size: var(--text-title-1);
+  line-height: var(--line-title-1);
+  font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
 }
 
 .page-header__title--compact {
-  font-size: 0.98rem;
+  font-size: var(--text-title-2);
+  line-height: var(--line-title-2);
 }
 
 .page-header__description {
   margin: 6px 0 0;
-  max-width: 700px;
-  font-size: 0.84rem;
+  max-width: 760px;
+  font-size: var(--text-body);
   line-height: 1.6;
   color: var(--color-text-secondary);
 }

@@ -1,42 +1,37 @@
-﻿<template>
+<template>
     <div class="page-shell settings-page">
         <div class="page-frame">
             <aside class="settings-sidebar surface-muted page-panel">
-                <div class="p-5 border-b border-border">
+                <div class="settings-sidebar-top">
                     <div class="settings-sidebar-header">
                         <div>
-                            <div class="section-title text-lg">设置中心</div>
+                            <div class="settings-kicker">System</div>
+                            <div class="section-title">设置中心</div>
+                            <p class="settings-sidebar-description">管理外观、基础信息与桌面使用体验。</p>
                         </div>
-                        <button
-                            @click="router.back()"
-                            class="btn btn-ghost btn-icon"
-                        >
+                        <button @click="router.back()" class="btn btn-secondary btn-icon">
                             <ArrowLeftIcon :size="18" />
                         </button>
                     </div>
                 </div>
 
-                <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
+                <nav class="settings-nav">
                     <button
                         v-for="item in menuItems"
                         :key="item.key"
                         @click="activeSection = item.key"
-                        :class="[
-                            'w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-all border',
-                            activeSection === item.key
-                                ? 'bg-primary/10 text-primary border-primary/20 shadow-sm'
-                                : 'text-muted-foreground border-transparent hover:bg-secondary hover:border-border hover:text-foreground',
-                        ]"
+                        class="settings-nav-item"
+                        :class="{ 'is-active': activeSection === item.key }"
                     >
                         <div class="settings-nav-icon">
                             <component :is="item.icon" :size="16" />
                         </div>
-                        <span class="text-sm font-medium">{{ item.label }}</span>
+                        <span class="settings-nav-label">{{ item.label }}</span>
                     </button>
                 </nav>
 
-                <div class="p-3 border-t border-border">
-                    <div class="info-chip w-full justify-center">
+                <div class="settings-sidebar-bottom">
+                    <div class="info-chip settings-sidebar-chip">
                         当前分区 · {{ currentMenuLabel }}
                     </div>
                 </div>
@@ -46,11 +41,13 @@
                 <div class="settings-main-inner">
                     <div class="settings-hero surface-muted">
                         <div>
+                            <div class="settings-kicker">Workspace</div>
                             <div class="section-title">{{ currentMenuLabel }}</div>
+                            <p class="settings-section-description">按照统一规范维护桌面工具的外观和基础信息。</p>
                         </div>
                         <div class="settings-hero-badges">
                             <span class="info-chip">
-                                <PaletteIcon :size="12" class="text-primary" />
+                                <PaletteIcon :size="12" />
                                 视觉主题
                             </span>
                         </div>
@@ -91,15 +88,28 @@ const currentMenuLabel = computed(
 
 <style scoped>
 .settings-sidebar {
-    border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
-    border-radius: var(--radius-xl);
     width: 264px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: color-mix(in srgb, var(--color-bg-secondary) 92%, white);
-    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--ui-border-default);
+    border-radius: var(--radius-lg);
+    background: var(--ui-bg-surface);
+    box-shadow: var(--shadow-rest);
+}
+
+.settings-sidebar-top,
+.settings-sidebar-bottom {
+    padding: 16px;
+}
+
+.settings-sidebar-top {
+    border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+.settings-sidebar-bottom {
+    border-top: 1px solid var(--ui-border-subtle);
 }
 
 .settings-sidebar-header {
@@ -109,31 +119,81 @@ const currentMenuLabel = computed(
     gap: 12px;
 }
 
+.settings-sidebar-description {
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+}
+
+.settings-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    text-align: left;
+    transition: all 0.14s ease;
+}
+
+.settings-nav-item:hover {
+    background: var(--ui-bg-surface-hover);
+    border-color: var(--ui-border-subtle);
+    color: var(--color-text-primary);
+}
+
+.settings-nav-item.is-active {
+    background: var(--color-accent-soft);
+    border-color: color-mix(in srgb, var(--color-accent) 24%, var(--ui-border-default));
+    color: var(--color-accent);
+}
+
 .settings-nav-icon {
     width: 28px;
     height: 28px;
-    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--ui-border-default);
+    border-radius: var(--radius-sm);
+    background: var(--ui-bg-surface-muted);
+}
+
+.settings-nav-label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.settings-sidebar-chip {
+    width: 100%;
+    justify-content: center;
 }
 
 .settings-main {
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
-    border-radius: var(--radius-xl);
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 4%, transparent), transparent 150px),
-        var(--color-bg-secondary);
-    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--ui-border-default);
+    border-radius: var(--radius-lg);
+    background: var(--ui-bg-surface);
+    box-shadow: var(--shadow-rest);
 }
 
 .settings-main-inner {
-    padding: 14px;
+    padding: 16px;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -146,19 +206,15 @@ const currentMenuLabel = computed(
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
-    padding: 10px 12px;
-    border-radius: var(--radius-lg);
-    margin-bottom: 14px;
-    flex-shrink: 0;
-    border: 1px solid color-mix(in srgb, var(--color-border) 86%, transparent);
-    background:
-        linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 8%, transparent), transparent 60%),
-        var(--color-bg-tertiary);
-    box-shadow: var(--shadow-sm);
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--ui-border-default);
+    border-radius: var(--radius-md);
+    background: var(--ui-bg-surface-muted);
 }
 
 .settings-page :deep(.page-panel) {
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-lg);
 }
 
 .settings-hero-badges {
@@ -192,4 +248,3 @@ const currentMenuLabel = computed(
     }
 }
 </style>
-

@@ -2,61 +2,113 @@
   <div class="providers-view app-page">
     <PageHeader
       title="供应商管理"
-      description="统一管理供应商接入、端点转发模式、模型映射和健康状态。"
+      description="使用表格管理供应商资产、接入模式、模型数量和运行状态，提升检索与编辑效率。"
     >
       <template #actions>
         <button class="btn btn-primary" @click="openAddDialog">
-          <Plus :size="14" /> 添加供应商
+          <Plus :size="14" />
+          添加供应商
         </button>
       </template>
     </PageHeader>
 
-    <div class="provider-grid">
-      <div v-if="providerStore.providers.length === 0" class="empty-state">
-        <Cpu :size="48" />
-        <p>暂未配置供应商</p>
-        <button class="btn btn-primary" @click="openAddDialog">
-          <Plus :size="14" /> 添加第一个供应商
-        </button>
+    <section class="toolbar-surface providers-toolbar">
+      <div class="toolbar-group providers-toolbar-main">
+        <div class="toolbar-field">
+          <label class="toolbar-label">搜索</label>
+          <input v-model="keyword" class="form-input toolbar-input" placeholder="按名称或 API Base 搜索" />
+        </div>
+        <div class="toolbar-field">
+          <label class="toolbar-label">类型</label>
+          <select v-model="typeFilter" class="form-input toolbar-select">
+            <option value="all">全部类型</option>
+            <option value="openai">OpenAI 兼容</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Gemini</option>
+          </select>
+        </div>
+        <div class="toolbar-field">
+          <label class="toolbar-label">状态</label>
+          <select v-model="statusFilter" class="form-input toolbar-select">
+            <option value="all">全部状态</option>
+            <option value="healthy">健康</option>
+            <option value="warning">异常</option>
+            <option value="disabled">禁用</option>
+          </select>
+        </div>
       </div>
+      <div class="toolbar-summary">
+        <span class="toolbar-chip">共 {{ filteredProviders.length }} 条</span>
+        <span class="toolbar-chip">健康 {{ healthyProviders }} 条</span>
+      </div>
+    </section>
 
-      <div v-for="p in providerStore.providers" :key="p.id" class="provider-card">
-        <div class="card-header">
-          <div class="card-title-row">
-            <StatusBadge
-              :status="p.healthy ? 'success' : p.enabled ? 'warning' : 'error'"
-              :label="p.healthy ? '正常' : p.enabled ? '异常' : '禁用'"
-            />
-            <span class="card-title">{{ p.name }}</span>
+    <section v-if="providerStore.providers.length === 0" class="empty-state providers-empty">
+      <Cpu :size="40" />
+      <div class="providers-empty-title">暂未配置供应商</div>
+      <p>先添加第一个供应商后，才能配置模型映射与统一路由策略。</p>
+      <button class="btn btn-primary" @click="openAddDialog">
+        <Plus :size="14" />
+        添加第一个供应商
+      </button>
+    </section>
+
+    <section v-else class="table-panel">
+      <DataTable
+        :columns="columns"
+        :data="filteredProviders"
+        :loading="providerStore.loading"
+        empty-text="没有符合筛选条件的供应商"
+        row-key="id"
+      >
+        <template #cell-name="{ row }">
+          <div class="provider-cell-main">
+            <span class="provider-name">{{ row.name }}</span>
+            <span class="provider-base">{{ row.apiBase }}</span>
           </div>
-          <div class="card-actions">
-            <button class="icon-btn" title="测试连接" @click="handleTest(p)" :disabled="testing">
+        </template>
+
+        <template #cell-type="{ value }">
+          <span class="provider-type">{{ typeLabelMap[value] || value }}</span>
+        </template>
+
+        <template #cell-endpointMode="{ row }">
+          <span class="provider-endpoint">{{ getEndpointModeLabel(row.endpointMode, row.type) }}</span>
+        </template>
+
+        <template #cell-modelCount="{ value }">
+          <span class="provider-count">{{ value || 0 }} 个</span>
+        </template>
+
+        <template #cell-priority="{ value }">
+          <span class="provider-count">{{ value }}</span>
+        </template>
+
+        <template #cell-status="{ row }">
+          <StatusBadge
+            :status="row.healthy ? 'success' : row.enabled ? 'warning' : 'error'"
+            :label="row.healthy ? '正常' : row.enabled ? '异常' : '禁用'"
+          />
+        </template>
+
+        <template #cell-actions="{ row }">
+          <div class="row-actions">
+            <button class="icon-btn" title="测试连接" @click.stop="handleTest(row)" :disabled="testing">
               <Zap :size="14" />
             </button>
-            <button class="icon-btn" title="模型设置" @click="openModelDialog(p)">
+            <button class="icon-btn" title="模型设置" @click.stop="openModelDialog(row)">
               <Database :size="14" />
             </button>
-            <button class="icon-btn" title="编辑" @click="openEditDialog(p)">
+            <button class="icon-btn" title="编辑" @click.stop="openEditDialog(row)">
               <Pencil :size="14" />
             </button>
-            <button class="icon-btn danger" title="删除" @click="handleDelete(p)">
+            <button class="icon-btn danger" title="删除" @click.stop="handleDelete(row)">
               <Trash2 :size="14" />
             </button>
           </div>
-        </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="meta-type">{{ p.type }}</span>
-            <span class="meta-endpoint">{{ getEndpointModeLabel(p.endpointMode, p.type) }}</span>
-            <span class="meta-base">{{ p.apiBase }}</span>
-          </div>
-          <div class="card-footer">
-            <span class="meta-models">{{ p.modelCount }} 个模型</span>
-            <span class="meta-priority">优先级: {{ p.priority }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
+        </template>
+      </DataTable>
+    </section>
 
     <ModalDialog
       :visible="showDialog"
@@ -90,6 +142,10 @@
             </option>
           </select>
         </div>
+        <div class="form-field">
+          <label class="form-label">优先级</label>
+          <input v-model.number="form.priority" class="form-input" type="number" min="0" />
+        </div>
         <div class="form-field full">
           <label class="form-label">API Base URL</label>
           <input v-model="form.apiBase" class="form-input" placeholder="https://api.openai.com/v1" />
@@ -98,11 +154,7 @@
           <label class="form-label">API Key</label>
           <input v-model="form.apiKey" class="form-input" type="password" :placeholder="isEditing ? '留空则保留原有密钥' : 'sk-...'" />
         </div>
-        <div class="form-field">
-          <label class="form-label">优先级</label>
-          <input v-model.number="form.priority" class="form-input" type="number" min="0" />
-        </div>
-        <div class="form-field">
+        <div class="form-field full">
           <label class="form-label">状态</label>
           <select v-model="form.enabled" class="form-input">
             <option :value="true">启用</option>
@@ -112,7 +164,8 @@
       </div>
       <div class="form-actions">
         <button class="btn btn-secondary" @click="handleTestForm" :disabled="testing">
-          <Zap :size="14" /> {{ testing ? '测试中...' : '测试连接' }}
+          <Zap :size="14" />
+          {{ testing ? '测试中...' : '测试连接' }}
         </button>
         <div class="form-actions-right">
           <button class="btn btn-secondary" @click="showDialog = false">取消</button>
@@ -133,7 +186,9 @@
     >
       <div class="model-dialog-hero">
         <div class="model-dialog-hero-copy">
+          <div class="settings-kicker">Mapping</div>
           <h3 class="model-dialog-title">模型映射</h3>
+          <p class="panel-description">将统一路由名映射到当前供应商真实模型名，并指定默认模型。</p>
         </div>
         <div class="model-dialog-summary">
           <div class="summary-label">当前供应商</div>
@@ -149,14 +204,16 @@
         <div class="section-head">
           <div class="section-title">映射规则</div>
           <button class="btn btn-secondary add-inline-btn" @click="addModel">
-            <Plus :size="14" /> 添加映射
+            <Plus :size="14" />
+            添加映射
           </button>
         </div>
 
         <div v-if="modelForm.llms.length === 0" class="empty-model-state">
           <div class="empty-model-state-title">还没有模型映射</div>
           <button class="btn btn-primary" @click="addModel">
-            <Plus :size="14" /> 添加第一条映射
+            <Plus :size="14" />
+            添加第一条映射
           </button>
         </div>
 
@@ -227,6 +284,7 @@ import { Plus, Cpu, Zap, Pencil, Trash2, Database } from 'lucide-vue-next';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import PageHeader from '@/components/layout/PageHeader.vue';
 import ModalDialog from '@/components/ModalDialog.vue';
+import DataTable from '@/components/layout/DataTable.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useToast } from '@/composables/useToast';
 
@@ -237,6 +295,9 @@ const { toast } = useToast();
 const showDialog = ref(false);
 const isEditing = ref(false);
 const testing = ref(false);
+const keyword = ref("");
+const typeFilter = ref("all");
+const statusFilter = ref("all");
 
 const showModelDialog = ref(false);
 const currentProvider = ref(null);
@@ -268,6 +329,22 @@ const endpointModeOptionsMap = {
   ],
 };
 
+const typeLabelMap = {
+  openai: "OpenAI 兼容",
+  anthropic: "Anthropic",
+  gemini: "Gemini",
+};
+
+const columns = [
+  { key: 'name', title: '名称' },
+  { key: 'type', title: '类型', class: 'w-[140px]' },
+  { key: 'endpointMode', title: '端点模式' },
+  { key: 'modelCount', title: '模型数', class: 'w-[88px]' },
+  { key: 'priority', title: '优先级', class: 'w-[88px]' },
+  { key: 'status', title: '状态', class: 'w-[120px]' },
+  { key: 'actions', title: '操作', class: 'w-[168px]' },
+];
+
 const defaultForm = () => ({
   id: '',
   name: '',
@@ -281,6 +358,19 @@ const defaultForm = () => ({
 
 const form = ref(defaultForm());
 const endpointModeOptions = computed(() => endpointModeOptionsMap[form.value.type] || endpointModeOptionsMap.openai);
+const healthyProviders = computed(() => providerStore.providers.filter((item) => item.healthy).length);
+
+const filteredProviders = computed(() => {
+  return providerStore.providers.filter((item) => {
+    const matchesKeyword = !keyword.value
+      || item.name.toLowerCase().includes(keyword.value.toLowerCase())
+      || item.apiBase.toLowerCase().includes(keyword.value.toLowerCase());
+    const matchesType = typeFilter.value === 'all' || item.type === typeFilter.value;
+    const status = item.healthy ? 'healthy' : item.enabled ? 'warning' : 'disabled';
+    const matchesStatus = statusFilter.value === 'all' || status === statusFilter.value;
+    return matchesKeyword && matchesType && matchesStatus;
+  });
+});
 
 function normalizeEndpointMode(type, endpointMode = '') {
   const options = endpointModeOptionsMap[type] || endpointModeOptionsMap.openai;
@@ -385,7 +475,6 @@ function openModelDialog(p) {
     llms: p.llms ? JSON.parse(JSON.stringify(p.llms)) : [],
     defaultModel: p.defaultModel || ''
   };
-  // 确保所有模型条目都有 target 字段
   modelForm.value.llms = modelForm.value.llms.map(m => ({
     model: m.model || '',
     target: m.target || ''
@@ -403,10 +492,9 @@ function removeModel(index) {
 
 async function saveModels() {
   if (!currentProvider.value) return;
-  
-  // 过滤掉空的模型条目
+
   const validLlms = modelForm.value.llms.filter(m => m.model.trim());
-  
+
   savingModels.value = true;
   try {
     await providerStore.setProviderModels(
@@ -429,108 +517,100 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.provider-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+.providers-view {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-.empty-state {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 48px 24px;
-  color: var(--color-text-muted);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-lg);
+.providers-toolbar {
+  align-items: flex-end;
 }
 
-.provider-card {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-secondary);
-  overflow: hidden;
+.providers-toolbar-main {
+  flex: 1;
 }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
+.toolbar-field {
+  min-width: 160px;
 }
-.card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+
+.toolbar-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
-.card-title {
-  font-size: 14px;
+
+.toolbar-input {
+  min-width: 260px;
+}
+
+.providers-empty-title {
+  font-size: 16px;
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
-.card-actions {
+.providers-empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.table-panel {
+  min-height: 0;
+}
+
+.provider-cell-main {
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  gap: 2px;
 }
-.card-body {
-  padding: 12px 16px;
-}
-.card-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.meta-type {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
+
+.provider-name {
   font-weight: 600;
+  color: var(--color-text-primary);
 }
-.meta-endpoint {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-tertiary));
-  color: var(--color-accent);
-  font-weight: 700;
-}
-.meta-base {
-  font-size: 12px;
-  color: var(--color-text-muted);
+
+.provider-base {
+  max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.card-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   font-size: 12px;
   color: var(--color-text-muted);
 }
 
+.provider-type,
+.provider-endpoint,
+.provider-count {
+  font-size: 12px;
+}
+
+.provider-endpoint {
+  color: var(--color-text-secondary);
+}
+
+.provider-type {
+  color: var(--color-text-primary);
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+
 .form-field.full {
   grid-column: 1 / -1;
-}
-.form-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  margin-bottom: 4px;
 }
 
 .form-actions {
@@ -539,7 +619,7 @@ onMounted(() => {
   justify-content: space-between;
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--ui-border-subtle);
 }
 
 .form-actions-right {
@@ -547,7 +627,6 @@ onMounted(() => {
   gap: 8px;
 }
 
-/* 模型对话框样式 */
 .model-dialog-content {
   display: flex;
   flex-direction: column;
@@ -558,23 +637,20 @@ onMounted(() => {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(260px, 0.9fr);
   gap: 16px;
-  align-items: stretch;
 }
 
 .model-dialog-hero-copy,
 .model-dialog-summary,
 .model-editor-card,
 .default-model-section {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-secondary);
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ui-bg-surface);
 }
 
 .model-dialog-hero-copy {
   padding: 18px 20px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0.02)),
-    var(--color-bg-secondary);
+  background: var(--ui-bg-surface-muted);
 }
 
 .model-dialog-title {
@@ -599,7 +675,7 @@ onMounted(() => {
 .summary-value {
   margin-top: 6px;
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-primary);
 }
 
@@ -610,18 +686,8 @@ onMounted(() => {
   margin-top: 14px;
 }
 
-.summary-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.model-editor-card {
+.model-editor-card,
+.default-model-section {
   padding: 18px 20px 20px;
 }
 
@@ -637,34 +703,12 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.section-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
 .model-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-height: 360px;
   overflow-y: auto;
-}
-
-.model-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-.model-input:focus {
-  outline: none;
-  border-color: var(--color-accent);
 }
 
 .add-inline-btn {
@@ -677,16 +721,14 @@ onMounted(() => {
   align-items: flex-start;
   gap: 12px;
   padding: 28px;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(180deg, rgba(37, 99, 235, 0.04), transparent),
-    var(--color-bg-primary);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--ui-bg-surface-muted);
 }
 
 .empty-model-state-title {
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-primary);
 }
 
@@ -696,9 +738,9 @@ onMounted(() => {
   gap: 12px;
   align-items: start;
   padding: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-primary);
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ui-bg-surface-muted);
 }
 
 .mapping-row-main {
@@ -710,14 +752,6 @@ onMounted(() => {
 
 .mapping-field {
   min-width: 0;
-}
-
-.mapping-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-text-secondary);
 }
 
 .mapping-arrow {
@@ -734,30 +768,20 @@ onMounted(() => {
   height: 32px;
 }
 
-.default-model-section {
-  padding: 18px 20px 20px;
-}
-
 .model-dialog-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 16px;
-  padding: 16px 20px 0;
-  border-top: 1px solid var(--color-border);
+  padding-top: 4px;
 }
 
 .model-dialog-actions-buttons {
   display: flex;
   gap: 8px;
-  flex-shrink: 0;
 }
 
 @media (max-width: 960px) {
-  .model-dialog-hero {
-    grid-template-columns: 1fr;
-  }
-
+  .model-dialog-hero,
   .mapping-row-main {
     grid-template-columns: 1fr;
   }
@@ -767,21 +791,32 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 720px) {
-  .section-head,
-  .model-dialog-actions {
+@media (max-width: 820px) {
+  .providers-toolbar {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .add-inline-btn,
-  .model-dialog-actions-buttons .btn {
-    width: 100%;
-    justify-content: center;
+  .toolbar-input {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 
+  .form-actions,
+  .section-head,
+  .model-dialog-actions,
   .model-dialog-actions-buttons {
-    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
   }
 
   .mapping-row {
