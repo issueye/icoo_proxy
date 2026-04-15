@@ -16,15 +16,16 @@ func TestConfigServiceSaveLoadRoundTrip(t *testing.T) {
 	}
 	defer service.Close()
 
-	err := service.SetClawConnectionConfig(ClawConnectionConfig{
-		APIBase: "http://127.0.0.1:116789",
-		WSHost:  "127.0.0.1",
-		WSPort:  "116789",
-		WSPath:  "/ws",
-		UserID:  "tester",
+	err := service.SetGatewayConfig(GatewayConfig{
+		ListenPort:      26790,
+		DefaultProvider: "openai-main",
+		LogLevel:        "debug",
+		RetryCount:      3,
+		RetryIntervalMs: 900,
+		AuthKey:         "gateway-secret",
 	})
 	if err != nil {
-		t.Fatalf("SetClawConnectionConfig() error = %v", err)
+		t.Fatalf("SetGatewayConfig() error = %v", err)
 	}
 
 	loaded := &ConfigService{
@@ -37,15 +38,15 @@ func TestConfigServiceSaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	cfg := loaded.GetClawConnectionConfig()
-	if cfg.APIBase != "http://127.0.0.1:116789" {
-		t.Fatalf("APIBase = %q", cfg.APIBase)
+	cfg := loaded.GetGatewayConfig()
+	if cfg.ListenPort != 26790 {
+		t.Fatalf("ListenPort = %d", cfg.ListenPort)
 	}
-	if cfg.WSHost != "127.0.0.1" {
-		t.Fatalf("WSHost = %q", cfg.WSHost)
+	if cfg.DefaultProvider != "openai-main" {
+		t.Fatalf("DefaultProvider = %q", cfg.DefaultProvider)
 	}
-	if cfg.UserID != "tester" {
-		t.Fatalf("UserID = %q", cfg.UserID)
+	if cfg.AuthKey != "gateway-secret" {
+		t.Fatalf("AuthKey = %q", cfg.AuthKey)
 	}
 }
 
@@ -58,25 +59,25 @@ func TestConfigServiceLoadAppliesDefaults(t *testing.T) {
 	}
 	defer service.Close()
 
-	if err := service.SetClawConnectionConfig(ClawConnectionConfig{
-		WSHost: "custom-host",
+	if err := service.SetGatewayConfig(GatewayConfig{
+		DefaultProvider: "custom-provider",
 	}); err != nil {
-		t.Fatalf("SetClawConnectionConfig() error = %v", err)
+		t.Fatalf("SetGatewayConfig() error = %v", err)
 	}
 
 	if err := service.Load(); err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	clawCfg := service.GetClawConnectionConfig()
-	if clawCfg.WSHost != "custom-host" {
-		t.Fatalf("WSHost = %q, want custom-host", clawCfg.WSHost)
+	gwCfg := service.GetGatewayConfig()
+	if gwCfg.DefaultProvider != "custom-provider" {
+		t.Fatalf("DefaultProvider = %q, want custom-provider", gwCfg.DefaultProvider)
 	}
-	if clawCfg.APIBase != "http://localhost:16789" {
-		t.Fatalf("APIBase = %q, want default", clawCfg.APIBase)
+	if gwCfg.ListenPort != 16790 {
+		t.Fatalf("ListenPort = %d, want default", gwCfg.ListenPort)
 	}
-	if clawCfg.WSPort != "16789" {
-		t.Fatalf("WSPort = %q, want default", clawCfg.WSPort)
+	if gwCfg.LogLevel != "info" {
+		t.Fatalf("LogLevel = %q, want default", gwCfg.LogLevel)
 	}
 }
 
@@ -103,13 +104,6 @@ func TestConfigServiceMigratesLegacyTOML(t *testing.T) {
 	dbPath := filepath.Join(dir, "icoo_proxy.db")
 	legacyPath := filepath.Join(dir, "icoo_proxy.toml")
 	content := []byte(`
-[claw_connection]
-api_base = "http://legacy-host:16789"
-ws_host = "legacy-host"
-ws_port = "26789"
-ws_path = "/legacy"
-user_id = "legacy-user"
-
 [gateway]
 listen_port = 26790
 default_provider = "openai-main"
@@ -151,14 +145,6 @@ enabled = true
 
 	if err := service.Load(); err != nil {
 		t.Fatalf("Load() error = %v", err)
-	}
-
-	clawCfg := service.GetClawConnectionConfig()
-	if clawCfg.APIBase != "http://legacy-host:16789" {
-		t.Fatalf("APIBase = %q", clawCfg.APIBase)
-	}
-	if clawCfg.UserID != "legacy-user" {
-		t.Fatalf("UserID = %q", clawCfg.UserID)
 	}
 
 	gwCfg := service.GetGatewayConfig()

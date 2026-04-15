@@ -36,12 +36,6 @@ func (a *App) Startup(ctx context.Context) {
 		runtime.LogWarning(a.ctx, "Failed to initialize audit store: "+err.Error())
 	}
 
-	// Set up proxy target from config
-	clawCfg := configService.GetClawConnectionConfig()
-	if clawCfg.APIBase != "" {
-		GetAPIProxy().SetTargetBase(clawCfg.APIBase)
-	}
-
 	// Inject config provider into provider manager
 	pm := provider.GetManager()
 	pm.SetConfigProvider(configService)

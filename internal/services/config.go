@@ -25,25 +25,16 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type ClawConnectionConfig struct {
-	APIBase string `json:"apiBase" toml:"api_base"`
-	WSHost  string `json:"wsHost" toml:"ws_host"`
-	WSPort  string `json:"wsPort" toml:"ws_port"`
-	WSPath  string `json:"wsPath" toml:"ws_path"`
-	UserID  string `json:"userId" toml:"user_id"`
+type FullConfig struct {
+	Gateway        config.GatewayConfig     `json:"gateway" toml:"gateway"`
+	Providers      []config.ProviderConfig  `json:"providers" toml:"providers"`
+	RouteRules     []config.RouteRuleConfig `json:"routeRules" toml:"route_rules"`
 }
 
 // Re-export config types for convenience
 type GatewayConfig = config.GatewayConfig
 type ProviderConfig = config.ProviderConfig
 type RouteRuleConfig = config.RouteRuleConfig
-
-type FullConfig struct {
-	ClawConnection ClawConnectionConfig     `json:"clawConnection" toml:"claw_connection"`
-	Gateway        config.GatewayConfig     `json:"gateway" toml:"gateway"`
-	Providers      []config.ProviderConfig  `json:"providers" toml:"providers"`
-	RouteRules     []config.RouteRuleConfig `json:"routeRules" toml:"route_rules"`
-}
 
 type ConfigService struct {
 	config           *FullConfig
@@ -96,13 +87,6 @@ var configOnce sync.Once
 
 func defaultConfig() *FullConfig {
 	return &FullConfig{
-		ClawConnection: ClawConnectionConfig{
-			APIBase: "http://localhost:16789",
-			WSHost:  "localhost",
-			WSPort:  "16789",
-			WSPath:  "/ws",
-			UserID:  "user-1",
-		},
 		Gateway: config.GatewayConfig{
 			ListenPort:      16790,
 			LogLevel:        "info",
@@ -206,21 +190,6 @@ func (s *ConfigService) GetConfig() *FullConfig {
 	defer s.mu.RUnlock()
 	cfg := *s.config
 	return &cfg
-}
-
-func (s *ConfigService) GetClawConnectionConfig() ClawConnectionConfig {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.config.ClawConnection
-}
-
-func (s *ConfigService) SetClawConnectionConfig(cfg ClawConnectionConfig) error {
-	s.mu.Lock()
-	current := *s.config
-	current.ClawConnection = cfg
-	s.applyDefaultsLocked(&current)
-	s.mu.Unlock()
-	return s.Save()
 }
 
 // --- Gateway config (config.ConfigProvider) ---
@@ -328,21 +297,6 @@ func (s *ConfigService) GetConfigJSON() string {
 
 func (s *ConfigService) applyDefaultsLocked(cfg *FullConfig) {
 	defaults := defaultConfig()
-	if cfg.ClawConnection.APIBase == "" {
-		cfg.ClawConnection.APIBase = defaults.ClawConnection.APIBase
-	}
-	if cfg.ClawConnection.WSHost == "" {
-		cfg.ClawConnection.WSHost = defaults.ClawConnection.WSHost
-	}
-	if cfg.ClawConnection.WSPort == "" {
-		cfg.ClawConnection.WSPort = defaults.ClawConnection.WSPort
-	}
-	if cfg.ClawConnection.WSPath == "" {
-		cfg.ClawConnection.WSPath = defaults.ClawConnection.WSPath
-	}
-	if cfg.ClawConnection.UserID == "" {
-		cfg.ClawConnection.UserID = defaults.ClawConnection.UserID
-	}
 	if cfg.Gateway.ListenPort == 0 {
 		cfg.Gateway.ListenPort = defaults.Gateway.ListenPort
 	}
@@ -433,9 +387,6 @@ func (s *ConfigService) migrateLegacyConfigLocked() (bool, error) {
 func (s *ConfigService) loadFromDBLocked() (*FullConfig, error) {
 	cfg := defaultConfig()
 
-	if err := s.loadSettingJSONLocked("claw_connection", &cfg.ClawConnection); err != nil {
-		return nil, err
-	}
 	if err := s.loadGatewayConfigLocked(&cfg.Gateway); err != nil {
 		return nil, err
 	}
@@ -555,7 +506,6 @@ func (s *ConfigService) saveSettingsLocked(tx *gorm.DB) error {
 	gatewayCfg.AuthKey = encryptedGatewayAuthKey
 
 	settings := []kv{
-		{key: "claw_connection", value: s.config.ClawConnection},
 		{key: "gateway", value: gatewayCfg},
 	}
 

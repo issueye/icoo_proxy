@@ -5,7 +5,6 @@ import (
 	"icoo_proxy/internal/services"
 	"io/fs"
 	"net/http"
-	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -18,7 +17,6 @@ var assets embed.FS
 
 type assetHandler struct {
 	assets http.Handler
-	proxy  *services.APIProxy
 }
 
 func newAssetHandler() *assetHandler {
@@ -28,15 +26,10 @@ func newAssetHandler() *assetHandler {
 	}
 	return &assetHandler{
 		assets: http.FileServer(http.FS(sub)),
-		proxy:  services.GetAPIProxy(),
 	}
 }
 
 func (h *assetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/proxy/") {
-		h.proxy.ServeHTTP(w, r)
-		return
-	}
 	h.assets.ServeHTTP(w, r)
 }
 

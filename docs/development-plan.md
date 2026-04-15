@@ -18,7 +18,7 @@
 | 资产 | 路径 | 可复用程度 | 说明 |
 |------|------|-----------|------|
 | Go 项目骨架 | `main.go`, `go.mod` | **高** | 保留 Wails 框架，新增网关 HTTP Server |
-| HTTP 反向代理 | `internal/services/api_proxy.go` | **高** | 作为网关代理引擎的基础进行重构 |
+| 网关配置与服务编排 | `internal/services/config.go`, `internal/services/app.go` | **高** | 保留桌面端配置持久化与生命周期管理 |
 | TOML 配置服务 | `internal/services/config.go` | **高** | 扩展配置结构，新增供应商/路由配置 |
 | Wails 应用绑定 | `internal/services/app.go` | **高** | 继续作为前端与后端的桥接层 |
 | Vue 3 前端框架 | `frontend/` | **高** | 保留技术栈，重构页面内容 |
@@ -26,7 +26,7 @@
 | 布局组件 | `frontend/src/components/layout/` | **高** | DataTable, ManagePage, PageHeader 等直接复用 |
 | Settings 组件 | `frontend/src/components/settings/` | **中** | 当前仅保留已启用设置分区，未挂载旧面板应移除 |
 | Pinia Store | `frontend/src/stores/` | **中** | provider.js 改造复用，新增 gateway/route store |
-| HTTP 服务层 | `frontend/src/services/` | **中** | http.js 保留，API 层需重构 |
+| 前端数据访问 | `frontend/src/stores/`, `frontend/src/wailsjs/` | **高** | 当前页面直接通过 Wails 绑定与 store 驱动 |
 | 供应商管理页面 | `frontend/src/views/ProvidersView.vue` | **中** | 作为供应商管理页面的基础改造 |
 | 主题系统 | `frontend/src/stores/theme.js` | **高** | 直接复用 |
 
@@ -155,8 +155,7 @@ internal/
 │
 └── services/                   # 现有服务（保留并改造）
     ├── app.go                 # Wails 应用绑定（扩展网关控制方法）
-    ├── config.go              # 保留，与 config 模块整合
-    └── api_proxy.go           # 改造为网关代理引擎的一部分
+    └── config.go              # 保留，与 config 模块整合
 ```
 
 ### 2.3 前端模块划分
@@ -197,14 +196,8 @@ frontend/src/
 │   ├── log.js                  # 日志状态（新增）
 │   └── theme.js                # 主题状态（保留）
 │
-├── services/
-│   ├── http.js                 # HTTP 客户端（保留）
-│   ├── wails.js                # Wails 桥接（保留）
-│   ├── unified-api.js          # 统一 API 适配（保留）
-│   ├── gateway-api.js          # 网关 API（新增）
-│   ├── provider-api.js         # 供应商 API（改造）
-│   ├── route-api.js            # 路由规则 API（新增）
-│   └── log-api.js              # 日志 API（新增）
+├── wailsjs/                    # Wails 生成绑定（保留）
+└── services/                   # 历史兼容层已移除
 ```
 
 ### 2.4 关键数据流
@@ -316,7 +309,7 @@ type ProviderAdapter interface {
 | T1-01 | 创建网关 HTTP Server | `internal/gateway/server.go` | 监听指定端口（默认 16790），启动独立 HTTP 服务器 |
 | T1-02 | 实现请求路由分发 | `internal/gateway/router.go` | 将 `/v1/chat/completions`、`/v1/models` 等路由到对应 handler |
 | T1-03 | 实现中间件框架 | `internal/gateway/middleware.go` | 可链式调用的中间件模式（Logger、Recovery、CORS） |
-| T1-04 | 重构代理引擎 | `internal/gateway/proxy_engine.go` | 基于 api_proxy.go 重构，支持动态目标、连接池、超时管理 |
+| T1-04 | 完善网关转发链路 | `internal/gateway/handler.go` | 直接维护供应商转发与流式超时控制 |
 | T1-05 | 定义内部统一消息类型 | `internal/protocol/types.go` | InternalRequest、InternalResponse、InternalStreamChunk |
 | T1-06 | 实现请求 handler | `internal/gateway/handler.go` | chatCompletionsHandler、modelsHandler、healthHandler |
 | T1-07 | 扩展配置结构 | `internal/config/config.go` | 新增 [gateway]、[[providers]]、[[route_rules]] 配置段 |
