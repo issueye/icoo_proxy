@@ -102,6 +102,7 @@
     <FloatingDrawer
       :visible="!!currentProvider"
       title="模型设置"
+      width="640px"
       @close="closeModelDrawer"
     >
       <template #summary>
@@ -132,32 +133,44 @@
             </button>
           </div>
 
-          <div v-else class="model-list">
-            <div
-              v-for="(model, index) in modelForm.llms"
-              :key="index"
-              class="mapping-row"
-            >
-              <div class="mapping-field">
-                <label class="mapping-label">请求模型名称</label>
-                <input
-                  v-model="model.model"
-                  class="model-input"
-                  placeholder="如: gpt-4o"
-                />
-              </div>
-              <div class="mapping-field">
-                <label class="mapping-label">目标模型</label>
-                <input
-                  v-model="model.target"
-                  class="model-input"
-                  placeholder="如: claude-3-7-sonnet"
-                />
-              </div>
-              <button class="icon-btn danger mapping-remove-btn" title="删除映射" @click="removeModel(index)">
-                <Trash2 :size="14" />
-              </button>
-            </div>
+          <div v-else class="model-rules-table-wrap">
+            <table class="model-rules-table">
+              <thead>
+                <tr>
+                  <th>请求模型名称</th>
+                  <th>目标模型</th>
+                  <th class="model-rules-table__action-head">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(model, index) in modelForm.llms"
+                  :key="index"
+                >
+                  <td>
+                    <input
+                      v-model="model.model"
+                      class="model-input table-model-input"
+                      :aria-label="`第 ${index + 1} 条映射的请求模型名称`"
+                      placeholder="如: gpt-4o"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      v-model="model.target"
+                      class="model-input table-model-input"
+                      :aria-label="`第 ${index + 1} 条映射的目标模型`"
+                      placeholder="如: claude-3-7-sonnet"
+                    />
+                  </td>
+                  <td class="model-rules-table__action-cell">
+                    <button class="icon-btn danger" type="button" title="删除映射" @click="removeModel(index)">
+                      <Trash2 :size="14" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
       </div>
 
@@ -678,13 +691,57 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.model-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.model-rules-table-wrap {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ui-bg-surface);
+}
+
+.model-rules-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.model-rules-table th,
+.model-rules-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.model-rules-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ui-bg-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.model-rules-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.model-rules-table tbody tr:hover {
+  background: var(--ui-bg-surface-hover);
+}
+
+.model-rules-table__action-head,
+.model-rules-table__action-cell {
+  width: 64px;
+  text-align: center;
+}
+
+.table-model-input {
+  width: 100%;
 }
 
 .add-inline-btn {
@@ -706,33 +763,6 @@ onMounted(() => {
   font-size: 18px;
   font-weight: 600;
   color: var(--color-text-primary);
-}
-
-.mapping-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  padding: 14px;
-  border: 1px solid var(--ui-border-default);
-  border-radius: var(--radius-md);
-  background: var(--ui-bg-surface);
-}
-
-.mapping-field {
-  min-width: 0;
-}
-
-.mapping-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.mapping-remove-btn {
-  justify-self: flex-end;
 }
 
 @media (max-width: 820px) {
@@ -759,6 +789,14 @@ onMounted(() => {
 
   .row-actions {
     justify-content: flex-start;
+  }
+
+  .model-rules-table {
+    min-width: 560px;
+  }
+
+  .model-rules-table-wrap {
+    overflow-x: auto;
   }
 }
 </style>
