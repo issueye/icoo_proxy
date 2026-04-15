@@ -198,56 +198,85 @@
       </template>
     </FloatingDrawer>
 
-    <ModalDialog
-      :visible="showDialog"
+    <FloatingDrawer
+      :visible="showProviderDrawer"
       :title="isEditing ? '编辑供应商' : '添加供应商'"
-      size="lg"
-      :showFooter="false"
-      @close="showDialog = false"
+      width="560px"
+      @close="closeProviderDrawer"
     >
-      <div class="form-grid">
-        <div class="form-field">
-          <label class="form-label">名称</label>
-          <input v-model="form.name" class="form-input" placeholder="如: OpenAI" />
+      <template #summary>
+        <div class="provider-drawer-summary">
+          <div class="summary-meta">
+            <span class="summary-chip">{{ form.enabled ? '启用' : '禁用' }}</span>
+            <span class="summary-chip">优先级 {{ form.priority }}</span>
+          </div>
         </div>
-        <div class="form-field">
-          <label class="form-label">类型</label>
-          <Select v-model="form.type" :options="providerTypeOptions" @update:modelValue="handleTypeChange" />
-        </div>
-        <div class="form-field">
-          <label class="form-label">端点转发</label>
-          <Select v-model="form.endpointMode" :options="endpointModeOptions" />
-        </div>
-        <div class="form-field">
-          <label class="form-label">优先级</label>
-          <input v-model.number="form.priority" class="form-input" type="number" min="0" />
-        </div>
-        <div class="form-field full">
-          <label class="form-label">API Base URL</label>
-          <input v-model="form.apiBase" class="form-input" placeholder="https://api.openai.com/v1" />
-        </div>
-        <div class="form-field full">
-          <label class="form-label">API Key</label>
-          <input v-model="form.apiKey" class="form-input" type="password" :placeholder="isEditing ? '留空则保留原有密钥' : 'sk-...'" />
-        </div>
-        <div class="form-field full">
-          <label class="form-label">状态</label>
+      </template>
+
+      <div class="provider-form-stack">
+        <section class="provider-form-section">
+          <div class="section-head compact">
+            <div class="section-title">基础信息</div>
+          </div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label">名称</label>
+              <input v-model="form.name" class="form-input" placeholder="如: OpenAI" />
+            </div>
+            <div class="form-field">
+              <label class="form-label">类型</label>
+              <Select v-model="form.type" :options="providerTypeOptions" @update:modelValue="handleTypeChange" />
+            </div>
+          </div>
+        </section>
+
+        <section class="provider-form-section">
+          <div class="section-head compact">
+            <div class="section-title">连接配置</div>
+          </div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label">端点转发</label>
+              <Select v-model="form.endpointMode" :options="endpointModeOptions" />
+            </div>
+            <div class="form-field">
+              <label class="form-label">优先级</label>
+              <input v-model.number="form.priority" class="form-input" type="number" min="0" />
+            </div>
+            <div class="form-field full">
+              <label class="form-label">API Base URL</label>
+              <input v-model="form.apiBase" class="form-input" placeholder="https://api.openai.com/v1" />
+            </div>
+            <div class="form-field full">
+              <label class="form-label">API Key</label>
+              <input v-model="form.apiKey" class="form-input" type="password" :placeholder="isEditing ? '留空则保留原有密钥' : 'sk-...'" />
+            </div>
+          </div>
+        </section>
+
+        <section class="provider-form-section">
+          <div class="section-head compact">
+            <div class="section-title">状态</div>
+          </div>
           <Select v-model="form.enabled" :options="enabledOptions" />
-        </div>
+        </section>
       </div>
-      <div class="form-actions">
-        <button class="btn btn-secondary" @click="handleTestForm" :disabled="testing">
-          <Zap :size="14" />
-          {{ testing ? '测试中...' : '测试连接' }}
-        </button>
-        <div class="form-actions-right">
-          <button class="btn btn-secondary" @click="showDialog = false">取消</button>
-          <button class="btn btn-primary" @click="handleSave" :disabled="providerStore.loading">
-            {{ providerStore.loading ? '保存中...' : '保存' }}
+
+      <template #footer>
+        <div class="provider-drawer-footer">
+          <button class="btn btn-secondary" type="button" @click="handleTestForm" :disabled="testing">
+            <Zap :size="14" />
+            {{ testing ? '测试中...' : '测试连接' }}
           </button>
+          <div class="form-actions-right">
+            <button class="btn btn-secondary" type="button" @click="closeProviderDrawer">取消</button>
+            <button class="btn btn-primary" type="button" @click="handleSave" :disabled="providerStore.loading">
+              {{ providerStore.loading ? '保存中...' : '保存' }}
+            </button>
+          </div>
         </div>
-      </div>
-    </ModalDialog>
+      </template>
+    </FloatingDrawer>
   </div>
 </template>
 
@@ -259,7 +288,6 @@ import FloatingDrawer from '@/components/ui/FloatingDrawer.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import Select from '@/components/ui/Select.vue';
 import PageHeader from '@/components/layout/PageHeader.vue';
-import ModalDialog from '@/components/ModalDialog.vue';
 import DataTable from '@/components/layout/DataTable.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { useToast } from '@/composables/useToast';
@@ -268,7 +296,7 @@ const providerStore = useProviderStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
 
-const showDialog = ref(false);
+const showProviderDrawer = ref(false);
 const isEditing = ref(false);
 const testing = ref(false);
 const keyword = ref("");
@@ -391,7 +419,7 @@ function handleTypeChange() {
 function openAddDialog() {
   isEditing.value = false;
   form.value = defaultForm();
-  showDialog.value = true;
+  showProviderDrawer.value = true;
 }
 
 function openEditDialog(p) {
@@ -406,7 +434,11 @@ function openEditDialog(p) {
     enabled: p.enabled,
     priority: p.priority,
   };
-  showDialog.value = true;
+  showProviderDrawer.value = true;
+}
+
+function closeProviderDrawer() {
+  showProviderDrawer.value = false;
 }
 
 async function handleSave() {
@@ -422,7 +454,7 @@ async function handleSave() {
       await providerStore.addProvider(form.value);
       toast('供应商已添加', 'success');
     }
-    showDialog.value = false;
+    closeProviderDrawer();
   } catch (e) {
     toast('操作失败: ' + e.message, 'error');
   }
@@ -665,18 +697,43 @@ onMounted(() => {
   grid-column: 1 / -1;
 }
 
-.form-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--ui-border-subtle);
-}
-
 .form-actions-right {
   display: flex;
   gap: 8px;
+}
+
+.provider-drawer-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.provider-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.provider-form-section {
+  padding: 14px;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ui-bg-surface-muted);
+}
+
+.provider-form-hint {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.provider-drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
 }
 
 .section-head {
@@ -781,10 +838,14 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .form-actions,
+  .provider-drawer-footer,
   .section-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .form-actions-right {
+    flex-direction: column;
   }
 
   .row-actions {
