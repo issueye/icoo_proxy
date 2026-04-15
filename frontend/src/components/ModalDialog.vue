@@ -295,6 +295,7 @@ function handleConfirm() {
 
 .modal-shell__body {
     background: var(--ui-bg-surface);
+    padding: 1.5rem;
 }
 
 .modal-shell__body--overflow-visible {

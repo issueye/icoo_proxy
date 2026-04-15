@@ -43,62 +43,152 @@
       </button>
     </section>
 
-    <section v-else class="table-panel">
-      <DataTable
-        :columns="columns"
-        :data="filteredProviders"
-        :loading="providerStore.loading"
-        empty-text="没有符合筛选条件的供应商"
-        row-key="id"
-      >
-        <template #cell-name="{ row }">
-          <div class="provider-cell-main">
-            <span class="provider-name">{{ row.name }}</span>
-            <span class="provider-base">{{ row.apiBase }}</span>
+    <div v-else class="providers-workspace">
+      <section class="table-panel">
+        <DataTable
+          :columns="columns"
+          :data="filteredProviders"
+          :loading="providerStore.loading"
+          empty-text="没有符合筛选条件的供应商"
+          row-key="id"
+        >
+          <template #cell-name="{ row }">
+            <div class="provider-cell-main">
+              <span class="provider-name">{{ row.name }}</span>
+              <span class="provider-base">{{ row.apiBase }}</span>
+            </div>
+          </template>
+
+          <template #cell-type="{ value }">
+            <span class="provider-type">{{ typeLabelMap[value] || value }}</span>
+          </template>
+
+          <template #cell-endpointMode="{ row }">
+            <span class="provider-endpoint">{{ getEndpointModeLabel(row.endpointMode, row.type) }}</span>
+          </template>
+
+          <template #cell-modelCount="{ value }">
+            <span class="provider-count">{{ value || 0 }} 个</span>
+          </template>
+
+          <template #cell-priority="{ value }">
+            <span class="provider-count">{{ value }}</span>
+          </template>
+
+          <template #cell-status="{ row }">
+            <StatusBadge
+              :status="row.healthy ? 'success' : row.enabled ? 'warning' : 'error'"
+              :label="row.healthy ? '正常' : row.enabled ? '异常' : '禁用'"
+            />
+          </template>
+
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <button class="icon-btn" title="测试连接" @click.stop="handleTest(row)" :disabled="testing">
+                <Zap :size="14" />
+              </button>
+              <button class="icon-btn" title="模型设置" @click.stop="openModelDrawer(row)">
+                <Database :size="14" />
+              </button>
+              <button class="icon-btn" title="编辑" @click.stop="openEditDialog(row)">
+                <Pencil :size="14" />
+              </button>
+              <button class="icon-btn danger" title="删除" @click.stop="handleDelete(row)">
+                <Trash2 :size="14" />
+              </button>
+            </div>
+          </template>
+        </DataTable>
+      </section>
+    </div>
+
+    <FloatingDrawer
+      :visible="!!currentProvider"
+      kicker="Provider Models"
+      title="模型设置"
+      description="管理当前供应商支持的模型与统一路由名映射。"
+      @close="closeModelDrawer"
+    >
+      <template #summary>
+        <div class="summary-row">
+          <span class="summary-label">当前供应商</span>
+          <span class="summary-value">{{ currentProvider?.name }}</span>
+        </div>
+        <div class="summary-meta">
+          <span class="summary-chip">{{ configuredModelCount }} 条映射</span>
+          <span class="summary-chip">{{ modelForm.defaultModel || '未设置默认模型' }}</span>
+        </div>
+      </template>
+
+      <div class="model-drawer__section model-drawer__section--scroll">
+          <div class="section-head">
+            <div class="section-title">模型映射</div>
+            <button class="btn btn-secondary add-inline-btn" @click="addModel">
+              <Plus :size="14" />
+              添加映射
+            </button>
           </div>
-        </template>
 
-        <template #cell-type="{ value }">
-          <span class="provider-type">{{ typeLabelMap[value] || value }}</span>
-        </template>
-
-        <template #cell-endpointMode="{ row }">
-          <span class="provider-endpoint">{{ getEndpointModeLabel(row.endpointMode, row.type) }}</span>
-        </template>
-
-        <template #cell-modelCount="{ value }">
-          <span class="provider-count">{{ value || 0 }} 个</span>
-        </template>
-
-        <template #cell-priority="{ value }">
-          <span class="provider-count">{{ value }}</span>
-        </template>
-
-        <template #cell-status="{ row }">
-          <StatusBadge
-            :status="row.healthy ? 'success' : row.enabled ? 'warning' : 'error'"
-            :label="row.healthy ? '正常' : row.enabled ? '异常' : '禁用'"
-          />
-        </template>
-
-        <template #cell-actions="{ row }">
-          <div class="row-actions">
-            <button class="icon-btn" title="测试连接" @click.stop="handleTest(row)" :disabled="testing">
-              <Zap :size="14" />
-            </button>
-            <button class="icon-btn" title="模型设置" @click.stop="openModelDialog(row)">
-              <Database :size="14" />
-            </button>
-            <button class="icon-btn" title="编辑" @click.stop="openEditDialog(row)">
-              <Pencil :size="14" />
-            </button>
-            <button class="icon-btn danger" title="删除" @click.stop="handleDelete(row)">
-              <Trash2 :size="14" />
+          <div v-if="modelForm.llms.length === 0" class="empty-model-state">
+            <div class="empty-model-state-title">还没有模型映射</div>
+            <button class="btn btn-primary" @click="addModel">
+              <Plus :size="14" />
+              添加第一条映射
             </button>
           </div>
-        </template>
-      </DataTable>
-    </section>
+
+          <div v-else class="model-list">
+            <div
+              v-for="(model, index) in modelForm.llms"
+              :key="index"
+              class="mapping-row"
+            >
+              <div class="mapping-field">
+                <label class="mapping-label">请求模型名称</label>
+                <input
+                  v-model="model.model"
+                  class="model-input"
+                  placeholder="如: gpt-4o"
+                />
+              </div>
+              <div class="mapping-field">
+                <label class="mapping-label">目标模型</label>
+                <input
+                  v-model="model.target"
+                  class="model-input"
+                  placeholder="如: claude-3-7-sonnet"
+                />
+              </div>
+              <button class="icon-btn danger mapping-remove-btn" title="删除映射" @click="removeModel(index)">
+                <Trash2 :size="14" />
+              </button>
+            </div>
+          </div>
+      </div>
+
+      <div class="model-drawer__section">
+        <div class="section-head compact">
+          <div class="section-title">默认模型</div>
+        </div>
+        <Select
+          v-model="modelForm.defaultModel"
+          :options="[
+            { label: '无', value: '' },
+            ...availableDefaultModels.map((m) => ({
+              label: `${m.model} → ${m.target || m.model}`,
+              value: m.model,
+            })),
+          ]"
+        />
+      </div>
+
+      <template #footer>
+        <button class="btn btn-secondary" @click="closeModelDrawer">取消</button>
+        <button class="btn btn-primary" @click="saveModels" :disabled="savingModels">
+          {{ savingModels ? '保存中...' : '保存' }}
+        </button>
+      </template>
+    </FloatingDrawer>
 
     <ModalDialog
       :visible="showDialog"
@@ -150,103 +240,6 @@
         </div>
       </div>
     </ModalDialog>
-
-    <ModalDialog
-      :visible="showModelDialog"
-      :title="`模型设置 - ${currentProvider?.name || ''}`"
-      size="full"
-      contentClass="model-dialog-content"
-      :allowOverflow="true"
-      @close="showModelDialog = false"
-    >
-      <div class="model-dialog-hero">
-        <div class="model-dialog-hero-copy">
-          <div class="settings-kicker">Mapping</div>
-          <h3 class="model-dialog-title">模型映射</h3>
-          <p class="panel-description">将统一路由名映射到当前供应商真实模型名，并指定默认模型。</p>
-        </div>
-        <div class="model-dialog-summary">
-          <div class="summary-label">当前供应商</div>
-          <div class="summary-value">{{ currentProvider?.name || '未选择' }}</div>
-          <div class="summary-meta">
-            <span class="summary-chip">{{ configuredModelCount }} 条映射</span>
-            <span class="summary-chip">{{ modelForm.defaultModel || '未设置默认模型' }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="model-editor-card">
-        <div class="section-head">
-          <div class="section-title">映射规则</div>
-          <button class="btn btn-secondary add-inline-btn" @click="addModel">
-            <Plus :size="14" />
-            添加映射
-          </button>
-        </div>
-
-        <div v-if="modelForm.llms.length === 0" class="empty-model-state">
-          <div class="empty-model-state-title">还没有模型映射</div>
-          <button class="btn btn-primary" @click="addModel">
-            <Plus :size="14" />
-            添加第一条映射
-          </button>
-        </div>
-
-        <div v-else class="model-list">
-          <div
-            v-for="(model, index) in modelForm.llms"
-            :key="index"
-            class="mapping-row"
-          >
-            <div class="mapping-row-main">
-              <div class="mapping-field">
-                <label class="mapping-label">请求模型名称</label>
-                <input
-                  v-model="model.model"
-                  class="model-input"
-                  placeholder="如: gpt-4o"
-                />
-              </div>
-              <div class="mapping-arrow">→</div>
-              <div class="mapping-field">
-                <label class="mapping-label">目标模型</label>
-                <input
-                  v-model="model.target"
-                  class="model-input"
-                  placeholder="如: claude-3-7-sonnet"
-                />
-              </div>
-            </div>
-            <button class="icon-btn danger mapping-remove-btn" title="删除映射" @click="removeModel(index)">
-              <Trash2 :size="14" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="default-model-section">
-        <div class="section-head compact">
-          <div class="section-title">默认模型</div>
-        </div>
-        <Select
-          v-model="modelForm.defaultModel"
-          :options="[
-            { label: '无', value: '' },
-            ...availableDefaultModels.map((m) => ({
-              label: `${m.model} → ${m.target || m.model}`,
-              value: m.model,
-            })),
-          ]"
-        />
-      </div>
-
-      <template #footer>
-        <button class="btn btn-secondary" @click="showModelDialog = false">取消</button>
-        <button class="btn btn-primary" @click="saveModels" :disabled="savingModels">
-          {{ savingModels ? '保存中...' : '保存' }}
-        </button>
-      </template>
-    </ModalDialog>
   </div>
 </template>
 
@@ -254,6 +247,7 @@
 import { computed, ref, onMounted } from 'vue';
 import { useProviderStore } from '@/stores/provider';
 import { Plus, Cpu, Zap, Pencil, Trash2, Database } from 'lucide-vue-next';
+import FloatingDrawer from '@/components/ui/FloatingDrawer.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import Select from '@/components/ui/Select.vue';
 import PageHeader from '@/components/layout/PageHeader.vue';
@@ -273,7 +267,6 @@ const keyword = ref("");
 const typeFilter = ref("all");
 const statusFilter = ref("all");
 
-const showModelDialog = ref(false);
 const currentProvider = ref(null);
 const savingModels = ref(false);
 
@@ -433,6 +426,9 @@ async function handleDelete(p) {
   try {
     await providerStore.deleteProvider(p.id);
     toast('供应商已删除', 'success');
+    if (currentProvider.value?.id === p.id) {
+      closeModelDrawer();
+    }
   } catch (e) {
     toast('删除失败: ' + e.message, 'error');
   }
@@ -468,7 +464,7 @@ async function handleTestForm() {
   }
 }
 
-function openModelDialog(p) {
+function openModelDrawer(p) {
   currentProvider.value = p;
   modelForm.value = {
     llms: p.llms ? JSON.parse(JSON.stringify(p.llms)) : [],
@@ -478,7 +474,11 @@ function openModelDialog(p) {
     model: m.model || '',
     target: m.target || ''
   }));
-  showModelDialog.value = true;
+}
+
+function closeModelDrawer() {
+  currentProvider.value = null;
+  modelForm.value = defaultModelForm();
 }
 
 function addModel() {
@@ -502,7 +502,8 @@ async function saveModels() {
       modelForm.value.defaultModel
     );
     toast('模型设置已保存', 'success');
-    showModelDialog.value = false;
+    closeModelDrawer();
+    await providerStore.fetchProviders();
   } catch (e) {
     toast('保存失败: ' + e.message, 'error');
   } finally {
@@ -558,8 +559,52 @@ onMounted(() => {
   line-height: 1.6;
 }
 
+.providers-workspace {
+  min-height: 0;
+}
+
 .table-panel {
   min-height: 0;
+}
+
+.model-drawer__summary,
+.model-drawer__section {
+  padding: 14px;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ui-bg-surface-muted);
+}
+
+.model-drawer__section--scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.summary-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .provider-cell-main {
@@ -626,70 +671,6 @@ onMounted(() => {
   gap: 8px;
 }
 
-.model-dialog-content {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.model-dialog-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 0.9fr);
-  gap: 16px;
-}
-
-.model-dialog-hero-copy,
-.model-dialog-summary,
-.model-editor-card,
-.default-model-section {
-  border: 1px solid var(--ui-border-default);
-  border-radius: var(--radius-md);
-  background: var(--ui-bg-surface);
-}
-
-.model-dialog-hero-copy {
-  padding: 18px 20px;
-  background: var(--ui-bg-surface-muted);
-}
-
-.model-dialog-title {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.25;
-  color: var(--color-text-primary);
-}
-
-.model-dialog-summary {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 18px 20px;
-}
-
-.summary-label {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.summary-value {
-  margin-top: 6px;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.summary-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.model-editor-card,
-.default-model-section {
-  padding: 18px 20px 20px;
-}
-
 .section-head {
   display: flex;
   align-items: flex-start;
@@ -706,7 +687,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 360px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -722,7 +704,7 @@ onMounted(() => {
   padding: 28px;
   border: 1px dashed var(--ui-border-strong);
   border-radius: var(--radius-md);
-  background: var(--ui-bg-surface-muted);
+  background: var(--ui-bg-surface);
 }
 
 .empty-model-state-title {
@@ -733,49 +715,29 @@ onMounted(() => {
 
 .mapping-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
-  padding: 16px;
+  padding: 14px;
   border: 1px solid var(--ui-border-default);
   border-radius: var(--radius-md);
-  background: var(--ui-bg-surface-muted);
-}
-
-.mapping-row-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
+  background: var(--ui-bg-surface);
 }
 
 .mapping-field {
   min-width: 0;
 }
 
-.mapping-arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
-  font-size: 18px;
-  font-weight: 700;
+.mapping-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 .mapping-remove-btn {
-  width: 32px;
-  height: 32px;
-}
-
-@media (max-width: 960px) {
-  .model-dialog-hero,
-  .mapping-row-main {
-    grid-template-columns: 1fr;
-  }
-
-  .mapping-arrow {
-    display: none;
-  }
+  justify-self: flex-end;
 }
 
 @media (max-width: 820px) {
@@ -802,15 +764,6 @@ onMounted(() => {
 
   .row-actions {
     justify-content: flex-start;
-  }
-
-  .mapping-row {
-    grid-template-columns: 1fr;
-  }
-
-  :deep(.modal-shell__footer) {
-    flex-direction: column;
-    align-items: stretch;
   }
 }
 </style>
