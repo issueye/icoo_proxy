@@ -186,10 +186,9 @@ const selectSize = computed(() => {
 
 const dropdownStyle = computed(() => {
   const triggerWidth = dropdownWidth.value || 0
-  const clampedWidth = Math.min(Math.max(triggerWidth, 136), 240)
 
   return {
-    width: `${clampedWidth}px`,
+    width: `${Math.max(triggerWidth, 136)}px`,
     maxWidth: "calc(100vw - 24px)",
   }
 })

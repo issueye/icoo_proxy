@@ -16,11 +16,7 @@
       <div class="toolbar-group">
         <div class="toolbar-field">
           <label class="toolbar-label">查询条数</label>
-          <select v-model.number="logLimit" class="form-input toolbar-select" @change="handleRefreshLogs">
-            <option :value="20">20</option>
-            <option :value="50">50</option>
-            <option :value="100">100</option>
-          </select>
+          <Select v-model="logLimit" :options="logLimitOptions" class="toolbar-select" @change="handleRefreshLogs" />
         </div>
 
         <label class="toggle-chip">
@@ -171,11 +167,17 @@ import { useGatewayStore } from '@/stores/gateway';
 import PageHeader from '@/components/layout/PageHeader.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import DataTable from '@/components/layout/DataTable.vue';
+import Select from '@/components/ui/Select.vue';
 
 const gatewayStore = useGatewayStore();
 const showErrorsOnly = ref(false);
 const logLimit = ref(50);
 const selectedLogId = ref(null);
+const logLimitOptions = [
+  { label: '20', value: 20 },
+  { label: '50', value: 50 },
+  { label: '100', value: 100 },
+];
 
 const columns = [
   { key: 'createdAt', title: '时间', class: 'w-[148px]' },

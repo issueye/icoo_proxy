@@ -14,7 +14,7 @@
             <!-- 弹窗内容 -->
             <div
                 class="modal-shell relative w-full overflow-hidden flex flex-col max-h-[90vh]"
-                :class="sizeClasses[size]"
+                :class="[sizeClasses[size], { 'modal-shell--overflow-visible': allowOverflow }]"
             >
                 <!-- 头部 -->
                 <div
@@ -46,7 +46,7 @@
                 <!-- 内容区域 -->
                 <div
                     class="modal-shell__body flex-1 overflow-y-auto"
-                    :class="contentClass"
+                    :class="[contentClass, { 'modal-shell__body--overflow-visible': allowOverflow }]"
                 >
                     <slot />
                 </div>
@@ -176,6 +176,11 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    /** 是否允许内容浮层溢出容器 */
+    allowOverflow: {
+        type: Boolean,
+        default: false,
+    },
     /** 底部按钮对齐方式: left, center, right */
     footerAlign: {
         type: String,
@@ -263,6 +268,10 @@ function handleConfirm() {
     box-shadow: var(--shadow-dialog);
 }
 
+.modal-shell--overflow-visible {
+    overflow: visible;
+}
+
 .modal-mask {
     background: rgba(17, 24, 39, 0.26);
     backdrop-filter: blur(4px);
@@ -286,6 +295,10 @@ function handleConfirm() {
 
 .modal-shell__body {
     background: var(--ui-bg-surface);
+}
+
+.modal-shell__body--overflow-visible {
+    overflow: visible;
 }
 </style>
 

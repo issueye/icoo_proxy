@@ -447,7 +447,7 @@ function handleClose() {
   border-right: 1px solid var(--ui-border-default);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 14px 10px 12px;
 }
 
@@ -510,6 +510,7 @@ function handleClose() {
 }
 
 .sidebar-foot {
+  margin-top: 8px;
   padding-top: 10px;
   display: flex;
   justify-content: stretch;

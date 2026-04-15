@@ -91,13 +91,7 @@
 
             <div class="field">
               <label class="field-label">匹配方式</label>
-              <select v-model="selectedRule.matchType" class="field-input">
-                <option value="model">模型名匹配</option>
-                <option value="system_contains">System 包含</option>
-                <option value="message_contains">任意消息包含</option>
-                <option value="user_contains">用户消息包含</option>
-                <option value="assistant_contains">助手消息包含</option>
-              </select>
+              <Select v-model="selectedRule.matchType" :options="matchTypeOptions" />
             </div>
 
             <div class="field field--wide">
@@ -107,12 +101,7 @@
 
             <div class="field">
               <label class="field-label">目标供应商</label>
-              <select v-model="selectedRule.providerId" class="field-input">
-                <option value="">请选择</option>
-                <option v-for="provider in providerStore.providers" :key="provider.id" :value="provider.id">
-                  {{ provider.name }}
-                </option>
-              </select>
+              <Select v-model="selectedRule.providerId" :options="providerOptions" />
             </div>
 
             <div class="field">
@@ -136,6 +125,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { MessageSquareText, Plus, Save } from 'lucide-vue-next';
 import PageHeader from '@/components/layout/PageHeader.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
+import Select from '@/components/ui/Select.vue';
 import { useGatewayStore } from '@/stores/gateway';
 import { useProviderStore } from '@/stores/provider';
 
@@ -151,6 +141,22 @@ const matchTypeLabelMap = {
   user_contains: "用户消息包含",
   assistant_contains: "助手消息包含",
 };
+
+const matchTypeOptions = [
+  { label: "模型名匹配", value: "model" },
+  { label: "System 包含", value: "system_contains" },
+  { label: "任意消息包含", value: "message_contains" },
+  { label: "用户消息包含", value: "user_contains" },
+  { label: "助手消息包含", value: "assistant_contains" },
+];
+
+const providerOptions = computed(() => [
+  { label: "请选择", value: "" },
+  ...providerStore.providers.map((provider) => ({
+    label: provider.name,
+    value: provider.id,
+  })),
+]);
 
 const selectedRule = computed(() => routeRuleDrafts.value[selectedRuleIndex.value] || null);
 

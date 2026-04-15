@@ -20,21 +20,11 @@
         </div>
         <div class="toolbar-field">
           <label class="toolbar-label">类型</label>
-          <select v-model="typeFilter" class="form-input toolbar-select">
-            <option value="all">全部类型</option>
-            <option value="openai">OpenAI 兼容</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="gemini">Gemini</option>
-          </select>
+          <Select v-model="typeFilter" :options="typeFilterOptions" class="toolbar-select" />
         </div>
         <div class="toolbar-field">
           <label class="toolbar-label">状态</label>
-          <select v-model="statusFilter" class="form-input toolbar-select">
-            <option value="all">全部状态</option>
-            <option value="healthy">健康</option>
-            <option value="warning">异常</option>
-            <option value="disabled">禁用</option>
-          </select>
+          <Select v-model="statusFilter" :options="statusFilterOptions" class="toolbar-select" />
         </div>
       </div>
       <div class="toolbar-summary">
@@ -124,23 +114,11 @@
         </div>
         <div class="form-field">
           <label class="form-label">类型</label>
-          <select v-model="form.type" class="form-input" @change="handleTypeChange">
-            <option value="openai">OpenAI 兼容</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="gemini">Google Gemini</option>
-          </select>
+          <Select v-model="form.type" :options="providerTypeOptions" @update:modelValue="handleTypeChange" />
         </div>
         <div class="form-field">
           <label class="form-label">端点转发</label>
-          <select v-model="form.endpointMode" class="form-input">
-            <option
-              v-for="option in endpointModeOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
+          <Select v-model="form.endpointMode" :options="endpointModeOptions" />
         </div>
         <div class="form-field">
           <label class="form-label">优先级</label>
@@ -156,10 +134,7 @@
         </div>
         <div class="form-field full">
           <label class="form-label">状态</label>
-          <select v-model="form.enabled" class="form-input">
-            <option :value="true">启用</option>
-            <option :value="false">禁用</option>
-          </select>
+          <Select v-model="form.enabled" :options="enabledOptions" />
         </div>
       </div>
       <div class="form-actions">
@@ -181,7 +156,7 @@
       :title="`模型设置 - ${currentProvider?.name || ''}`"
       size="full"
       contentClass="model-dialog-content"
-      :showFooter="false"
+      :allowOverflow="true"
       @close="showModelDialog = false"
     >
       <div class="model-dialog-hero">
@@ -253,26 +228,24 @@
         <div class="section-head compact">
           <div class="section-title">默认模型</div>
         </div>
-        <select v-model="modelForm.defaultModel" class="form-input">
-          <option value="">无</option>
-          <option
-            v-for="m in availableDefaultModels"
-            :key="m.model"
-            :value="m.model"
-          >
-            {{ m.model }} → {{ m.target || m.model }}
-          </option>
-        </select>
+        <Select
+          v-model="modelForm.defaultModel"
+          :options="[
+            { label: '无', value: '' },
+            ...availableDefaultModels.map((m) => ({
+              label: `${m.model} → ${m.target || m.model}`,
+              value: m.model,
+            })),
+          ]"
+        />
       </div>
 
-      <div class="model-dialog-actions">
-        <div class="model-dialog-actions-buttons">
-          <button class="btn btn-secondary" @click="showModelDialog = false">取消</button>
-          <button class="btn btn-primary" @click="saveModels" :disabled="savingModels">
-            {{ savingModels ? '保存中...' : '保存' }}
-          </button>
-        </div>
-      </div>
+      <template #footer>
+        <button class="btn btn-secondary" @click="showModelDialog = false">取消</button>
+        <button class="btn btn-primary" @click="saveModels" :disabled="savingModels">
+          {{ savingModels ? '保存中...' : '保存' }}
+        </button>
+      </template>
     </ModalDialog>
   </div>
 </template>
@@ -282,6 +255,7 @@ import { computed, ref, onMounted } from 'vue';
 import { useProviderStore } from '@/stores/provider';
 import { Plus, Cpu, Zap, Pencil, Trash2, Database } from 'lucide-vue-next';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
+import Select from '@/components/ui/Select.vue';
 import PageHeader from '@/components/layout/PageHeader.vue';
 import ModalDialog from '@/components/ModalDialog.vue';
 import DataTable from '@/components/layout/DataTable.vue';
@@ -343,6 +317,31 @@ const columns = [
   { key: 'priority', title: '优先级', class: 'w-[88px]' },
   { key: 'status', title: '状态', class: 'w-[120px]' },
   { key: 'actions', title: '操作', class: 'w-[168px]' },
+];
+
+const typeFilterOptions = [
+  { label: '全部类型', value: 'all' },
+  { label: 'OpenAI 兼容', value: 'openai' },
+  { label: 'Anthropic', value: 'anthropic' },
+  { label: 'Gemini', value: 'gemini' },
+];
+
+const statusFilterOptions = [
+  { label: '全部状态', value: 'all' },
+  { label: '健康', value: 'healthy' },
+  { label: '异常', value: 'warning' },
+  { label: '禁用', value: 'disabled' },
+];
+
+const providerTypeOptions = [
+  { label: 'OpenAI 兼容', value: 'openai' },
+  { label: 'Anthropic', value: 'anthropic' },
+  { label: 'Google Gemini', value: 'gemini' },
+];
+
+const enabledOptions = [
+  { label: '启用', value: true },
+  { label: '禁用', value: false },
 ];
 
 const defaultForm = () => ({
@@ -768,18 +767,6 @@ onMounted(() => {
   height: 32px;
 }
 
-.model-dialog-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-top: 4px;
-}
-
-.model-dialog-actions-buttons {
-  display: flex;
-  gap: 8px;
-}
-
 @media (max-width: 960px) {
   .model-dialog-hero,
   .mapping-row-main {
@@ -808,9 +795,7 @@ onMounted(() => {
   }
 
   .form-actions,
-  .section-head,
-  .model-dialog-actions,
-  .model-dialog-actions-buttons {
+  .section-head {
     flex-direction: column;
     align-items: stretch;
   }
@@ -821,6 +806,11 @@ onMounted(() => {
 
   .mapping-row {
     grid-template-columns: 1fr;
+  }
+
+  :deep(.modal-shell__footer) {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

@@ -42,3 +42,4 @@ export namespace config {
 	}
 
 }
+
