@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -222,5 +223,98 @@ func TestAddOpenAIResponsesProviderUsesResponsesAdapter(t *testing.T) {
 	}
 	if _, ok := got.Adapter.(*protocol.OpenAIResponsesAdapter); !ok {
 		t.Fatalf("expected OpenAIResponsesAdapter, got %T", got.Adapter)
+	}
+}
+
+func TestDoRequestWithRetryReturnsStructuredHTTPError(t *testing.T) {
+	protocol.RegisterDefaults()
+	m := GetManager()
+	m.client = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusBadGateway,
+				Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"Upstream request failed","type":"upstream_error"}}`)),
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+			}, nil
+		}),
+	}
+	m.SetConfigProvider(&routeTestConfigProvider{
+		gateway: config.GatewayConfig{
+			RetryCount:      0,
+			RetryIntervalMs: 1,
+		},
+	})
+
+	resp, err := m.DoRequestWithRetry(context.Background(), &ProviderRuntime{
+		Config: config.ProviderConfig{
+			ID:      "openai-main",
+			Type:    "openai",
+			APIBase: "https://api.openai.com/v1",
+		},
+		Adapter: &protocol.OpenAIAdapter{},
+	}, &protocol.InternalRequest{
+		Model: "gpt-4o-mini",
+		Messages: []protocol.InternalMessage{{
+			Role:    "user",
+			Content: []protocol.ContentBlock{{Type: "text", Text: "hello"}},
+		}},
+	})
+	if resp != nil {
+		t.Fatalf("expected nil response")
+	}
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("expected HTTPError, got %T (%v)", err, err)
+	}
+	if httpErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("StatusCode = %d", httpErr.StatusCode)
+	}
+	if string(httpErr.Body) != `{"error":{"message":"Upstream request failed","type":"upstream_error"}}` {
+		t.Fatalf("Body = %s", string(httpErr.Body))
+	}
+}
+
+func TestDoRequestUsesStreamClientForStreamingRequests(t *testing.T) {
+	protocol.RegisterDefaults()
+	m := GetManager()
+	m.client = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			t.Fatalf("non-stream client should not be used for streaming requests")
+			return nil, nil
+		}),
+	}
+	m.streamClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"id":"ok"}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	resp, err := m.DoRequest(context.Background(), &ProviderRuntime{
+		Config: config.ProviderConfig{
+			ID:      "openai-main",
+			Type:    "openai",
+			APIBase: "https://api.openai.com/v1",
+		},
+		Adapter: &protocol.OpenAIAdapter{},
+	}, &protocol.InternalRequest{
+		Model:  "gpt-4o-mini",
+		Stream: true,
+		Messages: []protocol.InternalMessage{{
+			Role:    "user",
+			Content: []protocol.ContentBlock{{Type: "text", Text: "hello"}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("DoRequest() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d", resp.StatusCode)
 	}
 }

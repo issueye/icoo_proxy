@@ -1,6 +1,9 @@
 <template>
-  <div class="logs-view">
-    <PageHeader title="请求日志">
+  <div class="logs-view app-page">
+    <PageHeader
+      title="请求日志"
+      description="集中查看请求入口、转发目标、错误回包和参数明细，便于排障和追踪。"
+    >
       <template #actions>
         <button class="btn btn-secondary" @click="handleRefreshLogs" :disabled="gatewayStore.logsLoading">
           <RefreshCw :size="14" :class="{ spinning: gatewayStore.logsLoading }" /> 刷新日志
@@ -61,6 +64,7 @@
                 <span>{{ log.method }} {{ log.path }}</span>
                 <span v-if="log.providerName">· {{ log.providerName }}</span>
                 <span v-if="log.providerType">· {{ log.providerType }}</span>
+                <span v-if="log.endpointMode">· {{ log.endpointMode }}</span>
                 <span v-if="log.clientIP">· {{ log.clientIP }}</span>
               </div>
             </div>
@@ -83,6 +87,11 @@
 
         <div v-if="log.errorMessage" class="request-log-error">
           {{ log.errorMessage }}
+        </div>
+
+        <div v-if="log.upstreamBase || log.upstreamPath" class="request-log-upstream">
+          <span class="request-log-upstream-label">上游目标</span>
+          <code>{{ [log.upstreamBase, log.upstreamPath].filter(Boolean).join('') }}</code>
         </div>
 
         <details v-if="log.requestPayload" class="request-log-body">
@@ -163,12 +172,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.logs-view {
-  padding: 24px;
-  overflow-y: auto;
-  height: 100%;
-}
-
 .logs-toolbar,
 .request-log-card,
 .empty-state {
@@ -192,40 +195,6 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-}
-
-.toolbar-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.toolbar-select {
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-}
-
-.toolbar-chip,
-.toggle-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-tertiary, var(--color-bg-primary));
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-
-.toggle-chip input {
-  margin: 0;
 }
 
 .empty-state {
@@ -337,6 +306,27 @@ onMounted(async () => {
   word-break: break-word;
 }
 
+.request-log-upstream {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.request-log-upstream-label {
+  color: var(--color-text-muted);
+}
+
+.request-log-upstream code {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary, var(--color-bg-primary));
+  color: var(--color-text-primary);
+}
+
 .request-log-body {
   margin-top: 12px;
   border-top: 1px solid var(--color-border);
@@ -360,29 +350,6 @@ onMounted(async () => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: var(--color-bg-tertiary, var(--color-bg-primary));
-  color: var(--color-text-secondary);
 }
 
 .spinning {

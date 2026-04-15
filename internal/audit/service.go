@@ -23,6 +23,9 @@ type RequestLog struct {
 	ProviderID      string    `json:"providerId"`
 	ProviderName    string    `json:"providerName"`
 	ProviderType    string    `json:"providerType"`
+	EndpointMode    string    `json:"endpointMode"`
+	UpstreamBase    string    `json:"upstreamBase"`
+	UpstreamPath    string    `json:"upstreamPath"`
 	Streaming       bool      `json:"streaming" gorm:"not null"`
 	StatusCode      int       `json:"statusCode" gorm:"not null"`
 	DurationMs      int64     `json:"durationMs" gorm:"not null"`
@@ -44,6 +47,9 @@ type RequestLogInput struct {
 	ProviderID      string
 	ProviderName    string
 	ProviderType    string
+	EndpointMode    string
+	UpstreamBase    string
+	UpstreamPath    string
 	Streaming       bool
 	StatusCode      int
 	DurationMs      int64
@@ -115,6 +121,9 @@ func (s *Service) Add(entry RequestLogInput) error {
 		ProviderID:      entry.ProviderID,
 		ProviderName:    entry.ProviderName,
 		ProviderType:    entry.ProviderType,
+		EndpointMode:    entry.EndpointMode,
+		UpstreamBase:    entry.UpstreamBase,
+		UpstreamPath:    entry.UpstreamPath,
 		Streaming:       entry.Streaming,
 		StatusCode:      entry.StatusCode,
 		DurationMs:      entry.DurationMs,

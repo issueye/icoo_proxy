@@ -1,6 +1,9 @@
 <template>
-  <div class="providers-view">
-    <PageHeader title="供应商管理">
+  <div class="providers-view app-page">
+    <PageHeader
+      title="供应商管理"
+      description="统一管理供应商接入、端点转发模式、模型映射和健康状态。"
+    >
       <template #actions>
         <button class="btn btn-primary" @click="openAddDialog">
           <Plus :size="14" /> 添加供应商
@@ -426,12 +429,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.providers-view {
-  padding: 24px;
-  overflow-y: auto;
-  height: 100%;
-}
-
 .provider-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
@@ -479,27 +476,6 @@ onMounted(() => {
   display: flex;
   gap: 4px;
 }
-.icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.icon-btn:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-}
-.icon-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
-
 .card-body {
   padding: 12px 16px;
 }
@@ -555,46 +531,6 @@ onMounted(() => {
   font-weight: 600;
   color: var(--color-text-muted);
   margin-bottom: 4px;
-}
-.form-input {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-size: 13px;
-  box-sizing: border-box;
-}
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-accent);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn-primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #fff;
-}
-.btn-secondary {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
 }
 
 .form-actions {

@@ -10,6 +10,3 @@ listen_port = 16790
 log_level = 'info'
 retry_count = 2
 retry_interval_ms = 500
-
-[agent_process]
-binary_path = ''

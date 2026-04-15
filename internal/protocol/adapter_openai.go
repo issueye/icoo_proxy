@@ -347,8 +347,12 @@ func (a *OpenAIAdapter) BuildResponsesRequest(req *InternalRequest) ([]byte, str
 				switch block.Type {
 				case "text":
 					if block.Text != "" {
+						partType := "input_text"
+						if msg.Role == "assistant" {
+							partType = "output_text"
+						}
 						content = append(content, map[string]interface{}{
-							"type": "input_text",
+							"type": partType,
 							"text": block.Text,
 						})
 					}

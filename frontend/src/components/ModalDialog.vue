@@ -3,40 +3,37 @@
     <Transition name="modal">
         <div
             v-if="visible"
-            class="fixed inset-0 z-50 flex items-start justify-center pt-[5vh]"
+            class="fixed inset-0 z-50 flex items-start justify-center px-3 py-6"
         >
             <!-- 遮罩层 -->
             <div
-                class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                class="absolute inset-0 bg-slate-950/48 backdrop-blur-md transition-opacity"
                 @click="handleMaskClick"
             />
 
             <!-- 弹窗内容 -->
             <div
-                class="relative bg-card text-card-foreground border border-border rounded-md shadow-lg w-full mx-4 overflow-hidden flex flex-col max-h-[90vh]"
+                class="modal-shell relative w-full overflow-hidden flex flex-col max-h-[90vh]"
                 :class="sizeClasses[size]"
             >
                 <!-- 头部 -->
                 <div
                     v-if="showHeader"
-                    class="flex items-center justify-between px-3 py-2.5 border-b border-border bg-secondary/80 backdrop-blur-sm"
-                    :class="{ 'sticky top-0 z-10': scrollable }"
-                >
+                        class="modal-shell__header flex items-center justify-between px-4 py-3 border-b border-border bg-secondary/70 backdrop-blur-sm"
+                        :class="{ 'sticky top-0 z-10': scrollable }"
+                    >
                     <div class="flex items-center gap-2.5">
                         <!-- 图标插槽 -->
                         <slot name="icon">
-                            <div
-                                v-if="icon"
-                                class="w-7 h-7 rounded-md bg-accent/15 flex items-center justify-center"
-                            >
+                            <div v-if="icon" class="modal-shell__icon">
                                 <component
                                     :is="icon"
-                                    :size="14"
+                                    :size="13"
                                     class="text-accent"
                                 />
                             </div>
                         </slot>
-                        <h2 class="font-semibold text-foreground">
+                        <h2 class="text-sm font-semibold text-foreground tracking-tight">
                             {{ title }}
                         </h2>
                     </div>
@@ -52,7 +49,7 @@
 
                 <!-- 内容区域 -->
                 <div
-                    class="flex-1 overflow-y-auto"
+                    class="modal-shell__body flex-1 overflow-y-auto"
                     :class="contentClass"
                 >
                     <slot />
@@ -61,7 +58,7 @@
                 <!-- 底部按钮 -->
                 <div
                     v-if="showFooter"
-                    class="flex gap-2 px-3 py-2.5 border-t border-border bg-secondary/70"
+                    class="modal-shell__footer flex gap-2 px-4 py-3 border-t border-border bg-secondary/68"
                     :class="[
                         footerAlignClass,
                         { 'sticky bottom-0 z-10 backdrop-blur-sm': scrollable },
@@ -197,7 +194,7 @@ const props = defineProps({
     /** 内容区域自定义类名 */
     contentClass: {
         type: String,
-        default: "p-6",
+        default: "p-4",
     },
 });
 
@@ -206,10 +203,10 @@ const emit = defineEmits(["close", "cancel", "confirm", "update:visible"]);
 // 尺寸对应的类名
 const sizeClasses = {
     sm: "max-w-sm",
-    md: "max-w-md",
-    lg: "max-w-lg",
-    xl: "max-w-xl",
-    full: "max-w-4xl",
+    md: "max-w-2xl",
+    lg: "max-w-4xl",
+    xl: "max-w-5xl",
+    full: "max-w-6xl",
 };
 
 // 底部对齐类名
@@ -261,6 +258,30 @@ function handleConfirm() {
 .modal-enter-from,
 .modal-leave-to {
     opacity: 0;
+}
+
+.modal-shell {
+    border-radius: var(--radius-lg);
+    border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 3%, transparent), transparent 96px),
+        var(--color-bg-secondary);
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-shell__icon {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--color-accent) 10%, white);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 18%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-shell__body {
+    background: color-mix(in srgb, var(--color-bg-secondary) 94%, white);
 }
 </style>
 

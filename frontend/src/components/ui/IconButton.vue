@@ -32,25 +32,25 @@ const props = defineProps({
 const emit = defineEmits(["click"])
 
 const iconButtonVariants = cva(
-  "inline-flex items-center justify-center border-none cursor-pointer transition-all duration-120 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+  "icon-btn border-none transition-all duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "text-muted-foreground hover:text-foreground hover:bg-accent/10",
-        primary: "text-primary hover:bg-primary/10",
-        destructive: "text-destructive hover:bg-destructive/10",
-        ghost: "text-muted-foreground hover:text-foreground hover:bg-secondary",
-        status: "text-muted-foreground hover:bg-secondary",
-        "status-success": "text-success hover:bg-secondary",
-        "status-warning": "text-warning hover:bg-secondary",
-        "status-error": "text-error hover:bg-secondary",
+        default: "text-muted-foreground hover:text-foreground",
+        primary: "text-primary hover:bg-primary/10 hover:text-primary",
+        destructive: "text-destructive hover:bg-destructive/10 hover:text-destructive",
+        ghost: "text-muted-foreground hover:text-foreground",
+        status: "text-muted-foreground hover:text-foreground",
+        "status-success": "text-success hover:bg-green-500/10 hover:text-success",
+        "status-warning": "text-warning hover:bg-amber-500/10 hover:text-warning",
+        "status-error": "text-error hover:bg-red-500/10 hover:text-error",
       },
       size: {
-        sm: "h-5 w-5 p-0.5",
-        default: "h-6 w-6 p-1",
-        md: "h-8 w-8 p-1.5",
+        sm: "h-7 w-7 p-1",
+        default: "h-8 w-8 p-1.5",
+        md: "h-9 w-9 p-1.5",
         lg: "h-10 w-10 p-2",
-        header: "h-6 w-7 p-0",
+        header: "h-7 w-8 rounded-[6px] p-0",
       },
     },
     compoundVariants: [

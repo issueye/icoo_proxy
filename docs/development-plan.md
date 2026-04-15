@@ -20,12 +20,11 @@
 | Go 项目骨架 | `main.go`, `go.mod` | **高** | 保留 Wails 框架，新增网关 HTTP Server |
 | HTTP 反向代理 | `internal/services/api_proxy.go` | **高** | 作为网关代理引擎的基础进行重构 |
 | TOML 配置服务 | `internal/services/config.go` | **高** | 扩展配置结构，新增供应商/路由配置 |
-| Agent 进程管理 | `internal/services/agent_process.go` | **中** | 可选保留，用于管理本地 Ollama 等进程 |
 | Wails 应用绑定 | `internal/services/app.go` | **高** | 继续作为前端与后端的桥接层 |
 | Vue 3 前端框架 | `frontend/` | **高** | 保留技术栈，重构页面内容 |
 | UI 组件库 | `frontend/src/components/ui/` | **高** | Button, Card, Input, Dialog 等组件直接复用 |
 | 布局组件 | `frontend/src/components/layout/` | **高** | DataTable, ManagePage, PageHeader 等直接复用 |
-| Settings 组件 | `frontend/src/components/settings/` | **中** | ProviderSettings 需大幅改造，ConnectionSettings 可保留 |
+| Settings 组件 | `frontend/src/components/settings/` | **中** | 当前仅保留已启用设置分区，未挂载旧面板应移除 |
 | Pinia Store | `frontend/src/stores/` | **中** | provider.js 改造复用，新增 gateway/route store |
 | HTTP 服务层 | `frontend/src/services/` | **中** | http.js 保留，API 层需重构 |
 | 供应商管理页面 | `frontend/src/views/ProvidersView.vue` | **中** | 作为供应商管理页面的基础改造 |
@@ -157,8 +156,7 @@ internal/
 └── services/                   # 现有服务（保留并改造）
     ├── app.go                 # Wails 应用绑定（扩展网关控制方法）
     ├── config.go              # 保留，与 config 模块整合
-    ├── api_proxy.go           # 改造为网关代理引擎的一部分
-    └── agent_process.go       # 保留，用于管理本地模型进程
+    └── api_proxy.go           # 改造为网关代理引擎的一部分
 ```
 
 ### 2.3 前端模块划分

@@ -1,5 +1,5 @@
 ﻿<template>
-    <div class="page-shell">
+    <div class="page-shell settings-page">
         <div class="page-frame">
             <aside class="settings-sidebar surface-muted page-panel">
                 <div class="p-5 border-b border-border">
@@ -9,7 +9,7 @@
                         </div>
                         <button
                             @click="router.back()"
-                            class="p-2 rounded-md hover:bg-secondary transition-colors"
+                            class="btn btn-ghost btn-icon"
                         >
                             <ArrowLeftIcon :size="18" />
                         </button>
@@ -22,7 +22,7 @@
                         :key="item.key"
                         @click="activeSection = item.key"
                         :class="[
-                            'w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-left transition-all border',
+                            'w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-all border',
                             activeSection === item.key
                                 ? 'bg-primary/10 text-primary border-primary/20 shadow-sm'
                                 : 'text-muted-foreground border-transparent hover:bg-secondary hover:border-border hover:text-foreground',
@@ -35,7 +35,7 @@
                     </button>
                 </nav>
 
-                <div class="p-4 border-t border-border">
+                <div class="p-3 border-t border-border">
                     <div class="info-chip w-full justify-center">
                         当前分区 · {{ currentMenuLabel }}
                     </div>
@@ -91,14 +91,15 @@ const currentMenuLabel = computed(
 
 <style scoped>
 .settings-sidebar {
-    border-left: 1px solid var(--color-border);
-    border-top: 1px solid var(--color-border);
-    border-bottom: 1px solid var(--color-border);
-    width: 284px;
+    border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+    border-radius: var(--radius-xl);
+    width: 264px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    background: color-mix(in srgb, var(--color-bg-secondary) 92%, white);
+    box-shadow: var(--shadow-sm);
 }
 
 .settings-sidebar-header {
@@ -109,8 +110,8 @@ const currentMenuLabel = computed(
 }
 
 .settings-nav-icon {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: var(--radius-md);
     display: flex;
     align-items: center;
@@ -123,6 +124,12 @@ const currentMenuLabel = computed(
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+    border-radius: var(--radius-xl);
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 4%, transparent), transparent 150px),
+        var(--color-bg-secondary);
+    box-shadow: var(--shadow-sm);
 }
 
 .settings-main-inner {
@@ -139,10 +146,19 @@ const currentMenuLabel = computed(
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
-    padding: 14px 16px;
+    padding: 10px 12px;
     border-radius: var(--radius-lg);
     margin-bottom: 14px;
     flex-shrink: 0;
+    border: 1px solid color-mix(in srgb, var(--color-border) 86%, transparent);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 8%, transparent), transparent 60%),
+        var(--color-bg-tertiary);
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-page :deep(.page-panel) {
+    border-radius: var(--radius-xl);
 }
 
 .settings-hero-badges {

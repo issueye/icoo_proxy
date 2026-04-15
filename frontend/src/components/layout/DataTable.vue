@@ -44,24 +44,24 @@ function handleRowClick(row, index) {
 </script>
 
 <template>
-  <div class="overflow-x-auto">
+  <div class="data-table-shell overflow-x-auto">
     <table
       :class="cn(
-        'w-full text-sm',
+        'data-table w-full text-sm',
         bordered ? 'border-collapse border border-border' : ''
       )"
     >
       <!-- 表头 -->
       <thead>
-        <tr :class="cn('bg-muted text-muted-foreground')">
+        <tr :class="cn('text-muted-foreground')">
           <th
             v-for="col in columns"
             :key="col.key || col.title"
             :class="cn(
-              'px-3 py-2 text-left font-medium text-xs',
+              'px-3 py-2 text-left font-medium text-[11px]',
               bordered ? 'border border-border' : '',
               size === 'sm' ? 'px-2 py-1.5' : '',
-              size === 'lg' ? 'px-4 py-2.5' : '',
+              size === 'lg' ? 'px-4 py-2' : '',
               col.class || ''
             )"
           >
@@ -74,7 +74,7 @@ function handleRowClick(row, index) {
       <tbody>
         <!-- 加载状态 -->
         <tr v-if="loading">
-          <td :colspan="columns.length" class="py-8 text-center text-muted-foreground">
+          <td :colspan="columns.length" class="py-7 text-center text-muted-foreground">
             <div class="flex items-center justify-center gap-2">
               <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -87,7 +87,7 @@ function handleRowClick(row, index) {
 
         <!-- 空状态 -->
         <tr v-else-if="data.length === 0">
-          <td :colspan="columns.length" class="py-12 text-center text-muted-foreground">
+          <td :colspan="columns.length" class="py-10 text-center text-muted-foreground">
             {{ emptyText }}
           </td>
         </tr>
@@ -99,7 +99,7 @@ function handleRowClick(row, index) {
           :key="row[rowKey] || index"
           :class="cn(
             'border-t border-border transition-colors',
-            hoverable ? 'hover:bg-accent/50' : '',
+            hoverable ? 'hover:bg-accent/35' : '',
             size === 'sm' ? 'text-xs' : ''
           )"
           @click="handleRowClick(row, index)"
@@ -108,10 +108,10 @@ function handleRowClick(row, index) {
             v-for="col in columns"
             :key="col.key || col.title"
             :class="cn(
-              'px-3 py-2',
+              'px-3 py-2.5',
               bordered ? 'border border-border' : '',
               size === 'sm' ? 'px-2 py-1.5' : '',
-              size === 'lg' ? 'px-4 py-2.5' : '',
+              size === 'lg' ? 'px-4 py-3' : '',
               col.class || '',
               col.align === 'center' ? 'text-center' : '',
               col.align === 'right' ? 'text-right' : ''
@@ -127,3 +127,29 @@ function handleRowClick(row, index) {
     </table>
   </div>
 </template>
+
+<style scoped>
+.data-table-shell {
+  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-bg-secondary) 96%, white);
+  box-shadow: var(--shadow-sm);
+}
+
+.data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--color-bg-tertiary) 94%, white);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 92%, transparent);
+}
+
+.data-table tbody tr:first-child td {
+  border-top: 0;
+}
+</style>

@@ -36,9 +36,6 @@ func (a *App) Startup(ctx context.Context) {
 		runtime.LogWarning(a.ctx, "Failed to initialize audit store: "+err.Error())
 	}
 
-	// Initialize agent process manager
-	GetAgentProcessManager().Init(ctx)
-
 	// Set up proxy target from config
 	clawCfg := configService.GetClawConnectionConfig()
 	if clawCfg.APIBase != "" {
@@ -70,7 +67,6 @@ func (a *App) MinimizeWindow() {
 }
 
 func (a *App) CloseWindow() {
-	GetAgentProcessManager().Shutdown()
 	gateway.GetServer().Stop()
 	GetConfigService().Close()
 	audit.GetService().Close()
@@ -78,60 +74,9 @@ func (a *App) CloseWindow() {
 }
 
 func (a *App) Shutdown(ctx context.Context) {
-	GetAgentProcessManager().Shutdown()
 	gateway.GetServer().Stop()
 	GetConfigService().Close()
 	audit.GetService().Close()
-}
-
-// --- Legacy compatibility ---
-
-func (a *App) GetClawConnectionConfig() map[string]string {
-	cfg := GetConfigService().GetClawConnectionConfig()
-	agentCfg := GetConfigService().GetAgentProcessConfig()
-	return map[string]string{
-		"apiBase":   cfg.APIBase,
-		"wsHost":    cfg.WSHost,
-		"wsPort":    cfg.WSPort,
-		"wsPath":    cfg.WSPath,
-		"userId":    cfg.UserID,
-		"agentPath": agentCfg.BinaryPath,
-	}
-}
-
-func (a *App) SetClawConnectionConfig(apiBase, wsHost, wsPort, wsPath, userId, agentPath string) error {
-	cfg := ClawConnectionConfig{
-		APIBase: apiBase,
-		WSHost:  wsHost,
-		WSPort:  wsPort,
-		WSPath:  wsPath,
-		UserID:  userId,
-	}
-	GetAPIProxy().SetTargetBase(apiBase)
-	if err := GetConfigService().SetClawConnectionConfig(cfg); err != nil {
-		return err
-	}
-	return GetConfigService().SetAgentProcessConfig(AgentProcessConfig{
-		BinaryPath: strings.TrimSpace(agentPath),
-	})
-}
-
-// --- Agent Process ---
-
-func (a *App) GetAgentProcessStatus() AgentProcessStatus {
-	return GetAgentProcessManager().Status()
-}
-
-func (a *App) WakeAgent() (AgentProcessStatus, error) {
-	return GetAgentProcessManager().Wake()
-}
-
-func (a *App) StopAgent() (AgentProcessStatus, error) {
-	return GetAgentProcessManager().Stop()
-}
-
-func (a *App) RestartAgent() (AgentProcessStatus, error) {
-	return GetAgentProcessManager().Restart()
 }
 
 // --- Gateway ---

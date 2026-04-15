@@ -1,6 +1,11 @@
 <script setup>
+import { computed, useAttrs } from "vue"
 import { cn } from "@/lib/utils"
 import Label from "./Label.vue"
+
+defineOptions({
+  inheritAttrs: false,
+})
 
 const props = defineProps({
   modelValue: {
@@ -46,6 +51,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(["update:modelValue"])
+const attrs = useAttrs()
+
+const textareaAttrs = computed(() => {
+  const { class: _class, ...rest } = attrs
+  return rest
+})
 
 function onInput(event) {
   const value = event.target.value
@@ -70,6 +81,7 @@ function onInput(event) {
     <!-- 文本框容器 -->
     <div class="relative">
       <textarea
+        v-bind="textareaAttrs"
         :value="modelValue"
         :placeholder="placeholder"
         :disabled="disabled"
@@ -87,7 +99,8 @@ function onInput(event) {
           'resize-none',
           {
             'border-error ring-1 ring-error': error,
-          }
+          },
+          attrs.class
         )"
       />
     </div>

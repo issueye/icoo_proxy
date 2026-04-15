@@ -1,8 +1,8 @@
 <template>
-  <div class="dialog-rules-view">
+  <div class="dialog-rules-view app-page">
     <PageHeader
       title="自定义对话规则"
-      description="根据模型名、System 或消息内容，把请求路由到指定供应商。"
+      description="用统一的规则编排模型分流逻辑，让不同请求按语义落到正确供应商。"
       :icon="MessageSquareText"
     >
       <template #actions>
@@ -153,12 +153,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.dialog-rules-view {
-  padding: 24px;
-  height: 100%;
-  overflow-y: auto;
-}
-
 .surface-card {
   margin-top: 8px;
   padding: 20px;
@@ -221,57 +215,12 @@ onMounted(async () => {
   gap: 12px;
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.field-label {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.field-input {
-  width: 100%;
-  min-width: 0;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: #fff;
-  color: var(--color-text-primary);
-  font-size: 13px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-.field-input:focus {
-  outline: none;
-  border-color: color-mix(in srgb, var(--color-accent) 60%, var(--color-border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
-}
-
 .route-rule-actions {
   margin-top: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-
-.toggle-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-
-.toggle-chip input {
-  margin: 0;
 }
 
 .empty-hint {
@@ -281,40 +230,6 @@ onMounted(async () => {
   text-align: center;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-lg);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-success, #22c55e);
-  border-color: var(--color-success, #22c55e);
-  color: #fff;
-}
-
-.btn-secondary {
-  background: var(--color-bg-tertiary, var(--color-bg-primary));
-  color: var(--color-text-secondary);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: #dc2626;
 }
 
 @media (max-width: 1100px) {

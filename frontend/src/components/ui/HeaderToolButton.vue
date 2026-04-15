@@ -36,12 +36,12 @@ function handleClick(event) {
 <template>
   <button
     :class="cn(
-      'header-tool-btn inline-flex items-center justify-center h-6 w-7 p-0',
+      'header-tool-btn icon-btn inline-flex items-center justify-center h-7 w-8 p-0',
       'bg-transparent text-muted-foreground border-none',
       'cursor-pointer transition-all duration-120',
-      'hover:bg-accent/10 hover:text-foreground',
+      'hover:text-foreground',
       'active:bg-secondary',
-      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       { 'opacity-50 cursor-not-allowed': disabled || loading },
       $attrs.class
     )"

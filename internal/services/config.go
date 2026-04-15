@@ -33,10 +33,6 @@ type ClawConnectionConfig struct {
 	UserID  string `json:"userId" toml:"user_id"`
 }
 
-type AgentProcessConfig struct {
-	BinaryPath string `json:"binaryPath" toml:"binary_path"`
-}
-
 // Re-export config types for convenience
 type GatewayConfig = config.GatewayConfig
 type ProviderConfig = config.ProviderConfig
@@ -44,7 +40,6 @@ type RouteRuleConfig = config.RouteRuleConfig
 
 type FullConfig struct {
 	ClawConnection ClawConnectionConfig     `json:"clawConnection" toml:"claw_connection"`
-	AgentProcess   AgentProcessConfig       `json:"agentProcess" toml:"agent_process"`
 	Gateway        config.GatewayConfig     `json:"gateway" toml:"gateway"`
 	Providers      []config.ProviderConfig  `json:"providers" toml:"providers"`
 	RouteRules     []config.RouteRuleConfig `json:"routeRules" toml:"route_rules"`
@@ -107,9 +102,6 @@ func defaultConfig() *FullConfig {
 			WSPort:  "16789",
 			WSPath:  "/ws",
 			UserID:  "user-1",
-		},
-		AgentProcess: AgentProcessConfig{
-			BinaryPath: "",
 		},
 		Gateway: config.GatewayConfig{
 			ListenPort:      16790,
@@ -226,21 +218,6 @@ func (s *ConfigService) SetClawConnectionConfig(cfg ClawConnectionConfig) error 
 	s.mu.Lock()
 	current := *s.config
 	current.ClawConnection = cfg
-	s.applyDefaultsLocked(&current)
-	s.mu.Unlock()
-	return s.Save()
-}
-
-func (s *ConfigService) GetAgentProcessConfig() AgentProcessConfig {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.config.AgentProcess
-}
-
-func (s *ConfigService) SetAgentProcessConfig(cfg AgentProcessConfig) error {
-	s.mu.Lock()
-	current := *s.config
-	current.AgentProcess = cfg
 	s.applyDefaultsLocked(&current)
 	s.mu.Unlock()
 	return s.Save()
@@ -459,9 +436,6 @@ func (s *ConfigService) loadFromDBLocked() (*FullConfig, error) {
 	if err := s.loadSettingJSONLocked("claw_connection", &cfg.ClawConnection); err != nil {
 		return nil, err
 	}
-	if err := s.loadSettingJSONLocked("agent_process", &cfg.AgentProcess); err != nil {
-		return nil, err
-	}
 	if err := s.loadGatewayConfigLocked(&cfg.Gateway); err != nil {
 		return nil, err
 	}
@@ -582,7 +556,6 @@ func (s *ConfigService) saveSettingsLocked(tx *gorm.DB) error {
 
 	settings := []kv{
 		{key: "claw_connection", value: s.config.ClawConnection},
-		{key: "agent_process", value: s.config.AgentProcess},
 		{key: "gateway", value: gatewayCfg},
 	}
 

@@ -63,25 +63,6 @@ export const wailsService = {
     return await this.app.ExecuteTool(toolName, args);
   },
 
-  async getAgentProcessStatus() {
-    if (!this.app?.GetAgentProcessStatus) return { managed: false, running: false, healthy: false };
-    return await this.app.GetAgentProcessStatus();
-  },
-
-  async wakeAgent() {
-    if (!this.app?.WakeAgent) return { managed: false, running: false, healthy: false };
-    return await this.app.WakeAgent();
-  },
-
-  async stopAgent() {
-    if (!this.app?.StopAgent) return { managed: false, running: false, healthy: false };
-    return await this.app.StopAgent();
-  },
-
-  async restartAgent() {
-    if (!this.app?.RestartAgent) return { managed: false, running: false, healthy: false };
-    return await this.app.RestartAgent();
-  },
 };
 
 // 事件系统

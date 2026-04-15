@@ -153,6 +153,65 @@ func TestOpenAIAdapterBuildResponsesRequest(t *testing.T) {
 	}
 }
 
+func TestOpenAIAdapterBuildResponsesRequestWithAssistantHistory(t *testing.T) {
+	adapter := &OpenAIAdapter{}
+	body, path, err := adapter.BuildResponsesRequest(&InternalRequest{
+		Model: "gpt-4.1",
+		Messages: []InternalMessage{
+			{
+				Role: "user",
+				Content: []ContentBlock{
+					{Type: "text", Text: "第一问"},
+				},
+			},
+			{
+				Role: "assistant",
+				Content: []ContentBlock{
+					{Type: "text", Text: "第一答"},
+				},
+			},
+			{
+				Role: "user",
+				Content: []ContentBlock{
+					{Type: "text", Text: "第二问"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildResponsesRequest() error = %v", err)
+	}
+	if path != "/responses" {
+		t.Fatalf("path = %q", path)
+	}
+
+	var payload struct {
+		Input []struct {
+			Type    string `json:"type"`
+			Role    string `json:"role"`
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"input"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(payload.Input) != 3 {
+		t.Fatalf("len(input) = %d", len(payload.Input))
+	}
+	if payload.Input[0].Role != "user" || payload.Input[0].Content[0].Type != "input_text" {
+		t.Fatalf("unexpected first item: %+v", payload.Input[0])
+	}
+	if payload.Input[1].Role != "assistant" || payload.Input[1].Content[0].Type != "output_text" {
+		t.Fatalf("unexpected assistant item: %+v", payload.Input[1])
+	}
+	if payload.Input[2].Role != "user" || payload.Input[2].Content[0].Type != "input_text" {
+		t.Fatalf("unexpected third item: %+v", payload.Input[2])
+	}
+}
+
 func TestOpenAIAdapterBuildResponsesStreamEvents(t *testing.T) {
 	adapter := &OpenAIAdapter{}
 	state := &OpenAIResponsesStreamState{}

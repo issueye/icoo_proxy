@@ -29,11 +29,28 @@ type RouteDecision struct {
 	Rule        *config.RouteRuleConfig
 }
 
+type HTTPError struct {
+	StatusCode int
+	Body       []byte
+	Header     http.Header
+}
+
+func (e *HTTPError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if len(e.Body) == 0 {
+		return fmt.Sprintf("status %d", e.StatusCode)
+	}
+	return fmt.Sprintf("status %d: %s", e.StatusCode, string(e.Body))
+}
+
 // Manager manages AI providers.
 type Manager struct {
 	mu             sync.RWMutex
 	providers      map[string]*ProviderRuntime
 	client         *http.Client
+	streamClient   *http.Client
 	configProvider config.ConfigProvider
 }
 
@@ -45,14 +62,18 @@ var (
 // GetManager returns the singleton Manager instance.
 func GetManager() *Manager {
 	once.Do(func() {
+		transport := &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+		}
 		instance = &Manager{
 			providers: make(map[string]*ProviderRuntime),
 			client: &http.Client{
-				Timeout: 30 * time.Second,
-				Transport: &http.Transport{
-					MaxIdleConns:        100,
-					MaxIdleConnsPerHost: 10,
-				},
+				Timeout:   30 * time.Second,
+				Transport: transport,
+			},
+			streamClient: &http.Client{
+				Transport: transport,
 			},
 		}
 	})
@@ -542,16 +563,16 @@ func (m *Manager) DoRequest(ctx context.Context, p *ProviderRuntime, req *protoc
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
-	return m.client.Do(httpReq)
+	return m.httpClient(req.Stream).Do(httpReq)
 }
 
 // DoRequestRaw forwards a raw HTTP request to a provider.
-func (m *Manager) DoRequestRaw(ctx context.Context, p *ProviderRuntime, method, path string, body []byte) (*http.Response, error) {
+func (m *Manager) DoRequestRaw(ctx context.Context, p *ProviderRuntime, method, path string, body []byte, stream bool) (*http.Response, error) {
 	httpReq, err := p.Adapter.BuildHTTPRequest(ctx, p.Config.APIBase, p.Config.APIKey, method, path, body)
 	if err != nil {
 		return nil, err
 	}
-	return m.client.Do(httpReq)
+	return m.httpClient(stream).Do(httpReq)
 }
 
 // DoRequestWithRetry sends a request with retry logic.
@@ -578,7 +599,11 @@ func (m *Manager) DoRequestWithRetry(ctx context.Context, p *ProviderRuntime, re
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			lastErr = fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
+			lastErr = &HTTPError{
+				StatusCode: resp.StatusCode,
+				Body:       body,
+				Header:     resp.Header.Clone(),
+			}
 			if i < maxRetries {
 				time.Sleep(retryInterval)
 				continue
@@ -588,6 +613,16 @@ func (m *Manager) DoRequestWithRetry(ctx context.Context, p *ProviderRuntime, re
 		return resp, nil
 	}
 	return nil, lastErr
+}
+
+func (m *Manager) httpClient(stream bool) *http.Client {
+	if stream && m.streamClient != nil {
+		return m.streamClient
+	}
+	if m.client != nil {
+		return m.client
+	}
+	return http.DefaultClient
 }
 
 // ProviderListJSON returns the provider list as JSON for the frontend.

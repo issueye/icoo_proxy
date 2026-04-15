@@ -1,8 +1,12 @@
 <script setup>
-import { computed, ref } from "vue"
+import { computed, ref, useAttrs } from "vue"
 import { cn } from "@/lib/utils"
 import { X, Eye, EyeOff } from "lucide-vue-next"
 import Label from "./Label.vue"
+
+defineOptions({
+  inheritAttrs: false,
+})
 
 const props = defineProps({
   modelValue: {
@@ -60,6 +64,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(["update:modelValue", "clear", "keydown"])
+const attrs = useAttrs()
 
 const showPassword = ref(false)
 
@@ -81,10 +86,15 @@ const inputSize = computed(() => {
     case "default":
       return "h-9 px-3 text-sm"
     case "lg":
-      return "h-11 px-4 text-base"
+      return "h-10 px-3.5 text-sm"
     default:
       return "h-9 px-3 text-sm"
   }
+})
+
+const inputAttrs = computed(() => {
+  const { class: _class, ...rest } = attrs
+  return rest
 })
 
 function onInput(event) {
@@ -113,27 +123,27 @@ function togglePassword() {
     </Label>
 
     <!-- 输入框容器 -->
-    <div class="relative">
+    <div
+      :class="cn(
+        'input-shell',
+        {
+          'is-error': error,
+          'is-disabled': disabled,
+        }
+      )"
+    >
       <div
-        :class="cn(
-          'flex items-center w-full border rounded-md transition-all',
-          'bg-background text-foreground',
-          'border-border',
-          'focus-within:outline-none focus-within:ring-1 focus-within:ring-ring focus-within:border-ring',
-          {
-            'border-error ring-1 ring-error': error,
-            'opacity-50 cursor-not-allowed': disabled,
-          }
-        )"
+        class="flex w-full items-center"
       >
         <!-- 前置内容 -->
         <span
           v-if="prefix"
-          class="flex-shrink-0 pl-2.5 pr-1 text-muted-foreground text-xs"
+          class="input-affix pl-2.5 pr-1 text-xs"
         >{{ prefix }}</span>
 
         <!-- 输入框 -->
         <input
+          v-bind="inputAttrs"
           :type="inputType"
           :value="modelValue"
           :placeholder="placeholder"
@@ -142,12 +152,11 @@ function togglePassword() {
           @input="onInput"
           @keydown="onKeydown"
           :class="cn(
-            'flex-1 bg-transparent border-0 outline-none',
-            'placeholder:text-muted-foreground',
+            'input-control',
             'disabled:cursor-not-allowed disabled:opacity-50',
             'read-only:opacity-70',
             inputSize,
-            $attrs.class
+            attrs.class
           )"
         />
 
@@ -156,7 +165,7 @@ function togglePassword() {
           v-if="clearable && hasValue && !disabled"
           type="button"
           @click="clearInput"
-          class="flex-shrink-0 p-0.5 mr-1 text-muted-foreground hover:text-foreground transition-colors"
+          class="input-action mr-1 p-0.5"
           tabindex="-1"
         >
           <X :size="14" />
@@ -167,7 +176,7 @@ function togglePassword() {
           v-if="showPasswordToggle"
           type="button"
           @click="togglePassword"
-          class="flex-shrink-0 p-0.5 mr-1 text-muted-foreground hover:text-foreground transition-colors"
+          class="input-action mr-1 p-0.5"
           tabindex="-1"
         >
           <Eye v-if="!showPassword" :size="14" />
@@ -177,7 +186,7 @@ function togglePassword() {
         <!-- 后置内容 -->
         <span
           v-if="suffix"
-          class="flex-shrink-0 pr-2.5 pl-1 text-muted-foreground text-xs"
+          class="input-affix pr-2.5 pl-1 text-xs"
         >{{ suffix }}</span>
       </div>
     </div>

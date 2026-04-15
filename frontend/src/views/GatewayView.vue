@@ -1,6 +1,9 @@
 <template>
-  <div class="gateway-view">
-    <PageHeader title="网关总览" />
+  <div class="gateway-view app-page">
+    <PageHeader
+      title="网关总览"
+      description="统一管理网关状态、入口鉴权、可用模型和对外接入方式。"
+    />
 
     <!-- 状态卡片 -->
     <div class="stats-grid">
@@ -58,7 +61,7 @@
           <code class="control-value">http://localhost:{{ gatewayStore.port }}/v1</code>
         </div>
         <div class="control-actions">
-          <button v-if="!gatewayStore.running" class="btn btn-primary" @click="handleStart" :disabled="gatewayStore.loading">
+          <button v-if="!gatewayStore.running" class="btn btn-success" @click="handleStart" :disabled="gatewayStore.loading">
             <Play :size="14" /> 启动
           </button>
           <button v-else class="btn btn-danger" @click="handleStop" :disabled="gatewayStore.loading">
@@ -238,12 +241,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.gateway-view {
-  padding: 24px;
-  overflow-y: auto;
-  height: 100%;
-}
-
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -441,60 +438,6 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 14px;
 }
-.btn-icon {
-  white-space: nowrap;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn-primary {
-  background: var(--color-success, #22c55e);
-  border-color: var(--color-success, #22c55e);
-  color: #fff;
-}
-.btn-danger {
-  background: #ef4444;
-  border-color: #ef4444;
-  color: #fff;
-}
-.btn-secondary {
-  background: var(--color-bg-tertiary, var(--color-bg-primary));
-  color: var(--color-text-secondary);
-}
-.btn-sm {
-  padding: 5px 12px;
-  font-size: 12px;
-}
-
-.toggle-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-.toggle-chip input {
-  margin: 0;
-}
-
 .spinning {
   animation: spin 1s linear infinite;
 }

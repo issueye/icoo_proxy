@@ -1,109 +1,103 @@
-﻿<template>
-    <section class="space-y-6">
-        <div>
-            <h2 class="text-xl font-semibold mb-1">外观设置</h2>
-            <p class="text-muted-foreground text-sm">自定义界面外观</p>
+<template>
+    <section class="settings-section">
+        <div class="settings-section-heading">
+            <div>
+                <div class="settings-kicker">Appearance</div>
+                <h2 class="settings-section-title">外观设置</h2>
+                <p class="settings-section-description">
+                    统一主题模式、强调色与界面控件预览。整体采用更紧凑的桌面工具风格，避免松散的大卡片布局。
+                </p>
+            </div>
+            <div class="info-chip">当前主题 · {{ themeLabel }}</div>
         </div>
 
-        <!-- 主题模式 -->
-        <div class="bg-secondary rounded-md border border-border p-5">
-            <div class="flex items-center justify-between">
+        <div class="settings-card">
+            <div class="settings-card-head">
                 <div>
-                    <div class="font-medium">主题模式</div>
-                    <div class="text-sm text-muted-foreground mt-1">
-                        切换明暗主题
-                    </div>
-                </div>
-                <div class="flex items-center gap-1 bg-secondary rounded-md p-1">
-                    <button
-                        @click="themeStore.setTheme('light')"
-                        :class="[
-                            'px-3 py-1.5 rounded-md text-sm transition-colors flex items-center gap-1.5',
-                            themeStore.theme === 'light'
-                                ? 'bg-accent text-white'
-                                : 'text-muted-foreground hover:text-foreground',
-                        ]"
-                    >
-                        <SunIcon :size="14" />
-                        浅色
-                    </button>
-                    <button
-                        @click="themeStore.setTheme('dark')"
-                        :class="[
-                            'px-3 py-1.5 rounded-md text-sm transition-colors flex items-center gap-1.5',
-                            themeStore.theme === 'dark'
-                                ? 'bg-accent text-white'
-                                : 'text-muted-foreground hover:text-foreground',
-                        ]"
-                    >
-                        <MoonIcon :size="14" />
-                        深色
-                    </button>
+                    <div class="settings-card-title">主题模式</div>
+                    <p class="settings-card-description">切换浅色或深色工作环境。</p>
                 </div>
             </div>
-        </div>
 
-        <!-- 颜色主题 -->
-        <div class="bg-secondary rounded-md border border-border p-5">
-            <div class="mb-4">
-                <div class="font-medium">颜色主题</div>
-                <div class="text-sm text-muted-foreground mt-1">
-                    选择你喜欢的强调色
-                </div>
-            </div>
-            <div class="grid grid-cols-4 sm:grid-cols-8 gap-3">
+            <div class="settings-segment">
                 <button
-                    v-for="color in colorList"
-                    :key="color.key"
-                    @click="themeStore.setColorTheme(color.key)"
-                    class="flex flex-col items-center gap-2 p-2 rounded-md hover:bg-secondary transition-colors"
-                    :class="themeStore.colorTheme === color.key ? 'bg-secondary' : ''"
+                    @click="themeStore.setTheme('light')"
+                    :class="['settings-segment-btn', { 'is-active': themeStore.theme === 'light' }]"
                 >
-                    <div
-                        class="color-theme-btn"
-                        :class="themeStore.colorTheme === color.key ? 'active' : ''"
-                        :style="{ backgroundColor: color.color }"
-                    ></div>
-                    <span class="text-xs text-muted-foreground">{{ color.name }}</span>
+                    <SunIcon :size="13" />
+                    浅色
+                </button>
+                <button
+                    @click="themeStore.setTheme('dark')"
+                    :class="['settings-segment-btn', { 'is-active': themeStore.theme === 'dark' }]"
+                >
+                    <MoonIcon :size="13" />
+                    深色
                 </button>
             </div>
         </div>
 
-        <!-- 预览 -->
-        <div class="bg-secondary rounded-md border border-border p-5">
-            <div class="mb-4">
-                <div class="font-medium">预览效果</div>
+        <div class="settings-card">
+            <div class="settings-card-head">
+                <div>
+                    <div class="settings-card-title">强调色</div>
+                    <p class="settings-card-description">统一页面高亮、选中态与状态提示色。</p>
+                </div>
             </div>
-            <div class="space-y-3">
-                <!-- 按钮预览 -->
-                <div class="flex items-center gap-3">
-                    <button class="px-4 py-2 bg-accent text-white rounded-md text-sm hover:bg-accent-hover transition-colors">
-                        主要按钮
-                    </button>
-                    <button class="px-4 py-2 bg-secondary text-foreground rounded-md text-sm border border-border hover:bg-bg-hover transition-colors">
-                        次要按钮
-                    </button>
-                    <button class="px-4 py-2 text-accent hover:bg-accent-light rounded-md text-sm transition-colors">
-                        文字按钮
-                    </button>
+
+            <div class="settings-swatch-grid">
+                <button
+                    v-for="color in colorList"
+                    :key="color.key"
+                    @click="themeStore.setColorTheme(color.key)"
+                    :class="['settings-swatch-card', { 'is-active': themeStore.colorTheme === color.key }]"
+                >
+                    <div
+                        class="color-theme-btn"
+                        :class="{ active: themeStore.colorTheme === color.key }"
+                        :style="{ backgroundColor: color.color }"
+                    />
+                    <span class="text-[11px] text-muted-foreground">{{ color.name }}</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="settings-card settings-card--soft">
+            <div class="settings-card-head">
+                <div>
+                    <div class="settings-card-title">控件预览</div>
+                    <p class="settings-card-description">检查按钮、标签和进度条是否保持紧凑一致。</p>
                 </div>
-                <!-- 标签预览 -->
-                <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-accent-light text-accent rounded-full text-xs font-medium">
-                        <CheckIcon :size="12" />
-                        标签样式
-                    </span>
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-secondary text-muted-foreground rounded-full text-xs">
-                        默认标签
-                    </span>
+            </div>
+
+            <div class="settings-preview-grid">
+                <div class="settings-preview-card">
+                    <strong>按钮</strong>
+                    <div class="flex flex-wrap gap-2">
+                        <button class="btn btn-primary btn-sm">主要按钮</button>
+                        <button class="btn btn-secondary btn-sm">次要按钮</button>
+                    </div>
                 </div>
-                <!-- 链接预览 -->
-                <div class="text-sm">
-                    这是一个 <a href="#" class="text-accent hover:underline">链接样式</a> 的预览
+
+                <div class="settings-preview-card">
+                    <strong>标签</strong>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="settings-preview-pill bg-accent/10 text-accent">
+                            <CheckIcon :size="11" />
+                            当前主题
+                        </span>
+                        <span class="settings-preview-pill bg-secondary text-muted-foreground">
+                            默认标签
+                        </span>
+                    </div>
                 </div>
-                <!-- 进度条预览 -->
-                <div class="w-full h-2 bg-secondary rounded-full overflow-hidden">
-                    <div class="h-full bg-accent rounded-full" style="width: 60%"></div>
+
+                <div class="settings-preview-card">
+                    <strong>进度</strong>
+                    <div class="settings-preview-bar">
+                        <span style="width: 62%"></span>
+                    </div>
+                    <div class="settings-help mt-2">视觉重心落在内容而不是装饰。</div>
                 </div>
             </div>
         </div>
@@ -118,4 +112,5 @@ import { useThemeStore } from "@/stores/theme";
 const themeStore = useThemeStore();
 
 const colorList = computed(() => themeStore.getColorThemeList());
+const themeLabel = computed(() => (themeStore.theme === "light" ? "浅色" : "深色"));
 </script>

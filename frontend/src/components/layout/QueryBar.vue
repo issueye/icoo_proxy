@@ -12,9 +12,8 @@ const props = defineProps({
 <template>
   <div
     :class="cn(
-      'query-bar flex flex-wrap items-center content-start gap-3 p-3',
-      'rounded-md border border-border bg-secondary',
-      compact ? 'gap-2 p-2' : 'gap-3 p-3'
+      'query-bar toolbar-surface flex flex-wrap items-center content-start',
+      compact ? 'gap-2 p-2' : 'gap-3'
     )"
   >
     <slot />

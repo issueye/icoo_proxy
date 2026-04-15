@@ -34,6 +34,9 @@ func TestServiceAddAndList(t *testing.T) {
 		ProviderID:      "openai-main",
 		ProviderName:    "OpenAI",
 		ProviderType:    "openai",
+		EndpointMode:    "responses",
+		UpstreamBase:    "https://api.openai.com/v1",
+		UpstreamPath:    "/responses",
 		Streaming:       true,
 		StatusCode:      200,
 		DurationMs:      123,
@@ -58,6 +61,12 @@ func TestServiceAddAndList(t *testing.T) {
 	}
 	if records[0].ProviderID != "openai-main" {
 		t.Fatalf("ProviderID = %q", records[0].ProviderID)
+	}
+	if records[0].EndpointMode != "responses" {
+		t.Fatalf("EndpointMode = %q", records[0].EndpointMode)
+	}
+	if records[0].UpstreamPath != "/responses" {
+		t.Fatalf("UpstreamPath = %q", records[0].UpstreamPath)
 	}
 	if records[0].StatusCode != 200 {
 		t.Fatalf("StatusCode = %d", records[0].StatusCode)

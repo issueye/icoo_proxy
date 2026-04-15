@@ -14,14 +14,6 @@ export function DeleteProvider(arg1) {
   return window['go']['services']['App']['DeleteProvider'](arg1);
 }
 
-export function GetAgentProcessStatus() {
-  return window['go']['services']['App']['GetAgentProcessStatus']();
-}
-
-export function GetClawConnectionConfig() {
-  return window['go']['services']['App']['GetClawConnectionConfig']();
-}
-
 export function GetGatewayConfig() {
   return window['go']['services']['App']['GetGatewayConfig']();
 }
@@ -62,14 +54,6 @@ export function RefreshModels() {
   return window['go']['services']['App']['RefreshModels']();
 }
 
-export function RestartAgent() {
-  return window['go']['services']['App']['RestartAgent']();
-}
-
-export function SetClawConnectionConfig(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['services']['App']['SetClawConnectionConfig'](arg1, arg2, arg3, arg4, arg5, arg6);
-}
-
 export function SetGatewayConfig(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['services']['App']['SetGatewayConfig'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -86,10 +70,6 @@ export function StartGateway() {
   return window['go']['services']['App']['StartGateway']();
 }
 
-export function StopAgent() {
-  return window['go']['services']['App']['StopAgent']();
-}
-
 export function StopGateway() {
   return window['go']['services']['App']['StopGateway']();
 }
@@ -100,8 +80,4 @@ export function TestProvider(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function UpdateProvider(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   return window['go']['services']['App']['UpdateProvider'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
-}
-
-export function WakeAgent() {
-  return window['go']['services']['App']['WakeAgent']();
 }

@@ -30,19 +30,19 @@ const props = defineProps({
 </script>
 
 <template>
-  <div class="rounded-md border border-border bg-card p-3">
+  <div class="metric-card page-surface-soft">
     <div class="flex items-center gap-3">
       <!-- 图标 -->
       <div
         v-if="icon"
-        :class="cn('w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0', iconBg)"
+        :class="cn('w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0', iconBg)"
       >
         <component :is="icon" :size="18" :class="iconColor" />
       </div>
 
       <!-- 数值和标签 -->
       <div class="min-w-0 flex-1">
-        <p class="text-xl font-bold text-foreground truncate">{{ value }}</p>
+        <p class="text-lg font-bold text-foreground truncate">{{ value }}</p>
         <p class="text-xs text-muted-foreground truncate">{{ label }}</p>
         <p v-if="description" class="text-[11px] text-muted-foreground mt-0.5 truncate">
           {{ description }}

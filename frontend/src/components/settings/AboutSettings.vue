@@ -1,22 +1,29 @@
-﻿<template>
-    <section class="space-y-6">
-        <div>
-            <h2 class="text-xl font-semibold mb-1">关于</h2>
-            <p class="text-muted-foreground text-sm">icooclaw 版本信息</p>
+<template>
+    <section class="settings-section">
+        <div class="settings-section-heading">
+            <div>
+                <div class="settings-kicker">About</div>
+                <h2 class="settings-section-title">关于</h2>
+                <p class="settings-section-description">
+                    当前应用版本、定位与基础识别信息。
+                </p>
+            </div>
         </div>
 
-        <div class="bg-secondary rounded-md border border-border p-6">
-            <div class="text-center">
-                <div
-                    class="w-16 h-16 mx-auto mb-4 rounded-md bg-accent/20 flex items-center justify-center"
-                >
-                    <SparklesIcon :size="32" class="text-accent" />
+        <div class="settings-card">
+            <div class="flex items-start gap-3">
+                <div class="about-mark">
+                    <SparklesIcon :size="18" class="text-accent" />
                 </div>
-                <h3 class="text-lg font-semibold">icooclaw</h3>
-                <p class="text-muted-foreground text-sm mt-1">
-                    AI 助手平台
-                </p>
-                <p class="text-muted-foreground text-xs mt-2">版本 1.0.0</p>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h3 class="text-sm font-semibold text-foreground">icooclaw</h3>
+                        <span class="info-chip">v1.0.0</span>
+                    </div>
+                    <p class="settings-card-description">
+                        AI 助手平台。当前关于页保持简洁，只展示必要信息，不额外堆叠装饰。
+                    </p>
+                </div>
             </div>
         </div>
     </section>
@@ -26,3 +33,16 @@
 import { Sparkles as SparklesIcon } from "lucide-vue-next";
 </script>
 
+<style scoped>
+.about-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-accent) 10%, white);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 16%, transparent);
+    flex-shrink: 0;
+}
+</style>

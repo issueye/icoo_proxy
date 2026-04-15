@@ -3,6 +3,7 @@ package gateway
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"icoo_proxy/internal/audit"
+	"icoo_proxy/internal/config"
 	"icoo_proxy/internal/protocol"
 	"icoo_proxy/internal/provider"
 )
@@ -99,6 +101,8 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	logEntry.ProviderID = p.Config.ID
 	logEntry.ProviderName = p.Config.Name
 	logEntry.ProviderType = p.Config.Type
+	logEntry.EndpointMode = config.NormalizeProviderEndpointMode(p.Config.Type, p.Config.EndpointMode)
+	logEntry.UpstreamBase = p.Config.APIBase
 
 	actualModel := decision.TargetModel
 	if actualModel != model {
@@ -126,6 +130,8 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		h.handlePassthrough(w, r, p, body, &logEntry)
 		return
 	}
+
+	populateUpstreamTarget(&logEntry, p, internalReq)
 
 	// Need protocol conversion
 	if internalReq.Stream {
@@ -199,6 +205,8 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	logEntry.ProviderID = p.Config.ID
 	logEntry.ProviderName = p.Config.Name
 	logEntry.ProviderType = p.Config.Type
+	logEntry.EndpointMode = config.NormalizeProviderEndpointMode(p.Config.Type, p.Config.EndpointMode)
+	logEntry.UpstreamBase = p.Config.APIBase
 
 	actualModel := decision.TargetModel
 	if actualModel != model {
@@ -206,6 +214,7 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	}
 	internalReq.Model = actualModel
 	logEntry.TargetModel = actualModel
+	populateUpstreamTarget(&logEntry, p, internalReq)
 
 	if internalReq.Stream {
 		h.handleResponsesStream(w, r, p, internalReq, &logEntry)
@@ -225,8 +234,9 @@ func (h *Handler) handlePassthrough(w http.ResponseWriter, r *http.Request, p *p
 		writeError(w, http.StatusInternalServerError, err.Error(), "server_error")
 		return
 	}
+	logEntry.UpstreamPath = path
 
-	resp, err := provider.GetManager().DoRequestRaw(r.Context(), p, "POST", path, body)
+	resp, err := provider.GetManager().DoRequestRaw(r.Context(), p, "POST", path, body, logEntry.Streaming)
 	if err != nil {
 		logEntry.ErrorMessage = fmt.Sprintf("provider request failed: %v", err)
 		writeError(w, http.StatusBadGateway, fmt.Sprintf("Provider request failed: %v", err), "server_error")
@@ -248,8 +258,7 @@ func (h *Handler) handlePassthrough(w http.ResponseWriter, r *http.Request, p *p
 func (h *Handler) handleNonStreamWithConversion(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
 	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
 	if err != nil {
-		logEntry.ErrorMessage = fmt.Sprintf("provider request failed: %v", err)
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("Provider request failed: %v", err), "server_error")
+		writeProviderError(w, logEntry, err)
 		return
 	}
 	defer resp.Body.Close()
@@ -300,8 +309,7 @@ func (h *Handler) handleNonStreamWithConversion(w http.ResponseWriter, r *http.R
 func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
 	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
 	if err != nil {
-		logEntry.ErrorMessage = fmt.Sprintf("provider request failed: %v", err)
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("Provider request failed: %v", err), "server_error")
+		writeProviderError(w, logEntry, err)
 		return
 	}
 	defer resp.Body.Close()
@@ -325,7 +333,7 @@ func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Requ
 	gwAdapter := &protocol.OpenAIAdapter{}
 
 	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -427,13 +435,16 @@ func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Requ
 			flusher.Flush()
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("[Gateway] Stream read failed: %v", err)
+		logEntry.ErrorMessage = fmt.Sprintf("stream read failed: %v", err)
+	}
 }
 
 func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
 	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
 	if err != nil {
-		logEntry.ErrorMessage = fmt.Sprintf("provider request failed: %v", err)
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("Provider request failed: %v", err), "server_error")
+		writeProviderError(w, logEntry, err)
 		return
 	}
 	defer resp.Body.Close()
@@ -478,8 +489,7 @@ func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, r *http.Reques
 func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
 	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
 	if err != nil {
-		logEntry.ErrorMessage = fmt.Sprintf("provider request failed: %v", err)
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("Provider request failed: %v", err), "server_error")
+		writeProviderError(w, logEntry, err)
 		return
 	}
 	defer resp.Body.Close()
@@ -503,7 +513,7 @@ func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, 
 	state := &protocol.OpenAIResponsesStreamState{}
 
 	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -586,6 +596,10 @@ func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, 
 		if chunk.StreamDone {
 			break
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("[Gateway] Responses stream read failed: %v", err)
+		logEntry.ErrorMessage = fmt.Sprintf("stream read failed: %v", err)
 	}
 }
 
@@ -752,4 +766,47 @@ func serializeHeaders(header http.Header) string {
 		return ""
 	}
 	return truncatePayload(payload)
+}
+
+func populateUpstreamTarget(logEntry *audit.RequestLogInput, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest) {
+	if logEntry == nil || p == nil {
+		return
+	}
+	logEntry.EndpointMode = config.NormalizeProviderEndpointMode(p.Config.Type, p.Config.EndpointMode)
+	logEntry.UpstreamBase = p.Config.APIBase
+	if internalReq == nil {
+		return
+	}
+	_, path, err := p.Adapter.BuildRequest(internalReq)
+	if err == nil {
+		logEntry.UpstreamPath = path
+	}
+}
+
+func writeProviderError(w http.ResponseWriter, logEntry *audit.RequestLogInput, err error) {
+	var httpErr *provider.HTTPError
+	if errors.As(err, &httpErr) {
+		if logEntry != nil {
+			logEntry.ErrorMessage = httpErr.Error()
+		}
+		for key, values := range httpErr.Header {
+			for _, value := range values {
+				w.Header().Add(key, value)
+			}
+		}
+		if w.Header().Get("Content-Type") == "" {
+			w.Header().Set("Content-Type", "application/json")
+		}
+		w.WriteHeader(httpErr.StatusCode)
+		if len(httpErr.Body) > 0 {
+			_, _ = w.Write(httpErr.Body)
+			return
+		}
+		_, _ = w.Write([]byte(http.StatusText(httpErr.StatusCode)))
+		return
+	}
+	if logEntry != nil {
+		logEntry.ErrorMessage = fmt.Sprintf("provider request failed: %v", err)
+	}
+	writeError(w, http.StatusBadGateway, fmt.Sprintf("Provider request failed: %v", err), "server_error")
 }

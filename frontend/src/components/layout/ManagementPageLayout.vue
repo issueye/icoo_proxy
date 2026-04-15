@@ -29,7 +29,7 @@ const props = defineProps({
 </script>
 
 <template>
-  <section class="management-page h-full flex flex-col min-h-0 p-2">
+  <section class="management-page h-full flex flex-col min-h-0 p-1.5">
     <!-- 固定头部区域 -->
     <div class="flex-shrink-0">
       <!-- 标题栏 -->
@@ -49,7 +49,7 @@ const props = defineProps({
       <!-- 指标卡片 -->
       <div
         v-if="$slots.metrics"
-        :class="cn('grid gap-3 py-3', compact ? 'grid-cols-2' : 'grid-cols-4')"
+        :class="cn('grid gap-2.5 py-2.5', compact ? 'grid-cols-2' : 'grid-cols-4')"
       >
         <slot name="metrics" />
       </div>
@@ -57,7 +57,7 @@ const props = defineProps({
       <Separator v-if="$slots.metrics && $slots.filters" />
 
       <!-- 筛选栏 -->
-      <div v-if="$slots.filters" class="py-3">
+      <div v-if="$slots.filters" class="py-2.5">
         <QueryBar :compact="compact">
           <slot name="filters" />
         </QueryBar>
@@ -66,7 +66,7 @@ const props = defineProps({
       <Separator v-if="$slots.footer" />
 
       <!-- 底部操作区 -->
-      <div v-if="$slots.footer" class="py-3">
+      <div v-if="$slots.footer" class="py-2.5">
         <slot name="footer" />
       </div>
     </div>

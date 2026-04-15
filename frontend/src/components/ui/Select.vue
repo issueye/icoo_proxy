@@ -1,8 +1,12 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue"
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, useAttrs } from "vue"
 import { cn } from "@/lib/utils"
 import { ChevronDown, Check, X, Search } from "lucide-vue-next"
 import Label from "./Label.vue"
+
+defineOptions({
+  inheritAttrs: false,
+})
 
 const props = defineProps({
   modelValue: {
@@ -68,6 +72,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(["update:modelValue", "change"])
+const attrs = useAttrs()
 
 const isOpen = ref(false)
 const searchQuery = ref("")
@@ -173,7 +178,7 @@ const selectSize = computed(() => {
     case "default":
       return "h-9 px-3 text-sm"
     case "lg":
-      return "h-11 px-4 text-base"
+      return "h-10 px-3.5 text-sm"
     default:
       return "h-9 px-3 text-sm"
   }
@@ -277,22 +282,19 @@ onUnmounted(() => {
     <div
       ref="triggerRef"
       :class="cn(
-        'relative flex items-center w-full cursor-pointer',
-        'border border-border rounded-md',
-        'bg-background transition-all',
-        'focus-within:outline-none focus-within:ring-1 focus-within:ring-ring focus-within:border-ring',
+        'input-shell relative cursor-pointer',
         {
-          'border-error ring-1 ring-error': error,
-          'opacity-50 cursor-not-allowed': disabled,
-          'border-ring ring-1 ring-ring': isOpen,
-        }
+          'is-error': error,
+          'is-disabled cursor-not-allowed': disabled,
+        },
+        attrs.class
       )"
       @click="toggleDropdown"
     >
       <!-- 选中值显示 -->
       <div
         :class="cn(
-          'flex-1 flex items-center gap-1 truncate',
+          'input-control flex items-center gap-1 truncate',
           selectSize,
           { 'text-muted-foreground': !isSelected }
         )"
@@ -305,7 +307,7 @@ onUnmounted(() => {
         v-if="clearable && hasValue && !disabled"
         type="button"
         @click.stop="clearSelection"
-        class="flex-shrink-0 p-0.5 mr-1 text-muted-foreground hover:text-foreground transition-colors"
+        class="input-action mr-1 p-0.5"
         tabindex="-1"
       >
         <X :size="14" />
@@ -314,7 +316,7 @@ onUnmounted(() => {
       <!-- 下拉箭头 -->
       <ChevronDown
         :size="14"
-        class="flex-shrink-0 mr-2 text-muted-foreground transition-transform"
+        class="input-affix mr-2 transition-transform"
         :class="{ 'rotate-180': isOpen }"
       />
     </div>
@@ -342,13 +344,13 @@ onUnmounted(() => {
     >
       <!-- 搜索框 -->
       <div v-if="searchable" class="p-2 border-b border-border">
-        <div class="relative">
-          <Search :size="12" class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <div class="input-shell">
+          <Search :size="12" class="input-affix absolute left-2 top-1/2 -translate-y-1/2" />
           <input
             v-model="searchQuery"
             type="text"
             placeholder="搜索..."
-            class="w-full pl-7 pr-2 h-7 text-xs bg-transparent border-0 outline-none placeholder:text-muted-foreground"
+            class="input-control h-7 pl-7 pr-2 text-xs"
             @click.stop
           />
         </div>
@@ -362,7 +364,7 @@ onUnmounted(() => {
             <!-- 分组标题 -->
             <div
               v-if="group !== '__ungrouped__'"
-              class="px-3 py-1 text-xs font-medium text-muted-foreground truncate"
+              class="px-3 py-1 text-[11px] font-medium text-muted-foreground truncate"
             >
               {{ group }}
             </div>
@@ -374,7 +376,7 @@ onUnmounted(() => {
                 'flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-sm',
                 'hover:bg-accent hover:text-accent-foreground',
                 {
-                  'bg-accent text-accent-foreground': isSelectedValue(option.value),
+                  'bg-accent/10 text-foreground': isSelectedValue(option.value),
                   'opacity-50 cursor-not-allowed': option.disabled,
                   'pl-6': group !== '__ungrouped__',
                 }
@@ -407,7 +409,7 @@ onUnmounted(() => {
               'flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-sm',
               'hover:bg-accent hover:text-accent-foreground',
               {
-                'bg-accent text-accent-foreground': isSelectedValue(option.value),
+                'bg-accent/10 text-foreground': isSelectedValue(option.value),
                 'opacity-50 cursor-not-allowed': option.disabled,
               }
             )"

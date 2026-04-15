@@ -14,13 +14,12 @@
       <Transition name="confirm-scale">
         <div
           v-if="visible"
-          class="bg-white relative border border-border rounded-md shadow-lg w-full max-w-sm mx-4 overflow-hidden"
+          class="confirm-shell relative w-full max-w-sm mx-4 overflow-hidden"
         >
-          <!-- 图标 -->
-          <div class="px-6 pt-6 pb-2 flex flex-col items-center text-center">
+          <div class="confirm-body">
             <div
               :class="[
-                'w-12 h-12 rounded-md flex items-center justify-center mb-4',
+                'confirm-icon',
                 iconClasses[state.type],
               ]"
             >
@@ -31,16 +30,15 @@
               <Info v-else :size="24" />
             </div>
 
-            <h3 class="font-semibold text-foreground text-lg mb-2">
+            <h3 class="confirm-title">
               {{ state.title }}
             </h3>
-            <p class="text-muted-foreground text-sm leading-relaxed">
+            <p class="confirm-message">
               {{ state.message }}
             </p>
           </div>
 
-          <!-- 按钮 -->
-          <div class="flex gap-3 px-6 py-5">
+          <div class="confirm-actions">
             <button
               @click="handleCancel"
               class="btn btn-secondary flex-1"
@@ -70,9 +68,9 @@ import { useConfirm } from "@/composables/useConfirm.js";
 const { visible, state, handleConfirm, handleCancel } = useConfirm();
 
 const iconClasses = {
-  default: "bg-accent/15 text-accent",
-  danger: "bg-red-500/15 text-red-500",
-  warning: "bg-amber-500/15 text-amber-500",
+  default: "bg-accent/10 text-accent",
+  danger: "bg-red-500/10 text-red-500",
+  warning: "bg-amber-500/10 text-amber-500",
 };
 
 const btnClasses = {
@@ -83,6 +81,55 @@ const btnClasses = {
 </script>
 
 <style scoped>
+.confirm-shell {
+  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 3%, transparent), transparent 72px),
+    color-mix(in srgb, var(--color-bg-secondary) 97%, white);
+  box-shadow: var(--shadow-lg);
+}
+
+.confirm-body {
+  padding: 18px 18px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.confirm-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  border: 1px solid currentColor;
+  border-color: color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.confirm-title {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.confirm-message {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 18px 18px;
+}
+
 .confirm-fade-enter-active,
 .confirm-fade-leave-active {
   transition: opacity 0.2s ease;

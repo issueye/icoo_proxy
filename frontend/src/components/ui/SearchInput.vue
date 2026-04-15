@@ -1,7 +1,11 @@
 <script setup>
-import { ref, computed } from "vue"
+import { ref, computed, useAttrs } from "vue"
 import { cn } from "@/lib/utils"
 import { Search, X } from "lucide-vue-next"
+
+defineOptions({
+  inheritAttrs: false,
+})
 
 const props = defineProps({
   modelValue: {
@@ -23,6 +27,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(["update:modelValue", "clear", "search"])
+const attrs = useAttrs()
 
 const inputRef = ref(null)
 
@@ -37,10 +42,15 @@ const inputSize = computed(() => {
     case "default":
       return "h-9 text-sm"
     case "lg":
-      return "h-11 text-base"
+      return "h-10 text-sm"
     default:
       return "h-9 text-sm"
   }
+})
+
+const inputAttrs = computed(() => {
+  const { class: _class, ...rest } = attrs
+  return rest
 })
 
 function onInput(event) {
@@ -73,12 +83,9 @@ defineExpose({ focus })
 <template>
   <div
     :class="cn(
-      'relative flex items-center w-full',
-      'border border-border rounded-md',
-      'bg-background transition-all',
-      'focus-within:outline-none focus-within:ring-1 focus-within:ring-ring focus-within:border-ring',
+      'input-shell',
       {
-        'opacity-50': disabled,
+        'is-disabled': disabled,
       }
     )"
   >
@@ -91,6 +98,7 @@ defineExpose({ focus })
     <!-- 输入框 -->
     <input
       ref="inputRef"
+      v-bind="inputAttrs"
       type="text"
       :value="modelValue"
       :placeholder="placeholder"
@@ -98,12 +106,11 @@ defineExpose({ focus })
       @input="onInput"
       @keydown="onKeydown"
       :class="cn(
-        'w-full bg-transparent border-0 outline-none',
+        'input-control',
         'pl-8 pr-7',
-        'placeholder:text-muted-foreground',
         'disabled:cursor-not-allowed',
         inputSize,
-        $attrs.class
+        attrs.class
       )"
     />
 
@@ -112,7 +119,7 @@ defineExpose({ focus })
       v-if="hasValue && !disabled"
       type="button"
       @click="clearInput"
-      class="absolute right-2 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+      class="input-action absolute right-2 p-0.5"
       tabindex="-1"
     >
       <X :size="12" />

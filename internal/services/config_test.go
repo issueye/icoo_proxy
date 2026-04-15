@@ -117,9 +117,6 @@ log_level = "debug"
 retry_count = 3
 retry_interval_ms = 900
 
-[agent_process]
-binary_path = "C:/tools/agent.exe"
-
 [[providers]]
 id = "openai-main"
 name = "OpenAI"
@@ -170,11 +167,6 @@ enabled = true
 	}
 	if gwCfg.DefaultProvider != "openai-main" {
 		t.Fatalf("DefaultProvider = %q", gwCfg.DefaultProvider)
-	}
-
-	agentCfg := service.GetAgentProcessConfig()
-	if agentCfg.BinaryPath != "C:/tools/agent.exe" {
-		t.Fatalf("BinaryPath = %q", agentCfg.BinaryPath)
 	}
 
 	providers := service.GetProviders()
