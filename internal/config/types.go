@@ -17,11 +17,33 @@ type ProviderConfig struct {
 	Type         string            `json:"type" toml:"type"`
 	APIBase      string            `json:"apiBase" toml:"api_base"`
 	APIKey       string            `json:"apiKey" toml:"api_key"`
+	EndpointMode string            `json:"endpointMode,omitempty" toml:"endpoint_mode,omitempty"`
 	Enabled      bool              `json:"enabled" toml:"enabled"`
 	Priority     int               `json:"priority" toml:"priority"`
 	ExtraConfig  map[string]string `json:"extraConfig" toml:"extra_config"`
 	LLMs         []ModelEntry      `json:"llms" toml:"llms"`                  // 模型列表
 	DefaultModel string            `json:"defaultModel" toml:"default_model"` // 默认模型
+}
+
+const (
+	ProviderEndpointModeChatCompletions   = "chat_completions"
+	ProviderEndpointModeResponses         = "responses"
+	ProviderEndpointModeAnthropicMessages = "anthropic_messages"
+	ProviderEndpointModeGeminiGenerate    = "gemini_generate_content"
+)
+
+func NormalizeProviderEndpointMode(providerType, endpointMode string) string {
+	if endpointMode != "" {
+		return endpointMode
+	}
+	switch providerType {
+	case "anthropic":
+		return ProviderEndpointModeAnthropicMessages
+	case "gemini":
+		return ProviderEndpointModeGeminiGenerate
+	default:
+		return ProviderEndpointModeChatCompletions
+	}
 }
 
 // ModelEntry represents a model with optional target mapping.

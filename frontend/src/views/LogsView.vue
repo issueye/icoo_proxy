@@ -73,6 +73,7 @@
         </div>
 
         <div class="request-log-tags">
+          <span class="request-log-tag request-log-tag--mode">{{ getRequestMode(log) }}</span>
           <span v-if="log.streaming" class="request-log-tag request-log-tag--accent">stream</span>
           <span class="request-log-tag">{{ log.statusCode >= 400 ? '失败' : '成功' }}</span>
           <span v-if="log.targetModel && log.targetModel !== log.model" class="request-log-tag">
@@ -84,9 +85,19 @@
           {{ log.errorMessage }}
         </div>
 
-        <details v-if="log.requestBody" class="request-log-body">
-          <summary>查看请求体</summary>
-          <pre>{{ log.requestBody }}</pre>
+        <details v-if="log.requestPayload" class="request-log-body">
+          <summary>查看请求参数</summary>
+          <pre>{{ formatPayload(log.requestPayload) }}</pre>
+        </details>
+
+        <details v-if="log.responseHeaders" class="request-log-body">
+          <summary>查看响应头</summary>
+          <pre>{{ formatPayload(log.responseHeaders) }}</pre>
+        </details>
+
+        <details v-if="log.responsePayload" class="request-log-body">
+          <summary>查看响应数据</summary>
+          <pre>{{ formatPayload(log.responsePayload) }}</pre>
         </details>
       </div>
     </div>
@@ -128,6 +139,21 @@ function formatTimestamp(value) {
     minute: '2-digit',
     second: '2-digit',
   });
+}
+
+function formatPayload(value) {
+  if (!value) return '';
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
+
+function getRequestMode(log) {
+  if (log?.path?.includes('/v1/responses')) return 'responses';
+  if (log?.path?.includes('/v1/chat/completions')) return 'chat.completions';
+  return 'gateway';
 }
 
 onMounted(async () => {
@@ -291,6 +317,12 @@ onMounted(async () => {
 
 .request-log-tag--accent {
   color: var(--color-accent);
+}
+
+.request-log-tag--mode {
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-tertiary, var(--color-bg-primary)));
+  color: var(--color-accent);
+  font-weight: 700;
 }
 
 .request-log-error {

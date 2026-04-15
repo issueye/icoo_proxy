@@ -74,11 +74,27 @@
     <!-- 快速测试 -->
     <div class="section">
       <h3 class="section-title">快速测试</h3>
+      <div class="mode-grid">
+        <div v-for="item in requestModes" :key="item.name" class="mode-card">
+          <div class="mode-card-head">
+            <div>
+              <div class="mode-card-title">{{ item.name }}</div>
+              <div class="mode-card-endpoint">{{ item.endpoint }}</div>
+            </div>
+            <span class="mode-chip">{{ item.payload }}</span>
+          </div>
+          <p class="mode-card-description">{{ item.description }}</p>
+        </div>
+      </div>
       <div class="test-hint">
         <pre class="code-block"><code>curl http://localhost:{{ gatewayStore.port }}/v1/chat/completions \
   {{ gatewayStore.gatewayConfig.authKey ? `-H "Authorization: Bearer ${gatewayStore.gatewayConfig.authKey}" \\` : '' }}
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}'</code></pre>
+        <pre class="code-block"><code>curl http://localhost:{{ gatewayStore.port }}/v1/responses \
+  {{ gatewayStore.gatewayConfig.authKey ? `-H "Authorization: Bearer ${gatewayStore.gatewayConfig.authKey}" \\` : '' }}
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4.1","input":"hello"}'</code></pre>
         <pre class="code-block"><code>curl http://localhost:{{ gatewayStore.port }}/v1/models{{ gatewayStore.gatewayConfig.authKey ? ` \
   -H "Authorization: Bearer ${gatewayStore.gatewayConfig.authKey}"` : '' }}</code></pre>
       </div>
@@ -133,115 +149,6 @@
       </div>
     </div>
 
-    <!-- 供应商概览 -->
-    <div class="section">
-      <h3 class="section-title">供应商状态</h3>
-      <div v-if="providerStore.providers.length === 0" class="empty-hint">
-        暂未配置供应商，前往 <router-link to="/providers">供应商管理</router-link> 添加
-      </div>
-      <div v-else class="provider-list">
-        <div v-for="p in providerStore.providers" :key="p.id" class="provider-item">
-          <div class="provider-left">
-            <StatusBadge
-              :status="p.healthy ? 'success' : p.enabled ? 'warning' : 'error'"
-              :label="p.healthy ? '正常' : p.enabled ? '异常' : '禁用'"
-            />
-            <span class="provider-name">{{ p.name }}</span>
-            <span class="provider-type">{{ p.type }}</span>
-          </div>
-          <div class="provider-right">
-            <span class="provider-models">{{ p.modelCount }} 模型</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-heading">
-        <h3 class="section-title">请求日志</h3>
-        <router-link to="/logs" class="section-link">打开</router-link>
-      </div>
-
-      <div class="log-module-card">
-        <div class="log-module-title">请求日志</div>
-        <div class="log-module-actions">
-          <div class="log-module-chip">{{ gatewayStore.logsLoading ? '正在同步日志' : '日志模块可用' }}</div>
-          <router-link to="/logs" class="btn btn-secondary btn-sm">打开日志页</router-link>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-heading">
-        <h3 class="section-title">自定义对话路由</h3>
-        <div class="section-tools">
-          <button class="btn btn-secondary btn-sm" type="button" @click="addRouteRule">
-            新增规则
-          </button>
-          <button class="btn btn-primary btn-sm" type="button" @click="handleSaveRouteRules" :disabled="gatewayStore.loading">
-            保存规则
-          </button>
-        </div>
-      </div>
-
-      <div class="route-rules-panel">
-        <div v-if="routeRuleDrafts.length === 0" class="empty-hint">
-          暂未配置自定义对话路由
-        </div>
-
-        <div v-else class="route-rule-list">
-          <div v-for="(rule, index) in routeRuleDrafts" :key="index" class="route-rule-card">
-            <div class="route-rule-grid">
-              <div>
-                <label class="control-label">规则名</label>
-                <input v-model="rule.name" class="auth-input" placeholder="例如：代码问题走 Claude" >
-              </div>
-              <div>
-                <label class="control-label">匹配方式</label>
-                <select v-model="rule.matchType" class="auth-input">
-                  <option value="model">模型名匹配</option>
-                  <option value="system_contains">System 包含</option>
-                  <option value="message_contains">任意消息包含</option>
-                  <option value="user_contains">用户消息包含</option>
-                  <option value="assistant_contains">助手消息包含</option>
-                </select>
-              </div>
-              <div>
-                <label class="control-label">匹配内容</label>
-                <input v-model="rule.pattern" class="auth-input" placeholder="如：gpt-* / 代码审查 / 翻译" >
-              </div>
-              <div>
-                <label class="control-label">目标供应商</label>
-                <select v-model="rule.providerId" class="auth-input">
-                  <option value="">请选择</option>
-                  <option v-for="provider in providerStore.providers" :key="provider.id" :value="provider.id">
-                    {{ provider.name }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="control-label">目标模型</label>
-                <input v-model="rule.targetModel" class="auth-input" placeholder="可选，留空则沿用原模型映射" >
-              </div>
-              <div>
-                <label class="control-label">优先级</label>
-                <input v-model.number="rule.priority" type="number" class="auth-input" placeholder="100" >
-              </div>
-            </div>
-
-            <div class="route-rule-actions">
-              <label class="toggle-chip">
-                <input v-model="rule.enabled" type="checkbox">
-                <span>启用规则</span>
-              </label>
-              <button class="btn btn-secondary btn-sm" type="button" @click="removeRouteRule(index)">
-                删除
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -252,7 +159,6 @@ import { useProviderStore } from '@/stores/provider';
 import {
   Server, Cpu, Activity, HeartPulse, Play, Square, RefreshCw,
 } from 'lucide-vue-next';
-import StatusBadge from '@/components/ui/StatusBadge.vue';
 import PageHeader from '@/components/layout/PageHeader.vue';
 
 const gatewayStore = useGatewayStore();
@@ -260,7 +166,20 @@ const providerStore = useProviderStore();
 let timer = null;
 const showAuthKey = ref(false);
 const authKeyDraft = ref("");
-const routeRuleDrafts = ref([]);
+const requestModes = [
+  {
+    name: "Chat Completions",
+    endpoint: "POST /v1/chat/completions",
+    payload: "messages",
+    description: "兼容传统 OpenAI Chat Completions 结构，使用 messages 数组组织上下文。",
+  },
+  {
+    name: "Responses",
+    endpoint: "POST /v1/responses",
+    payload: "input",
+    description: "兼容 OpenAI Responses API，支持 input、instructions 和函数工具定义。",
+  },
+];
 
 async function handleStart() {
   await gatewayStore.startGateway();
@@ -302,50 +221,11 @@ function generateGatewayKey() {
   return result;
 }
 
-function createEmptyRouteRule() {
-  return {
-    name: "",
-    matchType: "model",
-    pattern: "",
-    providerId: "",
-    targetModel: "",
-    priority: 100,
-    enabled: true,
-  };
-}
-
-function addRouteRule() {
-  routeRuleDrafts.value.push(createEmptyRouteRule());
-}
-
-function removeRouteRule(index) {
-  routeRuleDrafts.value.splice(index, 1);
-}
-
-async function handleSaveRouteRules() {
-  const sanitized = routeRuleDrafts.value
-    .map((rule) => ({
-      name: rule.name?.trim() || "",
-      matchType: rule.matchType || "model",
-      pattern: rule.pattern?.trim() || "",
-      providerId: rule.providerId || "",
-      targetModel: rule.targetModel?.trim() || "",
-      priority: Number(rule.priority) || 100,
-      enabled: !!rule.enabled,
-    }))
-    .filter((rule) => rule.pattern && rule.providerId);
-
-  await gatewayStore.saveRouteRules(sanitized);
-  routeRuleDrafts.value = sanitized.length > 0 ? sanitized.map((item) => ({ ...item })) : [];
-}
-
 onMounted(async () => {
   await gatewayStore.fetchStatus();
   await gatewayStore.fetchModels();
   await gatewayStore.fetchConfig();
   authKeyDraft.value = gatewayStore.gatewayConfig.authKey || "";
-  await gatewayStore.fetchRouteRules();
-  routeRuleDrafts.value = gatewayStore.routeRules.map((item) => ({ ...item }));
   await providerStore.fetchProviders();
   timer = window.setInterval(() => {
     gatewayStore.fetchStatus();
@@ -628,6 +508,54 @@ onUnmounted(() => {
   color: var(--color-text-muted);
   line-height: 1.6;
 }
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.mode-card {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 8%, transparent), transparent 55%),
+    var(--color-bg-secondary);
+}
+.mode-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mode-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.mode-card-endpoint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.mode-card-description {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--color-bg-tertiary, var(--color-bg-primary));
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .code-block {
   margin-top: 8px;
   padding: 12px 16px;
@@ -780,6 +708,9 @@ onUnmounted(() => {
     padding: 16px;
   }
   .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .mode-grid {
     grid-template-columns: 1fr;
   }
   .section-heading,

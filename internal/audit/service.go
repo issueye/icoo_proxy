@@ -14,41 +14,45 @@ import (
 )
 
 type RequestLog struct {
-	ID             uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	CreatedAt      time.Time `json:"createdAt"`
-	Method         string    `json:"method" gorm:"not null"`
-	Path           string    `json:"path" gorm:"not null"`
-	Model          string    `json:"model"`
-	TargetModel    string    `json:"targetModel"`
-	ProviderID     string    `json:"providerId"`
-	ProviderName   string    `json:"providerName"`
-	ProviderType   string    `json:"providerType"`
-	Streaming      bool      `json:"streaming" gorm:"not null"`
-	StatusCode     int       `json:"statusCode" gorm:"not null"`
-	DurationMs     int64     `json:"durationMs" gorm:"not null"`
-	ErrorMessage   string    `json:"errorMessage"`
-	ClientIP       string    `json:"clientIp"`
-	UserAgent      string    `json:"userAgent"`
-	RequestPayload string    `json:"requestPayload,omitempty"`
+	ID              uint      `json:"id" gorm:"primaryKey;autoIncrement"`
+	CreatedAt       time.Time `json:"createdAt"`
+	Method          string    `json:"method" gorm:"not null"`
+	Path            string    `json:"path" gorm:"not null"`
+	Model           string    `json:"model"`
+	TargetModel     string    `json:"targetModel"`
+	ProviderID      string    `json:"providerId"`
+	ProviderName    string    `json:"providerName"`
+	ProviderType    string    `json:"providerType"`
+	Streaming       bool      `json:"streaming" gorm:"not null"`
+	StatusCode      int       `json:"statusCode" gorm:"not null"`
+	DurationMs      int64     `json:"durationMs" gorm:"not null"`
+	ErrorMessage    string    `json:"errorMessage"`
+	ClientIP        string    `json:"clientIp"`
+	UserAgent       string    `json:"userAgent"`
+	RequestPayload  string    `json:"requestPayload,omitempty"`
+	ResponseHeaders string    `json:"responseHeaders,omitempty"`
+	ResponsePayload string    `json:"responsePayload,omitempty"`
 }
 
 func (RequestLog) TableName() string { return "request_logs" }
 
 type RequestLogInput struct {
-	Method         string
-	Path           string
-	Model          string
-	TargetModel    string
-	ProviderID     string
-	ProviderName   string
-	ProviderType   string
-	Streaming      bool
-	StatusCode     int
-	DurationMs     int64
-	ErrorMessage   string
-	ClientIP       string
-	UserAgent      string
-	RequestPayload string
+	Method          string
+	Path            string
+	Model           string
+	TargetModel     string
+	ProviderID      string
+	ProviderName    string
+	ProviderType    string
+	Streaming       bool
+	StatusCode      int
+	DurationMs      int64
+	ErrorMessage    string
+	ClientIP        string
+	UserAgent       string
+	RequestPayload  string
+	ResponseHeaders string
+	ResponsePayload string
 }
 
 type Service struct {
@@ -104,20 +108,22 @@ func (s *Service) Add(entry RequestLogInput) error {
 		return err
 	}
 	record := RequestLog{
-		Method:         entry.Method,
-		Path:           entry.Path,
-		Model:          entry.Model,
-		TargetModel:    entry.TargetModel,
-		ProviderID:     entry.ProviderID,
-		ProviderName:   entry.ProviderName,
-		ProviderType:   entry.ProviderType,
-		Streaming:      entry.Streaming,
-		StatusCode:     entry.StatusCode,
-		DurationMs:     entry.DurationMs,
-		ErrorMessage:   entry.ErrorMessage,
-		ClientIP:       entry.ClientIP,
-		UserAgent:      entry.UserAgent,
-		RequestPayload: entry.RequestPayload,
+		Method:          entry.Method,
+		Path:            entry.Path,
+		Model:           entry.Model,
+		TargetModel:     entry.TargetModel,
+		ProviderID:      entry.ProviderID,
+		ProviderName:    entry.ProviderName,
+		ProviderType:    entry.ProviderType,
+		Streaming:       entry.Streaming,
+		StatusCode:      entry.StatusCode,
+		DurationMs:      entry.DurationMs,
+		ErrorMessage:    entry.ErrorMessage,
+		ClientIP:        entry.ClientIP,
+		UserAgent:       entry.UserAgent,
+		RequestPayload:  entry.RequestPayload,
+		ResponseHeaders: entry.ResponseHeaders,
+		ResponsePayload: entry.ResponsePayload,
 	}
 	return s.db.Create(&record).Error
 }

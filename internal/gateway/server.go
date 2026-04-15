@@ -45,6 +45,7 @@ func (s *Server) Start(port int) error {
 
 	// Register routes
 	mux.HandleFunc("/v1/chat/completions", s.handler.ChatCompletions)
+	mux.HandleFunc("/v1/responses", s.handler.Responses)
 	mux.HandleFunc("/v1/models", s.handler.Models)
 	mux.HandleFunc("/v1/health", s.handler.Health)
 

@@ -44,6 +44,7 @@
         <div class="card-body">
           <div class="card-meta">
             <span class="meta-type">{{ p.type }}</span>
+            <span class="meta-endpoint">{{ getEndpointModeLabel(p.endpointMode, p.type) }}</span>
             <span class="meta-base">{{ p.apiBase }}</span>
           </div>
           <div class="card-footer">
@@ -68,10 +69,22 @@
         </div>
         <div class="form-field">
           <label class="form-label">类型</label>
-          <select v-model="form.type" class="form-input">
+          <select v-model="form.type" class="form-input" @change="handleTypeChange">
             <option value="openai">OpenAI 兼容</option>
             <option value="anthropic">Anthropic</option>
             <option value="gemini">Google Gemini</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">端点转发</label>
+          <select v-model="form.endpointMode" class="form-input">
+            <option
+              v-for="option in endpointModeOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
           </select>
         </div>
         <div class="form-field full">
@@ -239,17 +252,48 @@ const availableDefaultModels = computed(() =>
   modelForm.value.llms.filter(m => (m.model || '').trim())
 );
 
+const endpointModeOptionsMap = {
+  openai: [
+    { value: 'chat_completions', label: 'Chat Completions (/chat/completions)' },
+    { value: 'responses', label: 'Responses (/responses)' },
+  ],
+  anthropic: [
+    { value: 'anthropic_messages', label: 'Anthropic Messages (/v1/messages)' },
+  ],
+  gemini: [
+    { value: 'gemini_generate_content', label: 'Gemini GenerateContent' },
+  ],
+};
+
 const defaultForm = () => ({
   id: '',
   name: '',
   type: 'openai',
   apiBase: '',
   apiKey: '',
+  endpointMode: 'chat_completions',
   enabled: true,
   priority: 0,
 });
 
 const form = ref(defaultForm());
+const endpointModeOptions = computed(() => endpointModeOptionsMap[form.value.type] || endpointModeOptionsMap.openai);
+
+function normalizeEndpointMode(type, endpointMode = '') {
+  const options = endpointModeOptionsMap[type] || endpointModeOptionsMap.openai;
+  const values = options.map((item) => item.value);
+  if (values.includes(endpointMode)) return endpointMode;
+  return options[0].value;
+}
+
+function getEndpointModeLabel(endpointMode, type) {
+  const options = endpointModeOptionsMap[type] || [];
+  return options.find((item) => item.value === normalizeEndpointMode(type, endpointMode))?.label || endpointMode || '-';
+}
+
+function handleTypeChange() {
+  form.value.endpointMode = normalizeEndpointMode(form.value.type, form.value.endpointMode);
+}
 
 function openAddDialog() {
   isEditing.value = false;
@@ -265,6 +309,7 @@ function openEditDialog(p) {
     type: p.type,
     apiBase: p.apiBase,
     apiKey: '',
+    endpointMode: normalizeEndpointMode(p.type, p.endpointMode),
     enabled: p.enabled,
     priority: p.priority,
   };
@@ -305,7 +350,7 @@ async function handleTest(p) {
   testing.value = true;
   try {
     const result = await providerStore.testProvider({
-      id: p.id, name: p.name, type: p.type, apiBase: p.apiBase,
+      id: p.id, name: p.name, type: p.type, apiBase: p.apiBase, endpointMode: p.endpointMode,
     });
     if (result.success) {
       toast(`${p.name} 连接正常`, 'success');
@@ -472,6 +517,14 @@ onMounted(() => {
   color: var(--color-text-muted);
   text-transform: uppercase;
   font-weight: 600;
+}
+.meta-endpoint {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-tertiary));
+  color: var(--color-accent);
+  font-weight: 700;
 }
 .meta-base {
   font-size: 12px;

@@ -37,6 +37,8 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		logEntry.StatusCode = aw.statusCode
 		logEntry.DurationMs = time.Since(startedAt).Milliseconds()
+		logEntry.ResponseHeaders = serializeHeaders(aw.Header())
+		logEntry.ResponsePayload = aw.CapturedBody()
 		if err := audit.GetService().Add(logEntry); err != nil {
 			log.Printf("[Gateway] Failed to persist request log: %v", err)
 		}
@@ -109,7 +111,8 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	internalReq.Model = model
 
 	// Check if we need protocol conversion
-	needsConversion := p.Config.Type != "openai"
+	_, isOpenAIChatAdapter := p.Adapter.(*protocol.OpenAIAdapter)
+	needsConversion := !isOpenAIChatAdapter
 
 	if !needsConversion {
 		// For passthrough, we need to update the model in the request body
@@ -130,6 +133,85 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.handleNonStreamWithConversion(w, r, p, internalReq, &logEntry)
 	}
+}
+
+// Responses handles POST /v1/responses
+func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
+	aw := &auditResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+	w = aw
+	startedAt := time.Now()
+	logEntry := audit.RequestLogInput{
+		Method:    r.Method,
+		Path:      r.URL.Path,
+		ClientIP:  r.RemoteAddr,
+		UserAgent: r.UserAgent(),
+	}
+	defer func() {
+		logEntry.StatusCode = aw.statusCode
+		logEntry.DurationMs = time.Since(startedAt).Milliseconds()
+		logEntry.ResponseHeaders = serializeHeaders(aw.Header())
+		logEntry.ResponsePayload = aw.CapturedBody()
+		if err := audit.GetService().Add(logEntry); err != nil {
+			log.Printf("[Gateway] Failed to persist request log: %v", err)
+		}
+	}()
+
+	if r.Method != "POST" {
+		logEntry.ErrorMessage = "method not allowed"
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed", "invalid_request")
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		logEntry.ErrorMessage = "failed to read request body"
+		writeError(w, http.StatusBadRequest, "Failed to read request body", "invalid_request")
+		return
+	}
+	defer r.Body.Close()
+	logEntry.Streaming = IsStreamingRequest(body)
+	logEntry.RequestPayload = truncateRequestPayload(body)
+
+	gwAdapter := &protocol.OpenAIAdapter{}
+	internalReq, err := gwAdapter.ParseResponsesRequest(body)
+	if err != nil {
+		logEntry.ErrorMessage = fmt.Sprintf("failed to parse responses request: %v", err)
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse request: %v", err), "invalid_request")
+		return
+	}
+
+	model := internalReq.Model
+	logEntry.Model = model
+	if model == "" {
+		logEntry.ErrorMessage = "model is required"
+		writeError(w, http.StatusBadRequest, "model is required", "invalid_request")
+		return
+	}
+
+	pm := provider.GetManager()
+	decision := pm.ResolveRequest(internalReq)
+	if decision == nil || decision.Provider == nil {
+		logEntry.ErrorMessage = fmt.Sprintf("no provider found for model: %s", model)
+		writeError(w, http.StatusNotFound, fmt.Sprintf("No provider found for model: %s", model), "model_not_found")
+		return
+	}
+	p := decision.Provider
+	logEntry.ProviderID = p.Config.ID
+	logEntry.ProviderName = p.Config.Name
+	logEntry.ProviderType = p.Config.Type
+
+	actualModel := decision.TargetModel
+	if actualModel != model {
+		log.Printf("[Gateway] Responses model mapped: %s -> %s (provider: %s)", model, actualModel, p.Config.Name)
+	}
+	internalReq.Model = actualModel
+	logEntry.TargetModel = actualModel
+
+	if internalReq.Stream {
+		h.handleResponsesStream(w, r, p, internalReq, &logEntry)
+		return
+	}
+	h.handleResponsesNonStream(w, r, p, internalReq, &logEntry)
 }
 
 // handlePassthrough forwards requests directly to OpenAI-compatible providers.
@@ -271,6 +353,9 @@ func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Requ
 				log.Printf("[Gateway] Failed to parse Gemini stream chunk: %v", err)
 				continue
 			}
+			if chunk.Model == "" {
+				chunk.Model = internalReq.Model
+			}
 			if chunk.StreamDone {
 				fmt.Fprintf(w, "data: [DONE]\n\n")
 				if canFlush {
@@ -318,6 +403,12 @@ func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Requ
 			log.Printf("[Gateway] Failed to parse stream event: %v", err)
 			continue
 		}
+		if chunk.Model == "" {
+			chunk.Model = internalReq.Model
+		}
+		if len(chunk.Choices) == 0 && !chunk.StreamDone && chunk.Usage == nil {
+			continue
+		}
 		if chunk.StreamDone {
 			fmt.Fprintf(w, "data: [DONE]\n\n")
 			if canFlush {
@@ -334,6 +425,166 @@ func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Requ
 		fmt.Fprintf(w, "data: %s\n\n", openaiData)
 		if canFlush {
 			flusher.Flush()
+		}
+	}
+}
+
+func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
+	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
+	if err != nil {
+		logEntry.ErrorMessage = fmt.Sprintf("provider request failed: %v", err)
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Provider request failed: %v", err), "server_error")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		logEntry.ErrorMessage = string(body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
+		w.Write(body)
+		return
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logEntry.ErrorMessage = "failed to read provider response"
+		writeError(w, http.StatusInternalServerError, "Failed to read provider response", "server_error")
+		return
+	}
+
+	internalResp, err := p.Adapter.ParseResponse(respBody)
+	if err != nil {
+		logEntry.ErrorMessage = fmt.Sprintf("failed to parse provider response: %v", err)
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to parse provider response: %v", err), "server_error")
+		return
+	}
+	internalResp.Model = internalReq.Model
+
+	gwAdapter := &protocol.OpenAIAdapter{}
+	responsesResp, err := gwAdapter.BuildResponsesResponse(internalResp)
+	if err != nil {
+		logEntry.ErrorMessage = fmt.Sprintf("failed to build responses response: %v", err)
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to build response: %v", err), "server_error")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(responsesResp)
+}
+
+func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
+	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
+	if err != nil {
+		logEntry.ErrorMessage = fmt.Sprintf("provider request failed: %v", err)
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Provider request failed: %v", err), "server_error")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		logEntry.ErrorMessage = string(body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
+		w.Write(body)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, canFlush := w.(http.Flusher)
+	gwAdapter := &protocol.OpenAIAdapter{}
+	state := &protocol.OpenAIResponsesStreamState{}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if p.Config.Type == "gemini" {
+			line = strings.TrimSpace(line)
+			if line == "" || line == "[" || line == "]" || line == "," {
+				continue
+			}
+			line = strings.TrimPrefix(line, "[")
+			line = strings.TrimPrefix(line, ",")
+			line = strings.TrimSuffix(line, "]")
+			line = strings.TrimSuffix(line, ",")
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
+			chunk, err := p.Adapter.ParseStreamEvent("", line)
+			if err != nil {
+				log.Printf("[Gateway] Failed to parse Gemini stream chunk: %v", err)
+				continue
+			}
+			events, err := gwAdapter.BuildResponsesStreamEvents(chunk, state)
+			if err != nil {
+				log.Printf("[Gateway] Failed to build responses stream events: %v", err)
+				continue
+			}
+			for _, event := range events {
+				fmt.Fprintf(w, "data: %s\n\n", event)
+			}
+			if canFlush && len(events) > 0 {
+				flusher.Flush()
+			}
+			if chunk.StreamDone {
+				break
+			}
+			continue
+		}
+
+		if strings.HasPrefix(line, "event: ") {
+			continue
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+		if data == p.Adapter.StreamDone() || data == "" {
+			chunk := &protocol.InternalStreamChunk{Model: internalReq.Model, StreamDone: true}
+			events, err := gwAdapter.BuildResponsesStreamEvents(chunk, state)
+			if err == nil {
+				for _, event := range events {
+					fmt.Fprintf(w, "data: %s\n\n", event)
+				}
+			}
+			if canFlush {
+				flusher.Flush()
+			}
+			break
+		}
+
+		chunk, err := p.Adapter.ParseStreamEvent("", data)
+		if err != nil {
+			log.Printf("[Gateway] Failed to parse stream event: %v", err)
+			continue
+		}
+		chunk.Model = internalReq.Model
+		events, err := gwAdapter.BuildResponsesStreamEvents(chunk, state)
+		if err != nil {
+			log.Printf("[Gateway] Failed to build responses stream events: %v", err)
+			continue
+		}
+		for _, event := range events {
+			fmt.Fprintf(w, "data: %s\n\n", event)
+		}
+		if canFlush && len(events) > 0 {
+			flusher.Flush()
+		}
+		if chunk.StreamDone {
+			break
 		}
 	}
 }
@@ -443,6 +694,7 @@ func updateModelInBody(body []byte, model string) ([]byte, error) {
 type auditResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
+	body       []byte
 }
 
 func (rw *auditResponseWriter) WriteHeader(code int) {
@@ -454,6 +706,15 @@ func (rw *auditResponseWriter) Write(b []byte) (int, error) {
 	if rw.statusCode == 0 {
 		rw.statusCode = http.StatusOK
 	}
+	const maxLen = 2048
+	if len(b) > 0 && len(rw.body) < maxLen {
+		remaining := maxLen - len(rw.body)
+		if len(b) > remaining {
+			rw.body = append(rw.body, b[:remaining]...)
+		} else {
+			rw.body = append(rw.body, b...)
+		}
+	}
 	return rw.ResponseWriter.Write(b)
 }
 
@@ -463,10 +724,32 @@ func (rw *auditResponseWriter) Flush() {
 	}
 }
 
+func (rw *auditResponseWriter) CapturedBody() string {
+	if len(rw.body) == 0 {
+		return ""
+	}
+	return truncatePayload(rw.body)
+}
+
 func truncateRequestPayload(body []byte) string {
+	return truncatePayload(body)
+}
+
+func truncatePayload(body []byte) string {
 	const maxLen = 2048
 	if len(body) <= maxLen {
 		return string(body)
 	}
 	return string(body[:maxLen]) + "...(truncated)"
+}
+
+func serializeHeaders(header http.Header) string {
+	if len(header) == 0 {
+		return ""
+	}
+	payload, err := json.Marshal(header)
+	if err != nil {
+		return ""
+	}
+	return truncatePayload(payload)
 }

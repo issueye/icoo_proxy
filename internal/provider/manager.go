@@ -135,6 +135,18 @@ func (m *Manager) GetGatewayConfig() config.GatewayConfig {
 	return m.configProvider.GetGatewayConfig()
 }
 
+func adapterForConfig(cfg config.ProviderConfig) (protocol.ProtocolAdapter, error) {
+	switch cfg.Type {
+	case "openai":
+		if config.NormalizeProviderEndpointMode(cfg.Type, cfg.EndpointMode) == config.ProviderEndpointModeResponses {
+			return &protocol.OpenAIResponsesAdapter{}, nil
+		}
+		return &protocol.OpenAIAdapter{}, nil
+	default:
+		return protocol.GetAdapter(cfg.Type)
+	}
+}
+
 // LoadFromConfig loads providers from the configuration service.
 func (m *Manager) LoadFromConfig() {
 	if m.configProvider == nil {
@@ -146,7 +158,7 @@ func (m *Manager) LoadFromConfig() {
 
 	m.providers = make(map[string]*ProviderRuntime)
 	for _, p := range cfg {
-		adapter, err := protocol.GetAdapter(p.Type)
+		adapter, err := adapterForConfig(p)
 		if err != nil {
 			continue
 		}
@@ -187,9 +199,13 @@ func (m *Manager) Get(id string) *ProviderRuntime {
 
 // Add adds a new provider from config.
 func (m *Manager) Add(cfg config.ProviderConfig) error {
-	adapter, err := protocol.GetAdapter(cfg.Type)
+	cfg.EndpointMode = config.NormalizeProviderEndpointMode(cfg.Type, cfg.EndpointMode)
+	adapter, err := adapterForConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported provider type: %s", cfg.Type)
+	}
+	if strings.TrimSpace(cfg.ID) == "" {
+		cfg.ID = fmt.Sprintf("provider-%d", time.Now().UnixMilli())
 	}
 	if m.configProvider != nil {
 		if err := m.configProvider.AddProvider(cfg); err != nil {
@@ -216,8 +232,9 @@ func (m *Manager) Update(cfg config.ProviderConfig) error {
 	if exists && cfg.APIKey == "" {
 		cfg.APIKey = existing.Config.APIKey
 	}
+	cfg.EndpointMode = config.NormalizeProviderEndpointMode(cfg.Type, cfg.EndpointMode)
 
-	adapter, err := protocol.GetAdapter(cfg.Type)
+	adapter, err := adapterForConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported provider type: %s", cfg.Type)
 	}
@@ -259,7 +276,8 @@ func (m *Manager) TestConnection(ctx context.Context, cfg config.ProviderConfig)
 		cfg.APIKey = existing.Config.APIKey
 	}
 
-	adapter, err := protocol.GetAdapter(cfg.Type)
+	cfg.EndpointMode = config.NormalizeProviderEndpointMode(cfg.Type, cfg.EndpointMode)
+	adapter, err := adapterForConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported provider type: %s", cfg.Type)
 	}
@@ -579,6 +597,7 @@ func ProviderListJSON(providers []*ProviderRuntime) string {
 		Name         string              `json:"name"`
 		Type         string              `json:"type"`
 		APIBase      string              `json:"apiBase"`
+		EndpointMode string              `json:"endpointMode,omitempty"`
 		Enabled      bool                `json:"enabled"`
 		Healthy      bool                `json:"healthy"`
 		Priority     int                 `json:"priority"`
@@ -593,6 +612,7 @@ func ProviderListJSON(providers []*ProviderRuntime) string {
 			Name:         p.Config.Name,
 			Type:         p.Config.Type,
 			APIBase:      p.Config.APIBase,
+			EndpointMode: config.NormalizeProviderEndpointMode(p.Config.Type, p.Config.EndpointMode),
 			Enabled:      p.Config.Enabled,
 			Healthy:      p.Healthy,
 			Priority:     p.Config.Priority,

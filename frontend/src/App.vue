@@ -149,6 +149,7 @@ import { useThemeStore } from "./stores/theme";
 import { useGatewayStore } from "./stores/gateway";
 import {
   Server,
+  MessageSquareText,
   Cpu,
   ScrollText,
   Settings,
@@ -175,6 +176,7 @@ function handleRefresh() {
 
 const menuItems = [
   { path: "/", label: "网关", icon: Server },
+  { path: "/dialog-rules", label: "对话规则", icon: MessageSquareText },
   { path: "/providers", label: "供应商", icon: Cpu },
   { path: "/logs", label: "日志", icon: ScrollText },
 ];

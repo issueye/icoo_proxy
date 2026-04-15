@@ -189,27 +189,29 @@ func (a *App) GetProviders() string {
 	return provider.ProviderListJSON(pm.GetAll())
 }
 
-func (a *App) AddProvider(id, name, providerType, apiBase, apiKey string, enabled bool, priority int) error {
+func (a *App) AddProvider(id, name, providerType, apiBase, apiKey, endpointMode string, enabled bool, priority int) error {
 	return provider.GetManager().Add(config.ProviderConfig{
-		ID:       id,
-		Name:     name,
-		Type:     providerType,
-		APIBase:  apiBase,
-		APIKey:   apiKey,
-		Enabled:  enabled,
-		Priority: priority,
+		ID:           id,
+		Name:         name,
+		Type:         providerType,
+		APIBase:      apiBase,
+		APIKey:       apiKey,
+		EndpointMode: endpointMode,
+		Enabled:      enabled,
+		Priority:     priority,
 	})
 }
 
-func (a *App) UpdateProvider(id, name, providerType, apiBase, apiKey string, enabled bool, priority int) error {
+func (a *App) UpdateProvider(id, name, providerType, apiBase, apiKey, endpointMode string, enabled bool, priority int) error {
 	return provider.GetManager().Update(config.ProviderConfig{
-		ID:       id,
-		Name:     name,
-		Type:     providerType,
-		APIBase:  apiBase,
-		APIKey:   apiKey,
-		Enabled:  enabled,
-		Priority: priority,
+		ID:           id,
+		Name:         name,
+		Type:         providerType,
+		APIBase:      apiBase,
+		APIKey:       apiKey,
+		EndpointMode: endpointMode,
+		Enabled:      enabled,
+		Priority:     priority,
 	})
 }
 
@@ -217,13 +219,14 @@ func (a *App) DeleteProvider(id string) error {
 	return provider.GetManager().Delete(id)
 }
 
-func (a *App) TestProvider(id, name, providerType, apiBase, apiKey string) string {
+func (a *App) TestProvider(id, name, providerType, apiBase, apiKey, endpointMode string) string {
 	cfg := config.ProviderConfig{
-		ID:      id,
-		Name:    name,
-		Type:    providerType,
-		APIBase: apiBase,
-		APIKey:  apiKey,
+		ID:           id,
+		Name:         name,
+		Type:         providerType,
+		APIBase:      apiBase,
+		APIKey:       apiKey,
+		EndpointMode: endpointMode,
 	}
 	pm := provider.GetManager()
 	err := pm.TestConnection(a.ctx, cfg)

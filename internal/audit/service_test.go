@@ -27,18 +27,21 @@ func TestServiceAddAndList(t *testing.T) {
 	}
 
 	if err := svc.Add(RequestLogInput{
-		Method:       "POST",
-		Path:         "/v1/chat/completions",
-		Model:        "gpt-4o-mini",
-		TargetModel:  "gpt-4o-mini",
-		ProviderID:   "openai-main",
-		ProviderName: "OpenAI",
-		ProviderType: "openai",
-		Streaming:    true,
-		StatusCode:   200,
-		DurationMs:   123,
-		ClientIP:     "127.0.0.1:3000",
-		UserAgent:    "unit-test",
+		Method:          "POST",
+		Path:            "/v1/chat/completions",
+		Model:           "gpt-4o-mini",
+		TargetModel:     "gpt-4o-mini",
+		ProviderID:      "openai-main",
+		ProviderName:    "OpenAI",
+		ProviderType:    "openai",
+		Streaming:       true,
+		StatusCode:      200,
+		DurationMs:      123,
+		ClientIP:        "127.0.0.1:3000",
+		UserAgent:       "unit-test",
+		RequestPayload:  `{"model":"gpt-4o-mini"}`,
+		ResponseHeaders: `{"Content-Type":["application/json"]}`,
+		ResponsePayload: `{"id":"chatcmpl-test","choices":[]}`,
 	}); err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
@@ -58,6 +61,15 @@ func TestServiceAddAndList(t *testing.T) {
 	}
 	if records[0].StatusCode != 200 {
 		t.Fatalf("StatusCode = %d", records[0].StatusCode)
+	}
+	if records[0].RequestPayload == "" {
+		t.Fatalf("expected request payload to be persisted")
+	}
+	if records[0].ResponseHeaders == "" {
+		t.Fatalf("expected response headers to be persisted")
+	}
+	if records[0].ResponsePayload == "" {
+		t.Fatalf("expected response payload to be persisted")
 	}
 
 	if _, err := os.Stat(filepath.Join(dir, filepath.Base(appdb.DBPath()))); err != nil {

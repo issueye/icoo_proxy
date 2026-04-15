@@ -29,12 +29,12 @@ export const useProviderStore = defineStore('provider', () => {
     }
   }
 
-  async function addProvider({ id, name, type, apiBase, apiKey, enabled, priority }) {
+  async function addProvider({ id, name, type, apiBase, apiKey, endpointMode, enabled, priority }) {
     loading.value = true;
     error.value = null;
     try {
       await window.go.services.App.AddProvider(
-        id || '', name, type, apiBase, apiKey || '', enabled !== false, priority || 0
+        id || '', name, type, apiBase, apiKey || '', endpointMode || '', enabled !== false, priority || 0
       );
       await fetchProviders();
     } catch (e) {
@@ -45,12 +45,12 @@ export const useProviderStore = defineStore('provider', () => {
     }
   }
 
-  async function updateProvider({ id, name, type, apiBase, apiKey, enabled, priority }) {
+  async function updateProvider({ id, name, type, apiBase, apiKey, endpointMode, enabled, priority }) {
     loading.value = true;
     error.value = null;
     try {
       await window.go.services.App.UpdateProvider(
-        id, name, type, apiBase, apiKey || '', enabled, priority || 0
+        id, name, type, apiBase, apiKey || '', endpointMode || '', enabled, priority || 0
       );
       await fetchProviders();
     } catch (e) {
@@ -75,11 +75,11 @@ export const useProviderStore = defineStore('provider', () => {
     }
   }
 
-  async function testProvider({ id, name, type, apiBase, apiKey }) {
+  async function testProvider({ id, name, type, apiBase, apiKey, endpointMode }) {
     if (!isWailsEnv()) return { success: false, error: 'Not in Wails environment' };
     try {
       const result = await window.go.services.App.TestProvider(
-        id || '', name, type, apiBase, apiKey || ''
+        id || '', name, type, apiBase, apiKey || '', endpointMode || ''
       );
       return JSON.parse(result);
     } catch (e) {

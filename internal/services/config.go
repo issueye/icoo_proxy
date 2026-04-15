@@ -73,6 +73,7 @@ type providerRecord struct {
 	Type         string `gorm:"not null;column:type"`
 	APIBase      string `gorm:"not null;column:api_base"`
 	APIKey       string `gorm:"not null;column:api_key"`
+	EndpointMode string `gorm:"not null;column:endpoint_mode"`
 	Enabled      bool   `gorm:"not null;column:enabled"`
 	Priority     int    `gorm:"not null;column:priority"`
 	ExtraConfig  string `gorm:"not null;column:extra_config"`
@@ -380,6 +381,9 @@ func (s *ConfigService) applyDefaultsLocked(cfg *FullConfig) {
 	if cfg.Providers == nil {
 		cfg.Providers = []config.ProviderConfig{}
 	}
+	for i := range cfg.Providers {
+		cfg.Providers[i].EndpointMode = config.NormalizeProviderEndpointMode(cfg.Providers[i].Type, cfg.Providers[i].EndpointMode)
+	}
 	if cfg.RouteRules == nil {
 		cfg.RouteRules = []config.RouteRuleConfig{}
 	}
@@ -502,6 +506,7 @@ func (s *ConfigService) loadProvidersLocked() ([]config.ProviderConfig, error) {
 		p.Name = record.Name
 		p.Type = record.Type
 		p.APIBase = record.APIBase
+		p.EndpointMode = config.NormalizeProviderEndpointMode(record.Type, record.EndpointMode)
 		apiKey, err := s.decryptSecret(record.APIKey)
 		if err != nil {
 			return nil, err
@@ -634,6 +639,7 @@ func (s *ConfigService) saveProvidersLocked(tx *gorm.DB) error {
 			Type:         p.Type,
 			APIBase:      p.APIBase,
 			APIKey:       encryptedAPIKey,
+			EndpointMode: config.NormalizeProviderEndpointMode(p.Type, p.EndpointMode),
 			Enabled:      p.Enabled,
 			Priority:     p.Priority,
 			ExtraConfig:  string(extraJSON),

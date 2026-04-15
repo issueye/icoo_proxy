@@ -3,7 +3,7 @@
 import {services} from '../models';
 import {config} from '../models';
 
-export function AddProvider(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean,arg7:number):Promise<void>;
+export function AddProvider(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:boolean,arg8:number):Promise<void>;
 
 export function CloseWindow():Promise<void>;
 
@@ -49,8 +49,8 @@ export function StopAgent():Promise<services.AgentProcessStatus>;
 
 export function StopGateway():Promise<void>;
 
-export function TestProvider(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
+export function TestProvider(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<string>;
 
-export function UpdateProvider(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean,arg7:number):Promise<void>;
+export function UpdateProvider(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:boolean,arg8:number):Promise<void>;
 
 export function WakeAgent():Promise<services.AgentProcessStatus>;

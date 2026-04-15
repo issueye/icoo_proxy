@@ -17,12 +17,24 @@ type routeTestConfigProvider struct {
 	rules     []config.RouteRuleConfig
 }
 
-func (r *routeTestConfigProvider) GetProviders() []config.ProviderConfig        { return r.providers }
-func (r *routeTestConfigProvider) GetGatewayConfig() config.GatewayConfig       { return r.gateway }
-func (r *routeTestConfigProvider) GetRouteRules() []config.RouteRuleConfig      { return r.rules }
-func (r *routeTestConfigProvider) AddProvider(p config.ProviderConfig) error    { return nil }
-func (r *routeTestConfigProvider) UpdateProvider(p config.ProviderConfig) error { return nil }
-func (r *routeTestConfigProvider) DeleteProvider(id string) error               { return nil }
+func (r *routeTestConfigProvider) GetProviders() []config.ProviderConfig   { return r.providers }
+func (r *routeTestConfigProvider) GetGatewayConfig() config.GatewayConfig  { return r.gateway }
+func (r *routeTestConfigProvider) GetRouteRules() []config.RouteRuleConfig { return r.rules }
+func (r *routeTestConfigProvider) AddProvider(p config.ProviderConfig) error {
+	r.providers = append(r.providers, p)
+	return nil
+}
+func (r *routeTestConfigProvider) UpdateProvider(p config.ProviderConfig) error {
+	for i := range r.providers {
+		if r.providers[i].ID == p.ID {
+			r.providers[i] = p
+			return nil
+		}
+	}
+	r.providers = append(r.providers, p)
+	return nil
+}
+func (r *routeTestConfigProvider) DeleteProvider(id string) error { return nil }
 func (r *routeTestConfigProvider) SetGatewayConfig(cfg config.GatewayConfig) error {
 	r.gateway = cfg
 	return nil
@@ -132,5 +144,83 @@ func TestTestConnectionUsesStoredAPIKeyWhenRequestKeyMissing(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("TestConnection() error = %v", err)
+	}
+}
+
+func TestAddProviderWithoutIDAllowsSetModels(t *testing.T) {
+	protocol.RegisterDefaults()
+	m := GetManager()
+	m.mu.Lock()
+	m.providers = map[string]*ProviderRuntime{}
+	m.mu.Unlock()
+
+	cfgProvider := &routeTestConfigProvider{}
+	m.SetConfigProvider(cfgProvider)
+
+	err := m.Add(config.ProviderConfig{
+		Name:    "OpenAI",
+		Type:    "openai",
+		APIBase: "https://api.openai.com/v1",
+		Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+
+	providers := cfgProvider.GetProviders()
+	if len(providers) != 1 {
+		t.Fatalf("providers len = %d", len(providers))
+	}
+	if providers[0].ID == "" {
+		t.Fatalf("expected generated provider id")
+	}
+
+	err = m.SetModels(providers[0].ID, []config.ModelEntry{
+		{Model: "gpt-4o", Target: "gpt-4o"},
+	}, "gpt-4o")
+	if err != nil {
+		t.Fatalf("SetModels() error = %v", err)
+	}
+
+	got := m.Get(providers[0].ID)
+	if got == nil {
+		t.Fatalf("expected provider runtime for %q", providers[0].ID)
+	}
+	if len(got.Config.LLMs) != 1 || got.Config.LLMs[0].Model != "gpt-4o" {
+		t.Fatalf("unexpected llms: %+v", got.Config.LLMs)
+	}
+	if got.Config.DefaultModel != "gpt-4o" {
+		t.Fatalf("DefaultModel = %q", got.Config.DefaultModel)
+	}
+}
+
+func TestAddOpenAIResponsesProviderUsesResponsesAdapter(t *testing.T) {
+	protocol.RegisterDefaults()
+	m := GetManager()
+	m.mu.Lock()
+	m.providers = map[string]*ProviderRuntime{}
+	m.mu.Unlock()
+
+	cfgProvider := &routeTestConfigProvider{}
+	m.SetConfigProvider(cfgProvider)
+
+	err := m.Add(config.ProviderConfig{
+		ID:           "openai-responses",
+		Name:         "OpenAI Responses",
+		Type:         "openai",
+		APIBase:      "https://api.openai.com/v1",
+		EndpointMode: config.ProviderEndpointModeResponses,
+		Enabled:      true,
+	})
+	if err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+
+	got := m.Get("openai-responses")
+	if got == nil {
+		t.Fatalf("expected provider runtime")
+	}
+	if _, ok := got.Adapter.(*protocol.OpenAIResponsesAdapter); !ok {
+		t.Fatalf("expected OpenAIResponsesAdapter, got %T", got.Adapter)
 	}
 }

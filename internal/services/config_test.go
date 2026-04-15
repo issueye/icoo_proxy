@@ -210,13 +210,14 @@ func TestConfigServiceEncryptsProviderAPIKeyAtRest(t *testing.T) {
 	defer service.Close()
 
 	err := service.AddProvider(ProviderConfig{
-		ID:       "openai-main",
-		Name:     "OpenAI",
-		Type:     "openai",
-		APIBase:  "https://api.openai.com/v1",
-		APIKey:   "super-secret-key",
-		Enabled:  true,
-		Priority: 10,
+		ID:           "openai-main",
+		Name:         "OpenAI",
+		Type:         "openai",
+		APIBase:      "https://api.openai.com/v1",
+		APIKey:       "super-secret-key",
+		EndpointMode: "responses",
+		Enabled:      true,
+		Priority:     10,
 	})
 	if err != nil {
 		t.Fatalf("AddProvider() error = %v", err)
@@ -257,6 +258,9 @@ func TestConfigServiceEncryptsProviderAPIKeyAtRest(t *testing.T) {
 	}
 	if reloaded[0].APIKey != "super-secret-key" {
 		t.Fatalf("reloaded APIKey = %q", reloaded[0].APIKey)
+	}
+	if reloaded[0].EndpointMode != "responses" {
+		t.Fatalf("reloaded EndpointMode = %q", reloaded[0].EndpointMode)
 	}
 }
 
