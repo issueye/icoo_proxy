@@ -9,30 +9,15 @@ import (
 
 func TestConfigServiceSaveLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "icoo_proxy.db")
-	service := &ConfigService{
-		config:     defaultConfig(),
-		configPath: path,
-		keyPath:    filepath.Join(filepath.Dir(path), "icoo_proxy.key"),
-	}
+	service := &ConfigService{config: defaultConfig(), configPath: path, keyPath: filepath.Join(filepath.Dir(path), "icoo_proxy.key")}
 	defer service.Close()
 
-	err := service.SetGatewayConfig(GatewayConfig{
-		ListenPort:      26790,
-		DefaultProvider: "openai-main",
-		LogLevel:        "debug",
-		RetryCount:      3,
-		RetryIntervalMs: 900,
-		AuthKey:         "gateway-secret",
-	})
+	err := service.SetGatewayConfig(GatewayConfig{ListenPort: 26790, DefaultProvider: "openai-main", LogLevel: "debug", RetryCount: 3, RetryIntervalMs: 900, AuthKey: "gateway-secret"})
 	if err != nil {
 		t.Fatalf("SetGatewayConfig() error = %v", err)
 	}
 
-	loaded := &ConfigService{
-		config:     defaultConfig(),
-		configPath: path,
-		keyPath:    filepath.Join(filepath.Dir(path), "icoo_proxy.key"),
-	}
+	loaded := &ConfigService{config: defaultConfig(), configPath: path, keyPath: filepath.Join(filepath.Dir(path), "icoo_proxy.key")}
 	defer loaded.Close()
 	if err := loaded.Load(); err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -52,19 +37,12 @@ func TestConfigServiceSaveLoadRoundTrip(t *testing.T) {
 
 func TestConfigServiceLoadAppliesDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "icoo_proxy.db")
-	service := &ConfigService{
-		config:     defaultConfig(),
-		configPath: path,
-		keyPath:    filepath.Join(filepath.Dir(path), "icoo_proxy.key"),
-	}
+	service := &ConfigService{config: defaultConfig(), configPath: path, keyPath: filepath.Join(filepath.Dir(path), "icoo_proxy.key")}
 	defer service.Close()
 
-	if err := service.SetGatewayConfig(GatewayConfig{
-		DefaultProvider: "custom-provider",
-	}); err != nil {
+	if err := service.SetGatewayConfig(GatewayConfig{DefaultProvider: "custom-provider"}); err != nil {
 		t.Fatalf("SetGatewayConfig() error = %v", err)
 	}
-
 	if err := service.Load(); err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -83,17 +61,12 @@ func TestConfigServiceLoadAppliesDefaults(t *testing.T) {
 
 func TestConfigServiceEnsureDatabaseCreatesFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "icoo_proxy.db")
-	service := &ConfigService{
-		config:     defaultConfig(),
-		configPath: path,
-		keyPath:    filepath.Join(filepath.Dir(path), "icoo_proxy.key"),
-	}
+	service := &ConfigService{config: defaultConfig(), configPath: path, keyPath: filepath.Join(filepath.Dir(path), "icoo_proxy.key")}
 	defer service.Close()
 
 	if err := service.ensureDatabase(); err != nil {
 		t.Fatalf("ensureDatabase() error = %v", err)
 	}
-
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("expected database file to exist: %v", err)
 	}
@@ -124,25 +97,13 @@ default_model = "gpt-4o"
 [[providers.llms]]
 model = "chat-default"
 target = "gpt-4o"
-
-[[route_rules]]
-pattern = "gpt-*"
-provider_id = "openai-main"
-priority = 100
-enabled = true
 `)
 	if err := os.WriteFile(legacyPath, content, 0644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	service := &ConfigService{
-		config:           defaultConfig(),
-		configPath:       dbPath,
-		legacyConfigPath: legacyPath,
-		keyPath:          filepath.Join(dir, "icoo_proxy.key"),
-	}
+	service := &ConfigService{config: defaultConfig(), configPath: dbPath, legacyConfigPath: legacyPath, keyPath: filepath.Join(dir, "icoo_proxy.key")}
 	defer service.Close()
-
 	if err := service.Load(); err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -165,38 +126,14 @@ enabled = true
 	if len(providers[0].LLMs) != 1 || providers[0].LLMs[0].Target != "gpt-4o" {
 		t.Fatalf("unexpected provider llms: %+v", providers[0].LLMs)
 	}
-
-	rules := service.GetRouteRules()
-	if len(rules) != 1 {
-		t.Fatalf("route rules len = %d", len(rules))
-	}
-	if rules[0].Pattern != "gpt-*" {
-		t.Fatalf("Pattern = %q", rules[0].Pattern)
-	}
-	if rules[0].MatchType != "model" {
-		t.Fatalf("MatchType = %q", rules[0].MatchType)
-	}
 }
 
 func TestConfigServiceEncryptsProviderAPIKeyAtRest(t *testing.T) {
 	dir := t.TempDir()
-	service := &ConfigService{
-		config:     defaultConfig(),
-		configPath: filepath.Join(dir, "icoo_proxy.db"),
-		keyPath:    filepath.Join(dir, "icoo_proxy.key"),
-	}
+	service := &ConfigService{config: defaultConfig(), configPath: filepath.Join(dir, "icoo_proxy.db"), keyPath: filepath.Join(dir, "icoo_proxy.key")}
 	defer service.Close()
 
-	err := service.AddProvider(ProviderConfig{
-		ID:           "openai-main",
-		Name:         "OpenAI",
-		Type:         "openai",
-		APIBase:      "https://api.openai.com/v1",
-		APIKey:       "super-secret-key",
-		EndpointMode: "responses",
-		Enabled:      true,
-		Priority:     10,
-	})
+	err := service.AddProvider(ProviderConfig{ID: "openai-main", Name: "OpenAI", Type: "openai", APIBase: "https://api.openai.com/v1", APIKey: "super-secret-key", EndpointMode: "responses", Enabled: true, Priority: 10})
 	if err != nil {
 		t.Fatalf("AddProvider() error = %v", err)
 	}
@@ -220,11 +157,7 @@ func TestConfigServiceEncryptsProviderAPIKeyAtRest(t *testing.T) {
 		t.Fatalf("API key = %q, want encrypted prefix", stored.APIKey)
 	}
 
-	loaded := &ConfigService{
-		config:     defaultConfig(),
-		configPath: filepath.Join(dir, "icoo_proxy.db"),
-		keyPath:    filepath.Join(dir, "icoo_proxy.key"),
-	}
+	loaded := &ConfigService{config: defaultConfig(), configPath: filepath.Join(dir, "icoo_proxy.db"), keyPath: filepath.Join(dir, "icoo_proxy.key")}
 	defer loaded.Close()
 	if err := loaded.Load(); err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -244,30 +177,15 @@ func TestConfigServiceEncryptsProviderAPIKeyAtRest(t *testing.T) {
 
 func TestConfigServicePersistsGatewayAuthKey(t *testing.T) {
 	dir := t.TempDir()
-	service := &ConfigService{
-		config:     defaultConfig(),
-		configPath: filepath.Join(dir, "icoo_proxy.db"),
-		keyPath:    filepath.Join(dir, "icoo_proxy.key"),
-	}
+	service := &ConfigService{config: defaultConfig(), configPath: filepath.Join(dir, "icoo_proxy.db"), keyPath: filepath.Join(dir, "icoo_proxy.key")}
 	defer service.Close()
 
-	err := service.SetGatewayConfig(GatewayConfig{
-		ListenPort:      16790,
-		DefaultProvider: "openai-main",
-		LogLevel:        "info",
-		RetryCount:      2,
-		RetryIntervalMs: 500,
-		AuthKey:         "gateway-secret",
-	})
+	err := service.SetGatewayConfig(GatewayConfig{ListenPort: 16790, DefaultProvider: "openai-main", LogLevel: "info", RetryCount: 2, RetryIntervalMs: 500, AuthKey: "gateway-secret"})
 	if err != nil {
 		t.Fatalf("SetGatewayConfig() error = %v", err)
 	}
 
-	loaded := &ConfigService{
-		config:     defaultConfig(),
-		configPath: filepath.Join(dir, "icoo_proxy.db"),
-		keyPath:    filepath.Join(dir, "icoo_proxy.key"),
-	}
+	loaded := &ConfigService{config: defaultConfig(), configPath: filepath.Join(dir, "icoo_proxy.db"), keyPath: filepath.Join(dir, "icoo_proxy.key")}
 	defer loaded.Close()
 	if err := loaded.Load(); err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -275,54 +193,5 @@ func TestConfigServicePersistsGatewayAuthKey(t *testing.T) {
 
 	if loaded.GetGatewayConfig().AuthKey != "gateway-secret" {
 		t.Fatalf("AuthKey = %q", loaded.GetGatewayConfig().AuthKey)
-	}
-}
-
-func TestConfigServicePersistsExtendedRouteRules(t *testing.T) {
-	dir := t.TempDir()
-	service := &ConfigService{
-		config:     defaultConfig(),
-		configPath: filepath.Join(dir, "icoo_proxy.db"),
-		keyPath:    filepath.Join(dir, "icoo_proxy.key"),
-	}
-	defer service.Close()
-
-	rules := []RouteRuleConfig{
-		{
-			Name:        "translate-to-gemini",
-			MatchType:   "user_contains",
-			Pattern:     "翻译",
-			ProviderID:  "gemini-main",
-			TargetModel: "gemini-2.5-flash",
-			Priority:    120,
-			Enabled:     true,
-		},
-	}
-	if err := service.SetRouteRules(rules); err != nil {
-		t.Fatalf("SetRouteRules() error = %v", err)
-	}
-
-	loaded := &ConfigService{
-		config:     defaultConfig(),
-		configPath: filepath.Join(dir, "icoo_proxy.db"),
-		keyPath:    filepath.Join(dir, "icoo_proxy.key"),
-	}
-	defer loaded.Close()
-	if err := loaded.Load(); err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	got := loaded.GetRouteRules()
-	if len(got) != 1 {
-		t.Fatalf("len(got) = %d", len(got))
-	}
-	if got[0].Name != "translate-to-gemini" {
-		t.Fatalf("Name = %q", got[0].Name)
-	}
-	if got[0].MatchType != "user_contains" {
-		t.Fatalf("MatchType = %q", got[0].MatchType)
-	}
-	if got[0].TargetModel != "gemini-2.5-flash" {
-		t.Fatalf("TargetModel = %q", got[0].TargetModel)
 	}
 }

@@ -79,21 +79,17 @@ func defaultConfig() *FullConfig {
 			RetryCount:      2,
 			RetryIntervalMs: 500,
 		},
-		Providers:  []config.ProviderConfig{},
-		RouteRules: []config.RouteRuleConfig{},
+		Providers: []config.ProviderConfig{},
 	}
 }
 
 func GetConfigService() *ConfigService {
 	configOnce.Do(func() {
-		configService = &ConfigService{
-			config: defaultConfig(),
-		}
+		configService = &ConfigService{config: defaultConfig()}
 	})
 	return configService
 }
 
-// Ensure ConfigService implements config.ConfigProvider
 var _ config.ConfigProvider = (*ConfigService)(nil)
 
 func (s *ConfigService) Init(ctx context.Context) {
@@ -178,8 +174,6 @@ func (s *ConfigService) GetConfig() *FullConfig {
 	return &cfg
 }
 
-// --- Gateway config (config.ConfigProvider) ---
-
 func (s *ConfigService) GetGatewayConfig() config.GatewayConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -194,8 +188,6 @@ func (s *ConfigService) SetGatewayConfig(cfg config.GatewayConfig) error {
 	s.mu.Unlock()
 	return s.Save()
 }
-
-// --- Provider configs (config.ConfigProvider) ---
 
 func (s *ConfigService) GetProviders() []config.ProviderConfig {
 	s.mu.RLock()
@@ -252,27 +244,6 @@ func (s *ConfigService) DeleteProvider(id string) error {
 	return s.Save()
 }
 
-// --- Route rules (config.ConfigProvider) ---
-
-func (s *ConfigService) GetRouteRules() []config.RouteRuleConfig {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	result := make([]config.RouteRuleConfig, len(s.config.RouteRules))
-	copy(result, s.config.RouteRules)
-	return result
-}
-
-func (s *ConfigService) SetRouteRules(rules []config.RouteRuleConfig) error {
-	s.mu.Lock()
-	current := *s.config
-	current.RouteRules = rules
-	s.applyDefaultsLocked(&current)
-	s.mu.Unlock()
-	return s.Save()
-}
-
-// --- General ---
-
 func (s *ConfigService) GetConfigJSON() string {
 	s.mu.RLock()
 	cfg := *s.config
@@ -303,14 +274,6 @@ func (s *ConfigService) applyDefaultsLocked(cfg *FullConfig) {
 	}
 	for i := range cfg.Providers {
 		cfg.Providers[i].EndpointMode = config.NormalizeProviderEndpointMode(cfg.Providers[i].Type, cfg.Providers[i].EndpointMode)
-	}
-	if cfg.RouteRules == nil {
-		cfg.RouteRules = []config.RouteRuleConfig{}
-	}
-	for i := range cfg.RouteRules {
-		if cfg.RouteRules[i].MatchType == "" {
-			cfg.RouteRules[i].MatchType = "model"
-		}
 	}
 	s.config = cfg
 }
@@ -375,23 +338,14 @@ func (s *ConfigService) migrateLegacyConfigLocked() (bool, error) {
 
 func (s *ConfigService) loadFromDBLocked() (*FullConfig, error) {
 	cfg := defaultConfig()
-
 	if err := s.loadGatewayConfigLocked(&cfg.Gateway); err != nil {
 		return nil, err
 	}
-
 	providers, err := s.loadProvidersLocked()
 	if err != nil {
 		return nil, err
 	}
 	cfg.Providers = providers
-
-	routeRules, err := s.loadRouteRulesLocked()
-	if err != nil {
-		return nil, err
-	}
-	cfg.RouteRules = routeRules
-
 	return cfg, nil
 }
 
@@ -444,37 +398,12 @@ func (s *ConfigService) loadProvidersLocked() ([]config.ProviderConfig, error) {
 	return providers, nil
 }
 
-func (s *ConfigService) loadRouteRulesLocked() ([]config.RouteRuleConfig, error) {
-	var records []routeRuleRecord
-	if err := s.db.Order("priority DESC").Order("id ASC").Find(&records).Error; err != nil {
-		return nil, err
-	}
-
-	var rules []config.RouteRuleConfig
-	for _, record := range records {
-		rule := config.RouteRuleConfig{
-			Name:        record.Name,
-			MatchType:   record.MatchType,
-			Pattern:     record.Pattern,
-			ProviderID:  record.ProviderID,
-			TargetModel: record.TargetModel,
-			Priority:    record.Priority,
-			Enabled:     record.Enabled,
-		}
-		rules = append(rules, rule)
-	}
-	return rules, nil
-}
-
 func (s *ConfigService) saveLocked() error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := s.saveSettingsLocked(tx); err != nil {
 			return err
 		}
 		if err := s.saveProvidersLocked(tx); err != nil {
-			return err
-		}
-		if err := s.saveRouteRulesLocked(tx); err != nil {
 			return err
 		}
 		return nil
@@ -494,10 +423,7 @@ func (s *ConfigService) saveSettingsLocked(tx *gorm.DB) error {
 	}
 	gatewayCfg.AuthKey = encryptedGatewayAuthKey
 
-	settings := []kv{
-		{key: "gateway", value: gatewayCfg},
-	}
-
+	settings := []kv{{key: "gateway", value: gatewayCfg}}
 	for _, item := range settings {
 		payload, err := json.Marshal(item.value)
 		if err != nil {
@@ -557,29 +483,6 @@ func (s *ConfigService) saveProvidersLocked(tx *gorm.DB) error {
 			ExtraConfig:  string(extraJSON),
 			LLMs:         string(llmsJSON),
 			DefaultModel: p.DefaultModel,
-		})
-	}
-	if len(records) == 0 {
-		return nil
-	}
-	return tx.Create(&records).Error
-}
-
-func (s *ConfigService) saveRouteRulesLocked(tx *gorm.DB) error {
-	if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&routeRuleRecord{}).Error; err != nil {
-		return err
-	}
-
-	records := make([]routeRuleRecord, 0, len(s.config.RouteRules))
-	for _, rule := range s.config.RouteRules {
-		records = append(records, routeRuleRecord{
-			Name:        rule.Name,
-			MatchType:   rule.MatchType,
-			Pattern:     rule.Pattern,
-			ProviderID:  rule.ProviderID,
-			TargetModel: rule.TargetModel,
-			Priority:    rule.Priority,
-			Enabled:     rule.Enabled,
 		})
 	}
 	if len(records) == 0 {

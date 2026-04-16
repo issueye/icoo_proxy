@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -26,17 +25,6 @@ type ProviderRuntime struct {
 type RouteDecision struct {
 	Provider    *ProviderRuntime
 	TargetModel string
-	Rule        *config.RouteRuleConfig
-}
-
-type RouteDebugResult struct {
-	Matched        bool   `json:"matched"`
-	MatchedRule    string `json:"matchedRule,omitempty"`
-	MatchedReason  string `json:"matchedReason,omitempty"`
-	ProviderID     string `json:"providerId,omitempty"`
-	ProviderName   string `json:"providerName,omitempty"`
-	TargetModel    string `json:"targetModel,omitempty"`
-	FallbackReason string `json:"fallbackReason,omitempty"`
 }
 
 type HTTPError struct {
@@ -69,33 +57,20 @@ var (
 	once     sync.Once
 )
 
-// GetManager returns the singleton Manager instance.
 func GetManager() *Manager {
 	once.Do(func() {
-		transport := &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-		}
+		transport := &http.Transport{MaxIdleConns: 100, MaxIdleConnsPerHost: 10}
 		instance = &Manager{
 			providers: make(map[string]*ProviderRuntime),
-			client: &http.Client{
-				Timeout:   30 * time.Second,
-				Transport: transport,
-			},
-			streamClient: &http.Client{
-				Transport: transport,
-			},
+			client: &http.Client{Timeout: 30 * time.Second, Transport: transport},
+			streamClient: &http.Client{Transport: transport},
 		}
 	})
 	return instance
 }
 
-// SetConfigProvider sets the config provider (called during startup).
-func (m *Manager) SetConfigProvider(cp config.ConfigProvider) {
-	m.configProvider = cp
-}
+func (m *Manager) SetConfigProvider(cp config.ConfigProvider) { m.configProvider = cp }
 
-// GetModels returns the model list and default model for a provider.
 func (m *Manager) GetModels(providerID string) ([]config.ModelEntry, string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -106,58 +81,42 @@ func (m *Manager) GetModels(providerID string) ([]config.ModelEntry, string, err
 	return p.Config.LLMs, p.Config.DefaultModel, nil
 }
 
-// SetModels updates the model list and default model for a provider.
 func (m *Manager) SetModels(providerID string, llms []config.ModelEntry, defaultModel string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	p, exists := m.providers[providerID]
 	if !exists {
 		return fmt.Errorf("provider not found: %s", providerID)
 	}
-
-	// Update config
 	p.Config.LLMs = llms
 	p.Config.DefaultModel = defaultModel
-
-	// Persist to config provider
 	if m.configProvider != nil {
 		if err := m.configProvider.UpdateProvider(p.Config); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
-// ResolveModel maps a requested model name to the actual target model based on provider's LLMs config.
 func (m *Manager) ResolveModel(providerID, requestedModel string) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
 	p, exists := m.providers[providerID]
 	if !exists {
-		return requestedModel // 供应商不存在，返回原始名称
+		return requestedModel
 	}
-
-	// 遍历 LLMs 查找匹配
 	for _, entry := range p.Config.LLMs {
 		if entry.Model == requestedModel {
-			// 如果配置了 target，返回 target；否则返回 model
 			if entry.Target != "" {
 				return entry.Target
 			}
 			return entry.Model
 		}
 	}
-
-	// 未找到映射，返回原始请求
 	return requestedModel
 }
 
-func (m *Manager) getConfigProvider() config.ConfigProvider {
-	return m.configProvider
-}
+func (m *Manager) getConfigProvider() config.ConfigProvider { return m.configProvider }
 
 func (m *Manager) GetGatewayConfig() config.GatewayConfig {
 	if m.configProvider == nil {
@@ -178,7 +137,6 @@ func adapterForConfig(cfg config.ProviderConfig) (protocol.ProtocolAdapter, erro
 	}
 }
 
-// LoadFromConfig loads providers from the configuration service.
 func (m *Manager) LoadFromConfig() {
 	if m.configProvider == nil {
 		return
@@ -193,24 +151,16 @@ func (m *Manager) LoadFromConfig() {
 		if err != nil {
 			continue
 		}
-
-		// 向后兼容：迁移 alias 字段到 target
 		for i := range p.LLMs {
 			if p.LLMs[i].Target == "" && p.LLMs[i].Alias != "" {
 				p.LLMs[i].Target = p.LLMs[i].Alias
 				p.LLMs[i].Alias = ""
 			}
 		}
-
-		m.providers[p.ID] = &ProviderRuntime{
-			Config:  p,
-			Adapter: adapter,
-			Healthy: false,
-		}
+		m.providers[p.ID] = &ProviderRuntime{Config: p, Adapter: adapter, Healthy: false}
 	}
 }
 
-// GetAll returns all provider runtimes.
 func (m *Manager) GetAll() []*ProviderRuntime {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -221,14 +171,12 @@ func (m *Manager) GetAll() []*ProviderRuntime {
 	return result
 }
 
-// Get returns a provider runtime by ID.
 func (m *Manager) Get(id string) *ProviderRuntime {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.providers[id]
 }
 
-// Add adds a new provider from config.
 func (m *Manager) Add(cfg config.ProviderConfig) error {
 	cfg.EndpointMode = config.NormalizeProviderEndpointMode(cfg.Type, cfg.EndpointMode)
 	adapter, err := adapterForConfig(cfg)
@@ -244,27 +192,19 @@ func (m *Manager) Add(cfg config.ProviderConfig) error {
 		}
 	}
 	m.mu.Lock()
-	m.providers[cfg.ID] = &ProviderRuntime{
-		Config:  cfg,
-		Adapter: adapter,
-		Healthy: false,
-	}
+	m.providers[cfg.ID] = &ProviderRuntime{Config: cfg, Adapter: adapter, Healthy: false}
 	m.mu.Unlock()
 	return nil
 }
 
-// Update updates an existing provider.
 func (m *Manager) Update(cfg config.ProviderConfig) error {
-	// Get existing provider to preserve API key if not provided
 	m.mu.RLock()
 	existing, exists := m.providers[cfg.ID]
 	m.mu.RUnlock()
-
 	if exists && cfg.APIKey == "" {
 		cfg.APIKey = existing.Config.APIKey
 	}
 	cfg.EndpointMode = config.NormalizeProviderEndpointMode(cfg.Type, cfg.EndpointMode)
-
 	adapter, err := adapterForConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("unsupported provider type: %s", cfg.Type)
@@ -275,16 +215,11 @@ func (m *Manager) Update(cfg config.ProviderConfig) error {
 		}
 	}
 	m.mu.Lock()
-	m.providers[cfg.ID] = &ProviderRuntime{
-		Config:  cfg,
-		Adapter: adapter,
-		Healthy: false,
-	}
+	m.providers[cfg.ID] = &ProviderRuntime{Config: cfg, Adapter: adapter, Healthy: false}
 	m.mu.Unlock()
 	return nil
 }
 
-// Delete removes a provider.
 func (m *Manager) Delete(id string) error {
 	if m.configProvider != nil {
 		if err := m.configProvider.DeleteProvider(id); err != nil {
@@ -297,16 +232,13 @@ func (m *Manager) Delete(id string) error {
 	return nil
 }
 
-// TestConnection tests connectivity to a provider.
 func (m *Manager) TestConnection(ctx context.Context, cfg config.ProviderConfig) error {
 	m.mu.RLock()
 	existing, exists := m.providers[cfg.ID]
 	m.mu.RUnlock()
-
 	if exists && strings.TrimSpace(cfg.APIKey) == "" {
 		cfg.APIKey = existing.Config.APIKey
 	}
-
 	cfg.EndpointMode = config.NormalizeProviderEndpointMode(cfg.Type, cfg.EndpointMode)
 	adapter, err := adapterForConfig(cfg)
 	if err != nil {
@@ -328,7 +260,6 @@ func (m *Manager) TestConnection(ctx context.Context, cfg config.ProviderConfig)
 	return nil
 }
 
-// RefreshModels fetches model lists from all enabled providers.
 func (m *Manager) RefreshModels(ctx context.Context) {
 	m.mu.RLock()
 	providers := make([]*ProviderRuntime, 0)
@@ -372,7 +303,6 @@ func (m *Manager) fetchModels(ctx context.Context, p *ProviderRuntime) ([]protoc
 	return p.Adapter.ParseModelsResponse(body)
 }
 
-// GetAllModels returns aggregated model list from all enabled providers.
 func (m *Manager) GetAllModels() []protocol.ModelInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -385,7 +315,6 @@ func (m *Manager) GetAllModels() []protocol.ModelInfo {
 	return models
 }
 
-// ResolveProvider finds the best provider for a given model name.
 func (m *Manager) ResolveProvider(model string) *ProviderRuntime {
 	decision := m.ResolveRequest(&protocol.InternalRequest{Model: model})
 	if decision == nil {
@@ -394,212 +323,35 @@ func (m *Manager) ResolveProvider(model string) *ProviderRuntime {
 	return decision.Provider
 }
 
-func (m *Manager) DebugRoute(req *protocol.InternalRequest) RouteDebugResult {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if decision, reason := m.resolveByRouteRulesDebug(req); decision != nil {
-		return RouteDebugResult{
-			Matched:       true,
-			MatchedRule:   decision.Rule.Name,
-			MatchedReason: reason,
-			ProviderID:    decision.Provider.Config.ID,
-			ProviderName:  decision.Provider.Config.Name,
-			TargetModel:   decision.TargetModel,
-		}
-	}
-
-	for _, p := range m.providers {
-		if !p.Config.Enabled {
-			continue
-		}
-		for _, mi := range p.Models {
-			if mi.ID == req.Model {
-				return RouteDebugResult{
-					Matched:        false,
-					ProviderID:     p.Config.ID,
-					ProviderName:   p.Config.Name,
-					TargetModel:    m.resolveTargetModelLocked(p.Config.ID, req.Model, ""),
-					FallbackReason: "按已同步模型精确匹配到供应商",
-				}
-			}
-		}
-	}
-
-	if p := m.resolveByPrefix(req.Model); p != nil {
-		return RouteDebugResult{
-			Matched:        false,
-			ProviderID:     p.Config.ID,
-			ProviderName:   p.Config.Name,
-			TargetModel:    m.resolveTargetModelLocked(p.Config.ID, req.Model, ""),
-			FallbackReason: "按模型前缀推断供应商类型",
-		}
-	}
-
-	if m.configProvider != nil {
-		gwCfg := m.configProvider.GetGatewayConfig()
-		if gwCfg.DefaultProvider != "" {
-			if p, ok := m.providers[gwCfg.DefaultProvider]; ok && p.Config.Enabled {
-				return RouteDebugResult{
-					Matched:        false,
-					ProviderID:     p.Config.ID,
-					ProviderName:   p.Config.Name,
-					TargetModel:    m.resolveTargetModelLocked(p.Config.ID, req.Model, ""),
-					FallbackReason: "未命中规则，回退到默认供应商",
-				}
-			}
-		}
-	}
-
-	for _, p := range m.providers {
-		if p.Config.Enabled {
-			return RouteDebugResult{
-				Matched:        false,
-				ProviderID:     p.Config.ID,
-				ProviderName:   p.Config.Name,
-				TargetModel:    m.resolveTargetModelLocked(p.Config.ID, req.Model, ""),
-				FallbackReason: "未命中规则，回退到首个启用供应商",
-			}
-		}
-	}
-
-	return RouteDebugResult{
-		Matched:        false,
-		FallbackReason: "当前没有可用供应商",
-	}
-}
-
-func (m *Manager) resolveByRouteRulesDebug(req *protocol.InternalRequest) (*RouteDecision, string) {
-	if m.configProvider == nil {
-		return nil, ""
-	}
-	rules := m.configProvider.GetRouteRules()
-	sort.Slice(rules, func(i, j int) bool {
-		return rules[i].Priority > rules[j].Priority
-	})
-	for _, rule := range rules {
-		if !rule.Enabled {
-			continue
-		}
-		if matched, reason := m.matchRouteRuleWithReason(rule, req); matched {
-			if p, ok := m.providers[rule.ProviderID]; ok && p.Config.Enabled {
-				return &RouteDecision{
-					Provider:    p,
-					TargetModel: m.resolveTargetModelLocked(p.Config.ID, req.Model, rule.TargetModel),
-					Rule:        &rule,
-				}, reason
-			}
-			return nil, "规则已命中，但目标供应商不存在或未启用"
-		}
-	}
-	return nil, ""
-}
-
-func (m *Manager) matchRouteRuleWithReason(rule config.RouteRuleConfig, req *protocol.InternalRequest) (bool, string) {
-	pattern := strings.TrimSpace(rule.Pattern)
-	if pattern == "" {
-		return false, ""
-	}
-
-	switch strings.TrimSpace(rule.MatchType) {
-	case "", "model":
-		if m.matchPattern(pattern, req.Model) {
-			return true, fmt.Sprintf("模型名 %q 命中规则模式 %q", req.Model, pattern)
-		}
-	case "system_contains":
-		if strings.Contains(strings.ToLower(req.System), strings.ToLower(pattern)) {
-			return true, fmt.Sprintf("System 内容包含 %q", pattern)
-		}
-	case "message_contains":
-		if strings.Contains(strings.ToLower(m.requestText(req, "")), strings.ToLower(pattern)) {
-			return true, fmt.Sprintf("任意消息内容包含 %q", pattern)
-		}
-	case "user_contains":
-		if strings.Contains(strings.ToLower(m.requestText(req, "user")), strings.ToLower(pattern)) {
-			return true, fmt.Sprintf("用户消息包含 %q", pattern)
-		}
-	case "assistant_contains":
-		if strings.Contains(strings.ToLower(m.requestText(req, "assistant")), strings.ToLower(pattern)) {
-			return true, fmt.Sprintf("助手消息包含 %q", pattern)
-		}
-	}
-	return false, ""
-}
-
 func (m *Manager) ResolveRequest(req *protocol.InternalRequest) *RouteDecision {
 	model := req.Model
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// 1. Check route rules
-	if decision := m.resolveByRouteRules(req); decision != nil {
-		return decision
-	}
-	// 2. Try exact model match
 	for _, p := range m.providers {
 		if !p.Config.Enabled {
 			continue
 		}
 		for _, mi := range p.Models {
 			if mi.ID == model {
-				return &RouteDecision{
-					Provider:    p,
-					TargetModel: m.resolveTargetModelLocked(p.Config.ID, model, ""),
-				}
+				return &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
 			}
 		}
 	}
-	// 3. Prefix matching
 	if p := m.resolveByPrefix(model); p != nil {
-		return &RouteDecision{
-			Provider:    p,
-			TargetModel: m.resolveTargetModelLocked(p.Config.ID, model, ""),
-		}
+		return &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
 	}
-	// 4. Default provider
 	if m.configProvider != nil {
 		gwCfg := m.configProvider.GetGatewayConfig()
 		if gwCfg.DefaultProvider != "" {
 			if p, ok := m.providers[gwCfg.DefaultProvider]; ok && p.Config.Enabled {
-				return &RouteDecision{
-					Provider:    p,
-					TargetModel: m.resolveTargetModelLocked(p.Config.ID, model, ""),
-				}
+				return &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
 			}
 		}
 	}
-	// 5. First enabled provider
 	for _, p := range m.providers {
 		if p.Config.Enabled {
-			return &RouteDecision{
-				Provider:    p,
-				TargetModel: m.resolveTargetModelLocked(p.Config.ID, model, ""),
-			}
-		}
-	}
-	return nil
-}
-
-func (m *Manager) resolveByRouteRules(req *protocol.InternalRequest) *RouteDecision {
-	if m.configProvider == nil {
-		return nil
-	}
-	rules := m.configProvider.GetRouteRules()
-	sort.Slice(rules, func(i, j int) bool {
-		return rules[i].Priority > rules[j].Priority
-	})
-	for _, rule := range rules {
-		if !rule.Enabled {
-			continue
-		}
-		if m.matchRouteRule(rule, req) {
-			if p, ok := m.providers[rule.ProviderID]; ok && p.Config.Enabled {
-				return &RouteDecision{
-					Provider:    p,
-					TargetModel: m.resolveTargetModelLocked(p.Config.ID, req.Model, rule.TargetModel),
-					Rule:        &rule,
-				}
-			}
+			return &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
 		}
 	}
 	return nil
@@ -628,39 +380,6 @@ func (m *Manager) resolveByPrefix(model string) *ProviderRuntime {
 	return nil
 }
 
-func (m *Manager) matchPattern(pattern, model string) bool {
-	if pattern == model {
-		return true
-	}
-	if strings.HasSuffix(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
-		return strings.HasPrefix(model, prefix)
-	}
-	return false
-}
-
-func (m *Manager) matchRouteRule(rule config.RouteRuleConfig, req *protocol.InternalRequest) bool {
-	pattern := strings.TrimSpace(rule.Pattern)
-	if pattern == "" {
-		return false
-	}
-
-	switch strings.TrimSpace(rule.MatchType) {
-	case "", "model":
-		return m.matchPattern(pattern, req.Model)
-	case "system_contains":
-		return strings.Contains(strings.ToLower(req.System), strings.ToLower(pattern))
-	case "message_contains":
-		return strings.Contains(strings.ToLower(m.requestText(req, "")), strings.ToLower(pattern))
-	case "user_contains":
-		return strings.Contains(strings.ToLower(m.requestText(req, "user")), strings.ToLower(pattern))
-	case "assistant_contains":
-		return strings.Contains(strings.ToLower(m.requestText(req, "assistant")), strings.ToLower(pattern))
-	default:
-		return false
-	}
-}
-
 func (m *Manager) requestText(req *protocol.InternalRequest, role string) string {
 	var parts []string
 	for _, msg := range req.Messages {
@@ -676,10 +395,7 @@ func (m *Manager) requestText(req *protocol.InternalRequest, role string) string
 	return strings.Join(parts, "\n")
 }
 
-func (m *Manager) resolveTargetModelLocked(providerID, requestedModel, override string) string {
-	if strings.TrimSpace(override) != "" {
-		return strings.TrimSpace(override)
-	}
+func (m *Manager) resolveTargetModelLocked(providerID, requestedModel string) string {
 	p, exists := m.providers[providerID]
 	if !exists {
 		return requestedModel
@@ -695,7 +411,6 @@ func (m *Manager) resolveTargetModelLocked(providerID, requestedModel, override 
 	return requestedModel
 }
 
-// DoRequest sends a request through the provider's adapter.
 func (m *Manager) DoRequest(ctx context.Context, p *ProviderRuntime, req *protocol.InternalRequest) (*http.Response, error) {
 	body, path, err := p.Adapter.BuildRequest(req)
 	if err != nil {
@@ -708,7 +423,6 @@ func (m *Manager) DoRequest(ctx context.Context, p *ProviderRuntime, req *protoc
 	return m.httpClient(req.Stream).Do(httpReq)
 }
 
-// DoRequestRaw forwards a raw HTTP request to a provider.
 func (m *Manager) DoRequestRaw(ctx context.Context, p *ProviderRuntime, method, path string, body []byte, stream bool) (*http.Response, error) {
 	httpReq, err := p.Adapter.BuildHTTPRequest(ctx, p.Config.APIBase, p.Config.APIKey, method, path, body)
 	if err != nil {
@@ -717,7 +431,6 @@ func (m *Manager) DoRequestRaw(ctx context.Context, p *ProviderRuntime, method, 
 	return m.httpClient(stream).Do(httpReq)
 }
 
-// DoRequestWithRetry sends a request with retry logic.
 func (m *Manager) DoRequestWithRetry(ctx context.Context, p *ProviderRuntime, req *protocol.InternalRequest) (*http.Response, error) {
 	maxRetries := 2
 	retryInterval := 500 * time.Millisecond
@@ -741,11 +454,7 @@ func (m *Manager) DoRequestWithRetry(ctx context.Context, p *ProviderRuntime, re
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			lastErr = &HTTPError{
-				StatusCode: resp.StatusCode,
-				Body:       body,
-				Header:     resp.Header.Clone(),
-			}
+			lastErr = &HTTPError{StatusCode: resp.StatusCode, Body: body, Header: resp.Header.Clone()}
 			if i < maxRetries {
 				time.Sleep(retryInterval)
 				continue
@@ -767,20 +476,18 @@ func (m *Manager) httpClient(stream bool) *http.Client {
 	return http.DefaultClient
 }
 
-// ProviderListJSON returns the provider list as JSON for the frontend.
 func ProviderListJSON(providers []*ProviderRuntime) string {
 	type providerInfo struct {
-		ID           string              `json:"id"`
-		Name         string              `json:"name"`
-		Type         string              `json:"type"`
-		APIBase      string              `json:"apiBase"`
-		EndpointMode string              `json:"endpointMode,omitempty"`
-		Enabled      bool                `json:"enabled"`
-		Healthy      bool                `json:"healthy"`
-		Priority     int                 `json:"priority"`
-		ModelCount   int                 `json:"modelCount"`
-		LLMs         []config.ModelEntry `json:"llms,omitempty"`
-		DefaultModel string              `json:"defaultModel,omitempty"`
+		ID           string           `json:"id"`
+		Name         string           `json:"name"`
+		Type         string           `json:"type"`
+		APIBase      string           `json:"apiBase"`
+		EndpointMode string           `json:"endpointMode,omitempty"`
+		Enabled      bool             `json:"enabled"`
+		Healthy      bool             `json:"healthy"`
+		Priority     int              `json:"priority"`
+		LLMs         []config.ModelEntry `json:"llms"`
+		DefaultModel string           `json:"defaultModel"`
 	}
 	list := make([]providerInfo, 0, len(providers))
 	for _, p := range providers {
@@ -789,11 +496,10 @@ func ProviderListJSON(providers []*ProviderRuntime) string {
 			Name:         p.Config.Name,
 			Type:         p.Config.Type,
 			APIBase:      p.Config.APIBase,
-			EndpointMode: config.NormalizeProviderEndpointMode(p.Config.Type, p.Config.EndpointMode),
+			EndpointMode: p.Config.EndpointMode,
 			Enabled:      p.Config.Enabled,
 			Healthy:      p.Healthy,
 			Priority:     p.Config.Priority,
-			ModelCount:   len(p.Models),
 			LLMs:         p.Config.LLMs,
 			DefaultModel: p.Config.DefaultModel,
 		})
