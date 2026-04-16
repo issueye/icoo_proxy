@@ -14,6 +14,10 @@ export function DeleteProvider(arg1) {
   return window['go']['services']['App']['DeleteProvider'](arg1);
 }
 
+export function DebugRoute(arg1, arg2, arg3) {
+  return window['go']['services']['App']['DebugRoute'](arg1, arg2, arg3);
+}
+
 export function GetGatewayConfig() {
   return window['go']['services']['App']['GetGatewayConfig']();
 }

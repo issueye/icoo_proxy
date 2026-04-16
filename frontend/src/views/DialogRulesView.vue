@@ -105,7 +105,66 @@
 
           <div class="rules-note settings-note settings-note--accent">
             <div class="field-label">编辑提示</div>
+            <p>规则按优先级从高到低生效。目标模型留空时，会继续使用供应商上的模型映射结果。</p>
           </div>
+
+          <section class="debug-panel">
+            <div class="panel-head debug-panel-head">
+              <div>
+                <h3 class="section-title">规则调试</h3>
+                <p class="panel-description">输入一组样例请求，查看当前会命中哪条规则以及最终路由结果。</p>
+              </div>
+              <button class="btn btn-secondary" type="button" @click="handleDebugRoute" :disabled="debugLoading">
+                {{ debugLoading ? '调试中...' : '模拟路由' }}
+              </button>
+            </div>
+
+            <div class="editor-grid">
+              <div class="field">
+                <label class="field-label">测试模型名</label>
+                <input v-model="debugForm.model" class="field-input" placeholder="例如：gpt-4o" />
+              </div>
+
+              <div class="field field--wide">
+                <label class="field-label">System Prompt</label>
+                <textarea v-model="debugForm.systemPrompt" class="field-input field-textarea" placeholder="输入 system prompt，用于测试 system_contains 规则"></textarea>
+              </div>
+
+              <div class="field field--wide">
+                <label class="field-label">用户消息</label>
+                <textarea v-model="debugForm.userMessage" class="field-input field-textarea" placeholder="输入一条用户消息，用于测试 user_contains / message_contains 规则"></textarea>
+              </div>
+            </div>
+
+            <div v-if="debugResult" class="debug-result">
+              <div class="debug-result-head">
+                <StatusBadge
+                  :status="debugResult.matched ? 'success' : 'warning'"
+                  :label="debugResult.matched ? '命中规则' : '使用回退策略'"
+                />
+                <span class="panel-chip">{{ debugResult.providerName || '未解析供应商' }}</span>
+              </div>
+
+              <div class="debug-result-grid">
+                <div class="detail-item">
+                  <span class="detail-label">命中规则</span>
+                  <span class="detail-value">{{ debugResult.matchedRule || '--' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">目标供应商</span>
+                  <span class="detail-value">{{ debugResult.providerName || '--' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">目标模型</span>
+                  <span class="detail-value">{{ debugResult.targetModel || debugForm.model || '--' }}</span>
+                </div>
+                <div class="detail-item detail-item--wide">
+                  <span class="detail-label">原因说明</span>
+                  <span class="detail-value">{{ debugResult.matchedReason || debugResult.fallbackReason || '--' }}</span>
+                </div>
+              </div>
+            </div>
+          </section>
         </template>
       </section>
     </div>
@@ -120,11 +179,20 @@ import StatusBadge from '@/components/ui/StatusBadge.vue';
 import Select from '@/components/ui/Select.vue';
 import { useGatewayStore } from '@/stores/gateway';
 import { useProviderStore } from '@/stores/provider';
+import { useToast } from '@/composables/useToast';
 
 const gatewayStore = useGatewayStore();
 const providerStore = useProviderStore();
+const { toast } = useToast();
 const routeRuleDrafts = ref([]);
 const selectedRuleIndex = ref(0);
+const debugLoading = ref(false);
+const debugResult = ref(null);
+const debugForm = ref({
+  model: 'gpt-4o',
+  systemPrompt: '',
+  userMessage: '',
+});
 
 const matchTypeLabelMap = {
   model: "模型名匹配",
@@ -200,6 +268,18 @@ async function handleSaveRouteRules() {
   await gatewayStore.saveRouteRules(sanitized);
   routeRuleDrafts.value = sanitized.length > 0 ? sanitized.map((item) => ({ ...item })) : [];
   selectedRuleIndex.value = 0;
+  toast('规则已保存', 'success');
+}
+
+async function handleDebugRoute() {
+  debugLoading.value = true;
+  try {
+    debugResult.value = await gatewayStore.debugRoute(debugForm.value);
+  } catch (e) {
+    toast(e.message || '规则调试失败', 'error');
+  } finally {
+    debugLoading.value = false;
+  }
 }
 
 watch(
@@ -258,50 +338,51 @@ onMounted(async () => {
 }
 
 .rule-list-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
   padding: 12px;
-  border: 1px solid var(--ui-border-subtle);
+  border: 1px solid var(--ui-border-default);
   border-radius: var(--radius-sm);
   background: var(--ui-bg-surface-muted);
   text-align: left;
   transition: all 0.14s ease;
 }
 
-.rule-list-item:hover {
-  background: var(--ui-bg-surface-hover);
-  border-color: var(--ui-border-default);
-}
-
+.rule-list-item:hover,
 .rule-list-item.is-active {
+  border-color: color-mix(in srgb, var(--color-accent) 26%, var(--ui-border-default));
   background: var(--color-accent-soft);
-  border-color: color-mix(in srgb, var(--color-accent) 24%, var(--ui-border-default));
 }
 
 .rule-list-item-head,
 .rule-list-meta,
-.editor-actions {
+.panel-head,
+.debug-result-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
 }
 
-.rule-list-title,
-.empty-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
+.rule-list-item-head {
+  margin-bottom: 6px;
 }
 
-.rule-list-meta,
-.rule-list-pattern,
-.empty-state p {
+.rule-list-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rule-list-meta {
   font-size: 12px;
-  line-height: 1.55;
   color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.rule-list-pattern {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rules-editor-panel {
@@ -310,38 +391,118 @@ onMounted(async () => {
   gap: 16px;
 }
 
-.rules-editor-empty {
-  min-height: 280px;
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .editor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
-.field--wide {
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field--wide,
+.detail-item--wide {
   grid-column: 1 / -1;
 }
 
-.rules-note {
-  padding: 12px;
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
-@media (max-width: 980px) {
+.field-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--ui-bg-surface-muted);
+  color: var(--color-text-primary);
+}
+
+.field-textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.rules-note,
+.debug-panel {
+  padding: 14px;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--ui-bg-surface-muted);
+}
+
+.rules-note p,
+.panel-description {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.debug-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.debug-panel-head {
+  align-items: flex-start;
+}
+
+.debug-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--ui-border-default));
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+}
+
+.debug-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.detail-value {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+@media (max-width: 960px) {
   .rules-workspace {
     grid-template-columns: 1fr;
   }
-}
 
-@media (max-width: 720px) {
-  .editor-grid {
+  .editor-grid,
+  .debug-result-grid {
     grid-template-columns: 1fr;
-  }
-
-  .editor-actions {
-    flex-direction: column;
-    align-items: stretch;
   }
 }
 </style>

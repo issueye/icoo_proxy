@@ -230,6 +230,24 @@ func (a *App) GetRouteRules() string {
 	return string(data)
 }
 
+func (a *App) DebugRoute(model, systemPrompt, userMessage string) string {
+	req := &protocol.InternalRequest{
+		Model:  strings.TrimSpace(model),
+		System: strings.TrimSpace(systemPrompt),
+		Messages: []protocol.InternalMessage{
+			{
+				Role: "user",
+				Content: []protocol.ContentBlock{
+					{Type: "text", Text: strings.TrimSpace(userMessage)},
+				},
+			},
+		},
+	}
+	result := provider.GetManager().DebugRoute(req)
+	data, _ := json.Marshal(result)
+	return string(data)
+}
+
 func (a *App) SetRouteRules(rules []config.RouteRuleConfig) error {
 	return GetConfigService().SetRouteRules(rules)
 }

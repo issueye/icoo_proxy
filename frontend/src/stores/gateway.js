@@ -125,6 +125,21 @@ export const useGatewayStore = defineStore('gateway', () => {
     }
   }
 
+  async function debugRoute({ model, systemPrompt, userMessage }) {
+    if (!isWailsEnv()) {
+      return {
+        matched: false,
+        fallbackReason: 'Not in Wails environment',
+      };
+    }
+    const result = await window.go.services.App.DebugRoute(
+      model || '',
+      systemPrompt || '',
+      userMessage || '',
+    );
+    return JSON.parse(result);
+  }
+
   async function saveRouteRules(nextRules) {
     if (!isWailsEnv()) return;
     loading.value = true;
@@ -177,6 +192,6 @@ export const useGatewayStore = defineStore('gateway', () => {
   return {
     running, port, providerCount, healthyCount, models, requestLogs, logsLoading, gatewayConfig, routeRules, loading, error,
     statusText, statusColor,
-    fetchStatus, fetchModels, fetchConfig, saveConfig, fetchRequestLogs, fetchRouteRules, saveRouteRules, refreshModels, startGateway, stopGateway,
+    fetchStatus, fetchModels, fetchConfig, saveConfig, fetchRequestLogs, fetchRouteRules, debugRoute, saveRouteRules, refreshModels, startGateway, stopGateway,
   };
 });

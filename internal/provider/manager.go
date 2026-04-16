@@ -29,6 +29,16 @@ type RouteDecision struct {
 	Rule        *config.RouteRuleConfig
 }
 
+type RouteDebugResult struct {
+	Matched        bool   `json:"matched"`
+	MatchedRule    string `json:"matchedRule,omitempty"`
+	MatchedReason  string `json:"matchedReason,omitempty"`
+	ProviderID     string `json:"providerId,omitempty"`
+	ProviderName   string `json:"providerName,omitempty"`
+	TargetModel    string `json:"targetModel,omitempty"`
+	FallbackReason string `json:"fallbackReason,omitempty"`
+}
+
 type HTTPError struct {
 	StatusCode int
 	Body       []byte
@@ -382,6 +392,138 @@ func (m *Manager) ResolveProvider(model string) *ProviderRuntime {
 		return nil
 	}
 	return decision.Provider
+}
+
+func (m *Manager) DebugRoute(req *protocol.InternalRequest) RouteDebugResult {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if decision, reason := m.resolveByRouteRulesDebug(req); decision != nil {
+		return RouteDebugResult{
+			Matched:       true,
+			MatchedRule:   decision.Rule.Name,
+			MatchedReason: reason,
+			ProviderID:    decision.Provider.Config.ID,
+			ProviderName:  decision.Provider.Config.Name,
+			TargetModel:   decision.TargetModel,
+		}
+	}
+
+	for _, p := range m.providers {
+		if !p.Config.Enabled {
+			continue
+		}
+		for _, mi := range p.Models {
+			if mi.ID == req.Model {
+				return RouteDebugResult{
+					Matched:        false,
+					ProviderID:     p.Config.ID,
+					ProviderName:   p.Config.Name,
+					TargetModel:    m.resolveTargetModelLocked(p.Config.ID, req.Model, ""),
+					FallbackReason: "按已同步模型精确匹配到供应商",
+				}
+			}
+		}
+	}
+
+	if p := m.resolveByPrefix(req.Model); p != nil {
+		return RouteDebugResult{
+			Matched:        false,
+			ProviderID:     p.Config.ID,
+			ProviderName:   p.Config.Name,
+			TargetModel:    m.resolveTargetModelLocked(p.Config.ID, req.Model, ""),
+			FallbackReason: "按模型前缀推断供应商类型",
+		}
+	}
+
+	if m.configProvider != nil {
+		gwCfg := m.configProvider.GetGatewayConfig()
+		if gwCfg.DefaultProvider != "" {
+			if p, ok := m.providers[gwCfg.DefaultProvider]; ok && p.Config.Enabled {
+				return RouteDebugResult{
+					Matched:        false,
+					ProviderID:     p.Config.ID,
+					ProviderName:   p.Config.Name,
+					TargetModel:    m.resolveTargetModelLocked(p.Config.ID, req.Model, ""),
+					FallbackReason: "未命中规则，回退到默认供应商",
+				}
+			}
+		}
+	}
+
+	for _, p := range m.providers {
+		if p.Config.Enabled {
+			return RouteDebugResult{
+				Matched:        false,
+				ProviderID:     p.Config.ID,
+				ProviderName:   p.Config.Name,
+				TargetModel:    m.resolveTargetModelLocked(p.Config.ID, req.Model, ""),
+				FallbackReason: "未命中规则，回退到首个启用供应商",
+			}
+		}
+	}
+
+	return RouteDebugResult{
+		Matched:        false,
+		FallbackReason: "当前没有可用供应商",
+	}
+}
+
+func (m *Manager) resolveByRouteRulesDebug(req *protocol.InternalRequest) (*RouteDecision, string) {
+	if m.configProvider == nil {
+		return nil, ""
+	}
+	rules := m.configProvider.GetRouteRules()
+	sort.Slice(rules, func(i, j int) bool {
+		return rules[i].Priority > rules[j].Priority
+	})
+	for _, rule := range rules {
+		if !rule.Enabled {
+			continue
+		}
+		if matched, reason := m.matchRouteRuleWithReason(rule, req); matched {
+			if p, ok := m.providers[rule.ProviderID]; ok && p.Config.Enabled {
+				return &RouteDecision{
+					Provider:    p,
+					TargetModel: m.resolveTargetModelLocked(p.Config.ID, req.Model, rule.TargetModel),
+					Rule:        &rule,
+				}, reason
+			}
+			return nil, "规则已命中，但目标供应商不存在或未启用"
+		}
+	}
+	return nil, ""
+}
+
+func (m *Manager) matchRouteRuleWithReason(rule config.RouteRuleConfig, req *protocol.InternalRequest) (bool, string) {
+	pattern := strings.TrimSpace(rule.Pattern)
+	if pattern == "" {
+		return false, ""
+	}
+
+	switch strings.TrimSpace(rule.MatchType) {
+	case "", "model":
+		if m.matchPattern(pattern, req.Model) {
+			return true, fmt.Sprintf("模型名 %q 命中规则模式 %q", req.Model, pattern)
+		}
+	case "system_contains":
+		if strings.Contains(strings.ToLower(req.System), strings.ToLower(pattern)) {
+			return true, fmt.Sprintf("System 内容包含 %q", pattern)
+		}
+	case "message_contains":
+		if strings.Contains(strings.ToLower(m.requestText(req, "")), strings.ToLower(pattern)) {
+			return true, fmt.Sprintf("任意消息内容包含 %q", pattern)
+		}
+	case "user_contains":
+		if strings.Contains(strings.ToLower(m.requestText(req, "user")), strings.ToLower(pattern)) {
+			return true, fmt.Sprintf("用户消息包含 %q", pattern)
+		}
+	case "assistant_contains":
+		if strings.Contains(strings.ToLower(m.requestText(req, "assistant")), strings.ToLower(pattern)) {
+			return true, fmt.Sprintf("助手消息包含 %q", pattern)
+		}
+	}
+	return false, ""
 }
 
 func (m *Manager) ResolveRequest(req *protocol.InternalRequest) *RouteDecision {
