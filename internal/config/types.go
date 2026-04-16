@@ -2,6 +2,7 @@ package config
 
 // GatewayConfig holds gateway server configuration.
 type GatewayConfig struct {
+	ListenHost      string `json:"listenHost" toml:"listen_host"`
 	ListenPort      int    `json:"listenPort" toml:"listen_port"`
 	DefaultProvider string `json:"defaultProvider" toml:"default_provider"`
 	LogLevel        string `json:"logLevel" toml:"log_level"`

@@ -44,7 +44,7 @@ func (a *App) Startup(ctx context.Context) {
 	// Start gateway server
 	gwCfg := configService.GetGatewayConfig()
 	gw := gateway.GetServer()
-	if err := gw.Start(gwCfg.ListenPort); err != nil {
+	if err := gw.Start(gwCfg.ListenHost, gwCfg.ListenPort); err != nil {
 		runtime.LogWarning(a.ctx, "Failed to start gateway: "+err.Error())
 	}
 
@@ -87,6 +87,8 @@ func (a *App) GetGatewayStatus() string {
 	}
 	status := map[string]interface{}{
 		"running":       gw.IsRunning(),
+		"host":          gw.GetHost(),
+		"listenHost":    gw.GetHost(),
 		"port":          gw.GetPort(),
 		"providerCount": len(allProviders),
 		"healthyCount":  healthyCount,
@@ -97,7 +99,7 @@ func (a *App) GetGatewayStatus() string {
 
 func (a *App) StartGateway() error {
 	gwCfg := GetConfigService().GetGatewayConfig()
-	return gateway.GetServer().Start(gwCfg.ListenPort)
+	return gateway.GetServer().Start(gwCfg.ListenHost, gwCfg.ListenPort)
 }
 
 func (a *App) StopGateway() error {
@@ -110,8 +112,9 @@ func (a *App) GetGatewayConfig() string {
 	return string(data)
 }
 
-func (a *App) SetGatewayConfig(listenPort int, defaultProvider, logLevel string, retryCount, retryIntervalMs int, authKey string) error {
+func (a *App) SetGatewayConfig(listenHost string, listenPort int, defaultProvider, logLevel string, retryCount, retryIntervalMs int, authKey string) error {
 	return GetConfigService().SetGatewayConfig(config.GatewayConfig{
+		ListenHost:      strings.TrimSpace(listenHost),
 		ListenPort:      listenPort,
 		DefaultProvider: defaultProvider,
 		LogLevel:        logLevel,

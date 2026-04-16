@@ -14,6 +14,7 @@ import (
 // Server is the AI gateway HTTP server.
 type Server struct {
 	server  *http.Server
+	host    string
 	port    int
 	running bool
 	handler *Handler
@@ -34,11 +35,18 @@ func GetServer() *Server {
 }
 
 // Start starts the gateway HTTP server.
-func (s *Server) Start(port int) error {
+func (s *Server) Start(host string, port int) error {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	addr := fmt.Sprintf("%s:%d", host, port)
+
 	if s.running {
-		return fmt.Errorf("gateway already running on port %d", s.port)
+		return fmt.Errorf("gateway already running on %s:%d", s.host, s.port)
 	}
 
+	s.host = host
 	s.port = port
 
 	mux := http.NewServeMux()
@@ -57,12 +65,12 @@ func (s *Server) Start(port int) error {
 	handler = loggingMiddleware(handler)
 
 	s.server = &http.Server{
-		Addr:    fmt.Sprintf("127.0.0.1:%d", port),
+		Addr:    addr,
 		Handler: handler,
 	}
 
 	go func() {
-		log.Printf("[Gateway] Starting on port %d", port)
+		log.Printf("[Gateway] Starting on %s", addr)
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("[Gateway] Server error: %v", err)
 		}
@@ -95,6 +103,14 @@ func (s *Server) Stop() error {
 // IsRunning returns whether the gateway is currently running.
 func (s *Server) IsRunning() bool {
 	return s.running
+}
+
+// GetHost returns the host the gateway is listening on.
+func (s *Server) GetHost() string {
+	if strings.TrimSpace(s.host) == "" {
+		return "127.0.0.1"
+	}
+	return s.host
 }
 
 // GetPort returns the port the gateway is listening on.

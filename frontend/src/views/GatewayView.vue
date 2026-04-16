@@ -38,11 +38,11 @@
       <div class="gateway-hero__console">
         <div class="console-line">
           <span class="console-label">API Base</span>
-          <code>http://localhost:{{ gatewayStore.port }}/v1</code>
+          <code>http://{{ gatewayStore.host }}:{{ gatewayStore.port }}/v1</code>
         </div>
         <div class="console-line">
           <span class="console-label">Listen</span>
-          <code>127.0.0.1:{{ gatewayStore.port }}</code>
+          <code>{{ gatewayStore.host }}:{{ gatewayStore.port }}</code>
         </div>
         <div class="console-line">
           <span class="console-label">Auth</span>
@@ -260,6 +260,8 @@ const readinessLabel = computed(() => {
   if (syncedModelNames.value.length === 0) return "等待模型";
   return "可接入";
 });
+
+const gatewayAddress = computed(() => `${gatewayStore.host}:${gatewayStore.port}`);
 
 const summaryMetrics = computed(() => [
   {

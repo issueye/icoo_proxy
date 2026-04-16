@@ -41,13 +41,14 @@
                         <div class="section-title">{{ currentMenuLabel }}</div>
                         <div class="settings-hero-badges">
                             <span class="info-chip">
-                                <PaletteIcon :size="12" />
-                                视觉主题
+                                <component :is="currentMenuIcon" :size="12" />
+                                {{ currentMenuBadge }}
                             </span>
                         </div>
                     </div>
 
-                    <AppearanceSettings v-if="activeSection === 'appearance'" />
+                    <GatewaySettings v-if="activeSection === 'gateway'" />
+                    <AppearanceSettings v-else-if="activeSection === 'appearance'" />
                     <AboutSettings v-else-if="activeSection === 'about'" />
                 </div>
             </main>
@@ -62,22 +63,28 @@ import {
     ArrowLeft as ArrowLeftIcon,
     Palette as PaletteIcon,
     Info as InfoIcon,
+    Network as NetworkIcon,
 } from "lucide-vue-next";
 
+import GatewaySettings from "@/components/settings/GatewaySettings.vue";
 import AppearanceSettings from "@/components/settings/AppearanceSettings.vue";
 import AboutSettings from "@/components/settings/AboutSettings.vue";
 
 const router = useRouter();
 
 const menuItems = [
-    { key: "appearance", label: "外观", icon: PaletteIcon },
-    { key: "about", label: "关于", icon: InfoIcon },
+    { key: "gateway", label: "网关", icon: NetworkIcon, badge: "监听地址" },
+    { key: "appearance", label: "外观", icon: PaletteIcon, badge: "视觉主题" },
+    { key: "about", label: "关于", icon: InfoIcon, badge: "版本信息" },
 ];
 
-const activeSection = ref("appearance");
-const currentMenuLabel = computed(
-    () => menuItems.find((item) => item.key === activeSection.value)?.label || "设置",
+const activeSection = ref("gateway");
+const currentMenu = computed(
+    () => menuItems.find((item) => item.key === activeSection.value) || menuItems[0],
 );
+const currentMenuLabel = computed(() => currentMenu.value.label || "设置");
+const currentMenuIcon = computed(() => currentMenu.value.icon || NetworkIcon);
+const currentMenuBadge = computed(() => currentMenu.value.badge || "设置项");
 </script>
 
 <style scoped>
@@ -242,3 +249,4 @@ const currentMenuLabel = computed(
     }
 }
 </style>
+

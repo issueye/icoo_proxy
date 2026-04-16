@@ -54,8 +54,8 @@ export function RefreshModels() {
   return window['go']['services']['App']['RefreshModels']();
 }
 
-export function SetGatewayConfig(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['services']['App']['SetGatewayConfig'](arg1, arg2, arg3, arg4, arg5, arg6);
+export function SetGatewayConfig(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['services']['App']['SetGatewayConfig'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function SetProviderModels(arg1, arg2, arg3) {

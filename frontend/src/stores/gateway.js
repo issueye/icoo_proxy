@@ -8,6 +8,7 @@ function isWailsEnv() {
 
 export const useGatewayStore = defineStore('gateway', () => {
   const running = ref(false);
+  const host = ref('127.0.0.1');
   const port = ref(16790);
   const providerCount = ref(0);
   const healthyCount = ref(0);
@@ -15,6 +16,7 @@ export const useGatewayStore = defineStore('gateway', () => {
   const requestLogs = ref([]);
   const logsLoading = ref(false);
   const gatewayConfig = ref({
+    listenHost: '127.0.0.1',
     listenPort: 16790,
     defaultProvider: "",
     logLevel: "info",
@@ -35,6 +37,7 @@ export const useGatewayStore = defineStore('gateway', () => {
       const result = await window.go.services.App.GetGatewayStatus();
       const data = JSON.parse(result);
       running.value = data.running;
+      host.value = data.host || data.listenHost || '127.0.0.1';
       port.value = data.port;
       providerCount.value = data.providerCount;
       healthyCount.value = data.healthyCount;
@@ -62,6 +65,7 @@ export const useGatewayStore = defineStore('gateway', () => {
       const result = await window.go.services.App.GetGatewayConfig();
       const data = JSON.parse(result);
       gatewayConfig.value = {
+        listenHost: data.listenHost ?? '127.0.0.1',
         listenPort: data.listenPort ?? 16790,
         defaultProvider: data.defaultProvider ?? "",
         logLevel: data.logLevel ?? "info",
@@ -69,6 +73,8 @@ export const useGatewayStore = defineStore('gateway', () => {
         retryIntervalMs: data.retryIntervalMs ?? 500,
         authKey: data.authKey ?? "",
       };
+      host.value = gatewayConfig.value.listenHost;
+      port.value = gatewayConfig.value.listenPort;
     } catch (e) {
       error.value = e.message;
     }
@@ -83,6 +89,7 @@ export const useGatewayStore = defineStore('gateway', () => {
     loading.value = true;
     try {
       await window.go.services.App.SetGatewayConfig(
+        nextConfig.listenHost || '127.0.0.1',
         Number(nextConfig.listenPort) || 16790,
         nextConfig.defaultProvider || "",
         nextConfig.logLevel || "info",
@@ -91,6 +98,8 @@ export const useGatewayStore = defineStore('gateway', () => {
         nextConfig.authKey || "",
       );
       gatewayConfig.value = nextConfig;
+      host.value = nextConfig.listenHost || '127.0.0.1';
+      port.value = Number(nextConfig.listenPort) || 16790;
       await fetchStatus();
     } catch (e) {
       error.value = e.message;
@@ -175,8 +184,9 @@ export const useGatewayStore = defineStore('gateway', () => {
   }
 
   return {
-    running, port, providerCount, healthyCount, models, requestLogs, logsLoading, gatewayConfig, routeRules, loading, error,
+    running, host, port, providerCount, healthyCount, models, requestLogs, logsLoading, gatewayConfig, routeRules, loading, error,
     statusText, statusColor,
     fetchStatus, fetchModels, fetchConfig, saveConfig, fetchRequestLogs, fetchRouteRules, saveRouteRules, refreshModels, startGateway, stopGateway,
   };
 });
+
