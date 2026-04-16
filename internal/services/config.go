@@ -26,9 +26,9 @@ import (
 )
 
 type FullConfig struct {
-	Gateway        config.GatewayConfig     `json:"gateway" toml:"gateway"`
-	Providers      []config.ProviderConfig  `json:"providers" toml:"providers"`
-	RouteRules     []config.RouteRuleConfig `json:"routeRules" toml:"route_rules"`
+	Gateway    config.GatewayConfig     `json:"gateway" toml:"gateway"`
+	Providers  []config.ProviderConfig  `json:"providers" toml:"providers"`
+	RouteRules []config.RouteRuleConfig `json:"routeRules" toml:"route_rules"`
 }
 
 // Re-export config types for convenience

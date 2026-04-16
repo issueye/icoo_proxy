@@ -1,13 +1,17 @@
 <template>
   <div class="gateway-view app-page">
-    <PageHeader title="网关总览">
+    <UEDPageHeader
+      title="网关总览"
+      description="集中查看本地网关状态、访问鉴权和调试示例。"
+      divided
+    >
       <template #actions>
         <button class="btn btn-secondary" @click="handleRefresh" :disabled="gatewayStore.loading">
           <RefreshCw :size="14" :class="{ spinning: gatewayStore.loading }" />
           刷新状态
         </button>
       </template>
-    </PageHeader>
+    </UEDPageHeader>
 
     <section class="gateway-hero" :class="{ 'is-running': gatewayStore.running }">
       <div class="gateway-hero__content">
@@ -75,14 +79,10 @@
     </section>
 
     <div class="gateway-grid">
-      <section class="panel-card">
-        <div class="panel-head">
-          <div>
-            <h3 class="section-title">网关控制</h3>
-            <p class="panel-description">确认客户端连接地址、鉴权状态与当前启动动作。</p>
-          </div>
+      <UEDPageSection class="panel-card" title="网关控制" description="确认客户端连接地址、鉴权状态与当前启动动作。">
+        <template #actions>
           <span class="panel-chip">{{ readinessLabel }}</span>
-        </div>
+        </template>
 
         <div class="control-layout">
           <div class="info-list">
@@ -115,16 +115,9 @@
             </button>
           </div>
         </div>
-      </section>
+      </UEDPageSection>
 
-      <section class="panel-card">
-        <div class="panel-head">
-          <div>
-            <h3 class="section-title">诊断提示</h3>
-            <p class="panel-description">按上线前检查顺序展示当前阻塞项。</p>
-          </div>
-        </div>
-
+      <UEDPageSection class="panel-card" title="诊断提示" description="按上线前检查顺序展示当前阻塞项。">
         <div class="diagnostic-list">
           <div
             v-for="(item, index) in diagnosticItems"
@@ -139,16 +132,15 @@
             </div>
           </div>
         </div>
-      </section>
+      </UEDPageSection>
 
-      <section class="panel-card panel-card--wide">
-        <div class="panel-head">
-          <h3 class="section-title">访问鉴权</h3>
+      <UEDPageSection class="panel-card panel-card--wide" title="访问鉴权">
+        <template #actions>
           <StatusBadge
             :status="gatewayStore.gatewayConfig.authKey ? 'info' : 'neutral'"
             :label="gatewayStore.gatewayConfig.authKey ? '已启用鉴权' : '未启用鉴权'"
           />
-        </div>
+        </template>
 
         <div class="auth-layout">
           <div class="auth-form">
@@ -182,19 +174,15 @@
             <p>本地开发可关闭鉴权；如果暴露到局域网或被其他应用调用，建议生成随机 Key 并妥善保存。</p>
           </div>
         </div>
-      </section>
+      </UEDPageSection>
 
-      <section class="panel-card panel-card--wide">
-        <div class="panel-head">
-          <div>
-            <h3 class="section-title">接口调用示例</h3>
-            <p class="panel-description">选择常用端点后复制命令，可快速验证网关转发链路。</p>
-          </div>
+      <UEDPageSection class="panel-card panel-card--wide" title="接口调用示例" description="选择常用端点后复制命令，可快速验证网关转发链路。">
+        <template #actions>
           <button class="btn btn-secondary" type="button" @click="copyCurlCommand">
             <Copy :size="14" />
             复制示例
           </button>
-        </div>
+        </template>
 
         <div class="example-tabs">
           <button
@@ -219,7 +207,7 @@
 
           <pre class="code-block"><code>{{ activeCurlCommand }}</code></pre>
         </div>
-      </section>
+      </UEDPageSection>
     </div>
   </div>
 </template>
@@ -229,7 +217,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useGatewayStore } from '@/stores/gateway';
 import { useProviderStore } from '@/stores/provider';
 import { Activity, Boxes, Cpu, Network, Play, Server, ShieldCheck, Square, RefreshCw, Copy } from 'lucide-vue-next';
-import PageHeader from '@/components/layout/PageHeader.vue';
+import { UEDPageHeader, UEDPageSection } from '@/components/layout';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import { useToast } from '@/composables/useToast';
 

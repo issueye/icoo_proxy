@@ -1,13 +1,13 @@
 <template>
   <div class="providers-view app-page">
-    <PageHeader title="供应商管理">
+    <UEDPageHeader title="供应商管理" description="管理上游供应商、连接状态和模型映射。" divided>
       <template #actions>
         <button class="btn btn-primary" @click="openAddDialog">
           <Plus :size="14" />
           添加供应商
         </button>
       </template>
-    </PageHeader>
+    </UEDPageHeader>
 
     <section class="toolbar-surface providers-toolbar">
       <div class="toolbar-group providers-toolbar-main">
@@ -42,11 +42,12 @@
 
     <div v-else class="providers-workspace">
       <section class="table-panel">
-        <DataTable
+        <UEDTable
           :columns="columns"
           :data="filteredProviders"
           :loading="providerStore.loading"
-          empty-text="没有符合筛选条件的供应商"
+          empty-title="没有符合筛选条件的供应商"
+          empty-text="调整筛选条件后再试，或直接新增供应商。"
           row-key="id"
         >
           <template #cell-name="{ row }">
@@ -95,11 +96,11 @@
               </button>
             </div>
           </template>
-        </DataTable>
+        </UEDTable>
       </section>
     </div>
 
-    <FloatingDrawer
+    <UEDDrawer
       :visible="!!currentProvider"
       title="模型设置"
       width="640px"
@@ -196,9 +197,9 @@
           {{ savingModels ? '保存中...' : '保存' }}
         </button>
       </template>
-    </FloatingDrawer>
+    </UEDDrawer>
 
-    <FloatingDrawer
+    <UEDDrawer
       :visible="showProviderDrawer"
       :title="isEditing ? '编辑供应商' : '添加供应商'"
       width="560px"
@@ -276,7 +277,7 @@
           </div>
         </div>
       </template>
-    </FloatingDrawer>
+    </UEDDrawer>
   </div>
 </template>
 
@@ -284,11 +285,9 @@
 import { computed, ref, onMounted } from 'vue';
 import { useProviderStore } from '@/stores/provider';
 import { Plus, Cpu, Zap, Pencil, Trash2, Database } from 'lucide-vue-next';
-import FloatingDrawer from '@/components/ui/FloatingDrawer.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import Select from '@/components/ui/Select.vue';
-import PageHeader from '@/components/layout/PageHeader.vue';
-import DataTable from '@/components/layout/DataTable.vue';
+import { UEDDrawer, UEDPageHeader, UEDTable } from '@/components/layout';
 import { useConfirm } from '@/composables/useConfirm';
 import { useToast } from '@/composables/useToast';
 

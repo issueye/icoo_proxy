@@ -1,8 +1,10 @@
 <template>
   <div class="dialog-rules-view app-page">
-    <PageHeader
+    <UEDPageHeader
       title="对话规则"
+      description="维护模型与消息匹配规则，决定请求转发到哪个供应商与目标模型。"
       :icon="MessageSquareText"
+      divided
     >
       <template #actions>
         <button class="btn btn-secondary" type="button" @click="addRouteRule">
@@ -14,7 +16,7 @@
           保存规则
         </button>
       </template>
-    </PageHeader>
+    </UEDPageHeader>
 
     <div class="rules-workspace">
       <section class="rules-list-panel">
@@ -115,7 +117,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { MessageSquareText, Plus, Save } from 'lucide-vue-next';
-import PageHeader from '@/components/layout/PageHeader.vue';
+import { UEDPageHeader } from '@/components/layout';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import Select from '@/components/ui/Select.vue';
 import { useGatewayStore } from '@/stores/gateway';
