@@ -122,6 +122,11 @@ function handleRowClick(row, index) {
 
 <style scoped>
 .ued-table-shell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -136,6 +141,9 @@ function handleRowClick(row, index) {
 
 .ued-table-shell__table {
   width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .ued-table {

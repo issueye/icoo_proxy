@@ -253,6 +253,10 @@ onMounted(async () => {
 .logs-view {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
   gap: 16px;
 }
 
