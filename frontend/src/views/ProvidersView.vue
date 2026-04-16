@@ -1,6 +1,6 @@
 <template>
   <div class="providers-view app-page">
-    <UEDPageHeader title="供应商管理" description="管理上游供应商、连接状态和模型映射。" divided>
+    <UEDPageHeader title="供应商管理" divided>
       <template #actions>
         <button class="btn btn-primary" @click="openAddDialog">
           <Plus :size="14" />

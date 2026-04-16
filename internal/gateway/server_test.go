@@ -15,7 +15,6 @@ type gatewayTestConfigProvider struct {
 
 func (g *gatewayTestConfigProvider) GetProviders() []config.ProviderConfig        { return nil }
 func (g *gatewayTestConfigProvider) GetGatewayConfig() config.GatewayConfig       { return g.gateway }
-func (g *gatewayTestConfigProvider) GetRouteRules() []config.RouteRuleConfig      { return nil }
 func (g *gatewayTestConfigProvider) AddProvider(p config.ProviderConfig) error    { return nil }
 func (g *gatewayTestConfigProvider) UpdateProvider(p config.ProviderConfig) error { return nil }
 func (g *gatewayTestConfigProvider) DeleteProvider(id string) error               { return nil }
@@ -23,7 +22,6 @@ func (g *gatewayTestConfigProvider) SetGatewayConfig(cfg config.GatewayConfig) e
 	g.gateway = cfg
 	return nil
 }
-func (g *gatewayTestConfigProvider) SetRouteRules(rules []config.RouteRuleConfig) error { return nil }
 
 func TestAuthMiddlewareRejectsMissingKey(t *testing.T) {
 	provider.GetManager().SetConfigProvider(&gatewayTestConfigProvider{

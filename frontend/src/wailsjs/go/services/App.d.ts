@@ -6,8 +6,6 @@ export function AddProvider(arg1:string,arg2:string,arg3:string,arg4:string,arg5
 
 export function CloseWindow():Promise<void>;
 
-export function DebugRoute(arg1:string,arg2:string,arg3:string):Promise<string>;
-
 export function DeleteProvider(arg1:string):Promise<void>;
 
 export function GetGatewayConfig():Promise<string>;
@@ -22,8 +20,6 @@ export function GetProviderModels(arg1:string):Promise<string>;
 
 export function GetProviders():Promise<string>;
 
-export function GetRouteRules():Promise<string>;
-
 export function Greet(arg1:string):Promise<string>;
 
 export function MinimizeWindow():Promise<void>;
@@ -33,8 +29,6 @@ export function RefreshModels():Promise<string>;
 export function SetGatewayConfig(arg1:string,arg2:number,arg3:string,arg4:string,arg5:number,arg6:number,arg7:string):Promise<void>;
 
 export function SetProviderModels(arg1:string,arg2:Array<config.ModelEntry>,arg3:string):Promise<void>;
-
-export function SetRouteRules(arg1:Array<config.RouteRuleConfig>):Promise<void>;
 
 export function StartGateway():Promise<void>;
 

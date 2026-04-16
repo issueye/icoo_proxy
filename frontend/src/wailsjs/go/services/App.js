@@ -10,10 +10,6 @@ export function CloseWindow() {
   return window['go']['services']['App']['CloseWindow']();
 }
 
-export function DebugRoute(arg1, arg2, arg3) {
-  return window['go']['services']['App']['DebugRoute'](arg1, arg2, arg3);
-}
-
 export function DeleteProvider(arg1) {
   return window['go']['services']['App']['DeleteProvider'](arg1);
 }
@@ -42,10 +38,6 @@ export function GetProviders() {
   return window['go']['services']['App']['GetProviders']();
 }
 
-export function GetRouteRules() {
-  return window['go']['services']['App']['GetRouteRules']();
-}
-
 export function Greet(arg1) {
   return window['go']['services']['App']['Greet'](arg1);
 }
@@ -64,10 +56,6 @@ export function SetGatewayConfig(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
 
 export function SetProviderModels(arg1, arg2, arg3) {
   return window['go']['services']['App']['SetProviderModels'](arg1, arg2, arg3);
-}
-
-export function SetRouteRules(arg1) {
-  return window['go']['services']['App']['SetRouteRules'](arg1);
 }
 
 export function StartGateway() {

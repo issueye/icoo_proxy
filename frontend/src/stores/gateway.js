@@ -24,7 +24,6 @@ export const useGatewayStore = defineStore('gateway', () => {
     retryIntervalMs: 500,
     authKey: "",
   });
-  const routeRules = ref([]);
   const loading = ref(false);
   const error = ref(null);
 
@@ -123,46 +122,6 @@ export const useGatewayStore = defineStore('gateway', () => {
     }
   }
 
-  async function fetchRouteRules() {
-    if (!isWailsEnv()) return;
-    try {
-      const result = await window.go.services.App.GetRouteRules();
-      const data = JSON.parse(result);
-      routeRules.value = Array.isArray(data) ? data : [];
-    } catch (e) {
-      error.value = e.message;
-    }
-  }
-
-  async function debugRoute({ model, systemPrompt, userMessage }) {
-    if (!isWailsEnv()) {
-      return {
-        matched: false,
-        fallbackReason: 'Not in Wails environment',
-      };
-    }
-    const result = await window.go.services.App.DebugRoute(
-      model || '',
-      systemPrompt || '',
-      userMessage || '',
-    );
-    return JSON.parse(result);
-  }
-
-  async function saveRouteRules(nextRules) {
-    if (!isWailsEnv()) return;
-    loading.value = true;
-    try {
-      await window.go.services.App.SetRouteRules(nextRules);
-      routeRules.value = nextRules;
-    } catch (e) {
-      error.value = e.message;
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
   async function refreshModels() {
     if (!isWailsEnv()) return;
     loading.value = true;
@@ -199,9 +158,9 @@ export const useGatewayStore = defineStore('gateway', () => {
   }
 
   return {
-    running, host, port, providerCount, healthyCount, models, requestLogs, logsLoading, gatewayConfig, routeRules, loading, error,
+    running, host, port, providerCount, healthyCount, models, requestLogs, logsLoading, gatewayConfig, loading, error,
     statusText, statusColor,
-    fetchStatus, fetchModels, fetchConfig, saveConfig, fetchRequestLogs, fetchRouteRules, debugRoute, saveRouteRules, refreshModels, startGateway, stopGateway,
+    fetchStatus, fetchModels, fetchConfig, saveConfig, fetchRequestLogs, refreshModels, startGateway, stopGateway,
   };
 });
 

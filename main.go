@@ -3,8 +3,6 @@ package main
 import (
 	"embed"
 	"icoo_proxy/internal/services"
-	"io/fs"
-	"net/http"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -15,24 +13,6 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-type assetHandler struct {
-	assets http.Handler
-}
-
-func newAssetHandler() *assetHandler {
-	sub, err := fs.Sub(assets, "frontend/dist")
-	if err != nil {
-		panic(err)
-	}
-	return &assetHandler{
-		assets: http.FileServer(http.FS(sub)),
-	}
-}
-
-func (h *assetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.assets.ServeHTTP(w, r)
-}
-
 func main() {
 	app := services.NewApp()
 
@@ -41,7 +21,7 @@ func main() {
 		Width:  1200,
 		Height: 890,
 		AssetServer: &assetserver.Options{
-			Handler: newAssetHandler(),
+			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        app.Startup,

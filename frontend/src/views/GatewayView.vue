@@ -2,7 +2,6 @@
   <div class="gateway-view app-page">
     <UEDPageHeader
       title="网关总览"
-      description="集中查看本地网关状态、访问鉴权和调试示例。"
       divided
     >
       <template #actions>
@@ -19,15 +18,6 @@
           <Activity :size="14" />
           本地代理网关
         </div>
-        <h2 class="gateway-hero__title">
-          {{ gatewayStore.running ? "网关已就绪，正在接收请求" : "网关当前未启动" }}
-        </h2>
-        <p class="gateway-hero__description">
-          {{ gatewayStore.running
-            ? "客户端可通过统一 OpenAI 兼容入口访问已配置供应商，并按模型映射与规则完成转发。"
-            : "启动网关后，应用会监听本地端口并暴露兼容 OpenAI 的 /v1 接口。"
-          }}
-        </p>
         <div class="gateway-hero__meta">
           <StatusBadge :status="gatewayStore.running ? 'success' : 'error'" :label="gatewayStore.running ? '运行中' : '已停止'" />
           <span class="summary-chip">健康度 {{ providerHealthPercent }}%</span>
@@ -102,6 +92,10 @@
               <button class="btn btn-secondary btn-sm" type="button" @click="showAuthKey = !showAuthKey">
                 {{ showAuthKey ? "隐藏" : "显示" }}
               </button>
+              <button class="btn btn-secondary btn-sm" type="button" @click="copyAuthKey" :disabled="!authKeyDraft">
+                <Copy :size="13" />
+                复制
+              </button>
             </div>
 
             <div class="auth-actions">
@@ -113,15 +107,10 @@
               </button>
             </div>
           </div>
-
-          <div class="auth-aside">
-            <div class="auth-aside-title">安全建议</div>
-            <p>本地开发可关闭鉴权；如果暴露到局域网或被其他应用调用，建议生成随机 Key 并妥善保存。</p>
-          </div>
         </div>
       </UEDPageSection>
 
-      <UEDPageSection class="panel-card panel-card--wide" title="接口调用示例" description="选择常用端点后复制命令，可快速验证网关转发链路。">
+      <UEDPageSection class="panel-card panel-card--wide" title="接口调用示例">
         <template #actions>
           <button class="btn btn-secondary" type="button" @click="copyCurlCommand">
             <Copy :size="14" />
@@ -423,6 +412,18 @@ async function copyApiBase() {
     toast("API 地址已复制", "success");
   } catch {
     toast("复制失败，请手动复制地址", "error");
+  }
+}
+
+async function copyAuthKey() {
+  const value = authKeyDraft.value.trim();
+  if (!value) return;
+
+  try {
+    await navigator.clipboard.writeText(value);
+    toast("Auth Key 已复制", "success");
+  } catch {
+    toast("复制失败，请手动复制 Key", "error");
   }
 }
 
@@ -782,7 +783,6 @@ onUnmounted(() => {
 }
 
 .panel-card {
-  padding: 16px;
   border: 1px solid var(--ui-border-default);
   border-radius: var(--radius-lg);
   background: var(--ui-bg-surface);
@@ -791,13 +791,6 @@ onUnmounted(() => {
 
 .panel-card--wide {
   grid-column: 1 / -1;
-}
-
-.control-layout,
-.auth-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr);
-  gap: 16px;
 }
 
 .control-actions,
@@ -913,7 +906,7 @@ onUnmounted(() => {
 
 .auth-input-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   padding: 8px;

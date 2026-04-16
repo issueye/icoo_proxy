@@ -9,11 +9,6 @@ const routes = [
     component: () => import('../views/GatewayView.vue'),
   },
   {
-    path: '/dialog-rules',
-    name: 'DialogRules',
-    component: () => import('../views/DialogRulesView.vue'),
-  },
-  {
     path: '/providers',
     name: 'Providers',
     component: () => import('../views/ProvidersView.vue'),

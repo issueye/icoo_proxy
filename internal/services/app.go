@@ -26,29 +26,24 @@ func NewApp() *App {
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// Register protocol adapters
 	protocol.RegisterDefaults()
 
-	// Initialize config
 	configService := GetConfigService()
 	configService.Init(ctx)
 	if err := audit.GetService().Init(); err != nil {
 		runtime.LogWarning(a.ctx, "Failed to initialize audit store: "+err.Error())
 	}
 
-	// Inject config provider into provider manager
 	pm := provider.GetManager()
 	pm.SetConfigProvider(configService)
 	pm.LoadFromConfig()
 
-	// Start gateway server
 	gwCfg := configService.GetGatewayConfig()
 	gw := gateway.GetServer()
 	if err := gw.Start(gwCfg.ListenHost, gwCfg.ListenPort); err != nil {
 		runtime.LogWarning(a.ctx, "Failed to start gateway: "+err.Error())
 	}
 
-	// Refresh models from providers
 	go pm.RefreshModels(ctx)
 }
 
@@ -72,8 +67,6 @@ func (a *App) Shutdown(ctx context.Context) {
 	GetConfigService().Close()
 	audit.GetService().Close()
 }
-
-// --- Gateway ---
 
 func (a *App) GetGatewayStatus() string {
 	gw := gateway.GetServer()
@@ -123,8 +116,6 @@ func (a *App) SetGatewayConfig(listenHost string, listenPort int, defaultProvide
 		AuthKey:         strings.TrimSpace(authKey),
 	})
 }
-
-// --- Providers ---
 
 func (a *App) GetProviders() string {
 	pm := provider.GetManager()
@@ -188,7 +179,6 @@ func (a *App) RefreshModels() string {
 	return provider.ProviderListJSON(pm.GetAll())
 }
 
-// GetProviderModels returns the model list for a specific provider.
 func (a *App) GetProviderModels(providerID string) string {
 	pm := provider.GetManager()
 	llms, defaultModel, err := pm.GetModels(providerID)
@@ -203,7 +193,6 @@ func (a *App) GetProviderModels(providerID string) string {
 	return string(data)
 }
 
-// SetProviderModels updates the model list for a specific provider.
 func (a *App) SetProviderModels(providerID string, llms []config.ModelEntry, defaultModel string) error {
 	return provider.GetManager().SetModels(providerID, llms, defaultModel)
 }
@@ -225,32 +214,4 @@ func (a *App) GetModels() string {
 
 func (a *App) GetGatewayRequestLogs(limit int) string {
 	return audit.GetService().ListJSON(limit)
-}
-
-func (a *App) GetRouteRules() string {
-	rules := GetConfigService().GetRouteRules()
-	data, _ := json.Marshal(rules)
-	return string(data)
-}
-
-func (a *App) DebugRoute(model, systemPrompt, userMessage string) string {
-	req := &protocol.InternalRequest{
-		Model:  strings.TrimSpace(model),
-		System: strings.TrimSpace(systemPrompt),
-		Messages: []protocol.InternalMessage{
-			{
-				Role: "user",
-				Content: []protocol.ContentBlock{
-					{Type: "text", Text: strings.TrimSpace(userMessage)},
-				},
-			},
-		},
-	}
-	result := provider.GetManager().DebugRoute(req)
-	data, _ := json.Marshal(result)
-	return string(data)
-}
-
-func (a *App) SetRouteRules(rules []config.RouteRuleConfig) error {
-	return GetConfigService().SetRouteRules(rules)
 }

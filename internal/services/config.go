@@ -69,19 +69,6 @@ type providerRecord struct {
 
 func (providerRecord) TableName() string { return "providers" }
 
-type routeRuleRecord struct {
-	ID          uint   `gorm:"primaryKey;autoIncrement;column:id"`
-	Name        string `gorm:"not null;column:name"`
-	MatchType   string `gorm:"not null;column:match_type"`
-	Pattern     string `gorm:"not null;column:pattern"`
-	ProviderID  string `gorm:"not null;column:provider_id"`
-	TargetModel string `gorm:"not null;column:target_model"`
-	Priority    int    `gorm:"not null;column:priority"`
-	Enabled     bool   `gorm:"not null;column:enabled"`
-}
-
-func (routeRuleRecord) TableName() string { return "route_rules" }
-
 var configService *ConfigService
 var configOnce sync.Once
 

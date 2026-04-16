@@ -55,26 +55,13 @@ type ModelEntry struct {
 	Alias string `json:"alias,omitempty" toml:"alias,omitempty"` // 模型别名（已废弃）
 }
 
-// RouteRuleConfig holds a route rule configuration.
-type RouteRuleConfig struct {
-	Name        string `json:"name" toml:"name"`
-	MatchType   string `json:"matchType" toml:"match_type"`
-	Pattern     string `json:"pattern" toml:"pattern"`
-	ProviderID  string `json:"providerId" toml:"provider_id"`
-	TargetModel string `json:"targetModel" toml:"target_model"`
-	Priority    int    `json:"priority" toml:"priority"`
-	Enabled     bool   `json:"enabled" toml:"enabled"`
-}
-
 // ConfigProvider is an interface for accessing configuration.
 // This decouples the provider/gateway packages from the services package.
 type ConfigProvider interface {
 	GetProviders() []ProviderConfig
 	GetGatewayConfig() GatewayConfig
-	GetRouteRules() []RouteRuleConfig
 	AddProvider(p ProviderConfig) error
 	UpdateProvider(p ProviderConfig) error
 	DeleteProvider(id string) error
 	SetGatewayConfig(cfg GatewayConfig) error
-	SetRouteRules(rules []RouteRuleConfig) error
 }

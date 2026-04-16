@@ -47,7 +47,7 @@ const sectionClass = computed(() => cn(props.muted && "ued-panel--muted"))
 
 .ued-page-section__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--ued-space-12);
   padding: var(--ued-panel-padding);
