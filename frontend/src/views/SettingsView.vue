@@ -37,16 +37,6 @@
 
             <main class="settings-main surface-panel page-panel">
                 <div class="settings-main-inner">
-                    <div class="settings-hero surface-muted">
-                        <div class="section-title">{{ currentMenuLabel }}</div>
-                        <div class="settings-hero-badges">
-                            <span class="info-chip">
-                                <component :is="currentMenuIcon" :size="12" />
-                                {{ currentMenuBadge }}
-                            </span>
-                        </div>
-                    </div>
-
                     <GatewaySettings v-if="activeSection === 'gateway'" />
                     <AppearanceSettings v-else-if="activeSection === 'appearance'" />
                     <AboutSettings v-else-if="activeSection === 'about'" />

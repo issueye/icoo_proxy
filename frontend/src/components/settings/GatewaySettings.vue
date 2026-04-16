@@ -6,13 +6,9 @@
         </div>
 
         <div class="settings-card">
-            <div class="settings-card-head">
-                <div class="settings-card-title">监听地址</div>
-            </div>
-
             <div class="gateway-settings-grid">
                 <label class="settings-field">
-                    <span class="settings-field-label">监听 IP / Host</span>
+                    <span class="settings-field-label">监听地址</span>
                     <input
                         v-model.trim="form.listenHost"
                         class="input"
@@ -43,26 +39,6 @@
                 <button class="btn btn-primary" type="button" @click="handleSave" :disabled="gatewayStore.loading">
                     保存设置
                 </button>
-            </div>
-        </div>
-
-        <div class="settings-card settings-card--soft">
-            <div class="settings-card-head">
-                <div class="settings-card-title">生效说明</div>
-            </div>
-
-            <div class="gateway-settings-notes">
-                <div class="gateway-settings-note">
-                    <strong>当前地址</strong>
-                    <code>{{ gatewayAddress }}</code>
-                </div>
-                <div class="gateway-settings-note">
-                    <strong>访问入口</strong>
-                    <code>http://{{ gatewayAddress }}/v1</code>
-                </div>
-                <div class="settings-help">
-                    保存后会写入网关配置；如果网关已在运行，建议停止后重新启动，以确保监听地址切换到新配置。
-                </div>
             </div>
         </div>
     </section>

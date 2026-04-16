@@ -26,15 +26,13 @@ import (
 )
 
 type FullConfig struct {
-	Gateway    config.GatewayConfig     `json:"gateway" toml:"gateway"`
-	Providers  []config.ProviderConfig  `json:"providers" toml:"providers"`
-	RouteRules []config.RouteRuleConfig `json:"routeRules" toml:"route_rules"`
+	Gateway   config.GatewayConfig    `json:"gateway" toml:"gateway"`
+	Providers []config.ProviderConfig `json:"providers" toml:"providers"`
 }
 
 // Re-export config types for convenience
 type GatewayConfig = config.GatewayConfig
 type ProviderConfig = config.ProviderConfig
-type RouteRuleConfig = config.RouteRuleConfig
 
 type ConfigService struct {
 	config           *FullConfig
@@ -334,7 +332,7 @@ func (s *ConfigService) Close() error {
 }
 
 func (s *ConfigService) initSchema() error {
-	if err := s.db.AutoMigrate(&settingRecord{}, &providerRecord{}, &routeRuleRecord{}); err != nil {
+	if err := s.db.AutoMigrate(&settingRecord{}, &providerRecord{}); err != nil {
 		return fmt.Errorf("failed to initialize schema: %w", err)
 	}
 	return nil

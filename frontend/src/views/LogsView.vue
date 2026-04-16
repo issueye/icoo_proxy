@@ -15,17 +15,6 @@
           <label class="toolbar-label">查询条数</label>
           <Select v-model="logLimit" :options="logLimitOptions" class="toolbar-select" @change="handleRefreshLogs" />
         </div>
-
-        <label class="toggle-chip">
-          <input v-model="showErrorsOnly" type="checkbox">
-          <span>仅看失败</span>
-        </label>
-      </div>
-
-      <div class="toolbar-summary">
-        <span class="toolbar-chip">{{ filteredLogs.length }} 条</span>
-        <span class="toolbar-chip">{{ errorCount }} 失败</span>
-        <span class="toolbar-chip">端口 {{ gatewayStore.port }}</span>
       </div>
     </section>
 

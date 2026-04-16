@@ -24,10 +24,6 @@
           <Select v-model="statusFilter" :options="statusFilterOptions" class="toolbar-select" />
         </div>
       </div>
-      <div class="toolbar-summary">
-        <span class="toolbar-chip">共 {{ filteredProviders.length }} 条</span>
-        <span class="toolbar-chip">健康 {{ healthyProviders }} 条</span>
-      </div>
     </section>
 
     <section v-if="providerStore.providers.length === 0" class="empty-state providers-empty">
