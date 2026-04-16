@@ -26,9 +26,9 @@ import (
 )
 
 type FullConfig struct {
-	Gateway        config.GatewayConfig     `json:"gateway" toml:"gateway"`
-	Providers      []config.ProviderConfig  `json:"providers" toml:"providers"`
-	RouteRules     []config.RouteRuleConfig `json:"routeRules" toml:"route_rules"`
+	Gateway    config.GatewayConfig     `json:"gateway" toml:"gateway"`
+	Providers  []config.ProviderConfig  `json:"providers" toml:"providers"`
+	RouteRules []config.RouteRuleConfig `json:"routeRules" toml:"route_rules"`
 }
 
 // Re-export config types for convenience
@@ -88,6 +88,7 @@ var configOnce sync.Once
 func defaultConfig() *FullConfig {
 	return &FullConfig{
 		Gateway: config.GatewayConfig{
+			ListenHost:      "127.0.0.1",
 			ListenPort:      16790,
 			LogLevel:        "info",
 			RetryCount:      2,
@@ -297,6 +298,9 @@ func (s *ConfigService) GetConfigJSON() string {
 
 func (s *ConfigService) applyDefaultsLocked(cfg *FullConfig) {
 	defaults := defaultConfig()
+	if strings.TrimSpace(cfg.Gateway.ListenHost) == "" {
+		cfg.Gateway.ListenHost = defaults.Gateway.ListenHost
+	}
 	if cfg.Gateway.ListenPort == 0 {
 		cfg.Gateway.ListenPort = defaults.Gateway.ListenPort
 	}

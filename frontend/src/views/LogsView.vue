@@ -1,13 +1,13 @@
 <template>
   <div class="logs-view app-page">
-    <PageHeader title="请求日志">
+    <UEDPageHeader title="请求日志" divided>
       <template #actions>
         <button class="btn btn-secondary" @click="handleRefreshLogs" :disabled="gatewayStore.logsLoading">
           <RefreshCw :size="14" :class="{ spinning: gatewayStore.logsLoading }" />
           刷新日志
         </button>
       </template>
-    </PageHeader>
+    </UEDPageHeader>
 
     <section class="toolbar-surface logs-toolbar">
       <div class="toolbar-group">
@@ -31,12 +31,16 @@
 
     <div class="logs-workspace">
       <section class="logs-table-panel">
-        <div v-if="filteredLogs.length === 0" class="empty-state">
-          <div class="empty-title">{{ gatewayStore.logsLoading ? '正在加载请求日志...' : '暂时还没有请求记录' }}</div>
-          <p>{{ gatewayStore.logsLoading ? '系统正在同步最新日志。' : '启动网关并发起一次请求后，这里会显示转发记录。' }}</p>
-        </div>
-
-        <DataTable v-else :columns="columns" :data="filteredLogs" row-key="id" @row-click="handleSelectLog">
+        <UEDTable
+          :columns="columns"
+          :data="filteredLogs"
+          :loading="gatewayStore.logsLoading"
+          row-key="id"
+          clickable
+          empty-title="暂时还没有请求记录"
+          empty-text="启动网关并发起一次请求后，这里会显示转发记录。"
+          @row-click="handleSelectLog"
+        >
           <template #cell-createdAt="{ value }">
             <span class="table-mono">{{ formatTimestamp(value) }}</span>
           </template>
@@ -72,7 +76,7 @@
           <template #cell-durationMs="{ value }">
             <span class="table-mono">{{ value }} ms</span>
           </template>
-        </DataTable>
+        </UEDTable>
       </section>
 
       <aside class="logs-detail-panel">
@@ -153,9 +157,9 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { RefreshCw } from 'lucide-vue-next';
 import { useGatewayStore } from '@/stores/gateway';
-import PageHeader from '@/components/layout/PageHeader.vue';
+import UEDPageHeader from '@/components/layout/UEDPageHeader.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
-import DataTable from '@/components/layout/DataTable.vue';
+import UEDTable from '@/components/layout/UEDTable.vue';
 import Select from '@/components/ui/Select.vue';
 
 const gatewayStore = useGatewayStore();
@@ -249,6 +253,10 @@ onMounted(async () => {
 .logs-view {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
   gap: 16px;
 }
 

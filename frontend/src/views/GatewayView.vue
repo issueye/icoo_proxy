@@ -1,13 +1,17 @@
 <template>
   <div class="gateway-view app-page">
-    <PageHeader title="网关总览">
+    <UEDPageHeader
+      title="网关总览"
+      description="集中查看本地网关状态、访问鉴权和调试示例。"
+      divided
+    >
       <template #actions>
         <button class="btn btn-secondary" @click="handleRefresh" :disabled="gatewayStore.loading">
           <RefreshCw :size="14" :class="{ spinning: gatewayStore.loading }" />
           刷新状态
         </button>
       </template>
-    </PageHeader>
+    </UEDPageHeader>
 
     <section class="gateway-hero" :class="{ 'is-running': gatewayStore.running }">
       <div class="gateway-hero__content">
@@ -34,11 +38,11 @@
       <div class="gateway-hero__console">
         <div class="console-line">
           <span class="console-label">API Base</span>
-          <code>http://localhost:{{ gatewayStore.port }}/v1</code>
+          <code>http://{{ gatewayStore.host }}:{{ gatewayStore.port }}/v1</code>
         </div>
         <div class="console-line">
           <span class="console-label">Listen</span>
-          <code>127.0.0.1:{{ gatewayStore.port }}</code>
+          <code>{{ gatewayStore.host }}:{{ gatewayStore.port }}</code>
         </div>
         <div class="console-line">
           <span class="console-label">Auth</span>
@@ -62,7 +66,7 @@
     </section>
 
     <section class="summary-grid">
-      <div v-for="metric in summaryMetrics" :key="metric.label" class="summary-card">
+      <div v-for="metric in summaryMetrics" :key="metric.label" class="summary-card" :class="metric.tone ? `is-${metric.tone}` : ''">
         <div class="summary-card__icon">
           <component :is="metric.icon" :size="17" />
         </div>
@@ -75,80 +79,13 @@
     </section>
 
     <div class="gateway-grid">
-      <section class="panel-card">
-        <div class="panel-head">
-          <div>
-            <h3 class="section-title">网关控制</h3>
-            <p class="panel-description">确认客户端连接地址、鉴权状态与当前启动动作。</p>
-          </div>
-          <span class="panel-chip">{{ readinessLabel }}</span>
-        </div>
-
-        <div class="control-layout">
-          <div class="info-list">
-            <div class="info-row">
-              <span class="info-row-label">API Base</span>
-              <code class="summary-value">http://localhost:{{ gatewayStore.port }}/v1</code>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">鉴权模式</span>
-              <span class="info-row-value">{{ gatewayStore.gatewayConfig.authKey ? "Bearer / x-api-key" : "未启用" }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-row-label">上游健康</span>
-              <span class="info-row-value">{{ gatewayStore.healthyCount }} / {{ gatewayStore.providerCount }} 个供应商可用</span>
-            </div>
-          </div>
-
-          <div class="control-actions">
-            <button v-if="!gatewayStore.running" class="btn btn-success" @click="handleStart" :disabled="gatewayStore.loading">
-              <Play :size="14" />
-              启动网关
-            </button>
-            <button v-else class="btn btn-danger" @click="handleStop" :disabled="gatewayStore.loading">
-              <Square :size="14" />
-              停止网关
-            </button>
-            <button class="btn btn-secondary" type="button" @click="copyApiBase">
-              <Copy :size="14" />
-              复制地址
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel-card">
-        <div class="panel-head">
-          <div>
-            <h3 class="section-title">诊断提示</h3>
-            <p class="panel-description">按上线前检查顺序展示当前阻塞项。</p>
-          </div>
-        </div>
-
-        <div class="diagnostic-list">
-          <div
-            v-for="(item, index) in diagnosticItems"
-            :key="item.label"
-            class="diagnostic-item"
-            :class="{ warning: !item.ok }"
-          >
-            <span class="diagnostic-step">{{ index + 1 }}</span>
-            <div class="diagnostic-copy">
-              <StatusBadge :status="item.ok ? 'success' : 'warning'" :label="item.label" />
-              <p>{{ item.description }}</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel-card panel-card--wide">
-        <div class="panel-head">
-          <h3 class="section-title">访问鉴权</h3>
+      <UEDPageSection class="panel-card panel-card--wide" title="访问鉴权">
+        <template #actions>
           <StatusBadge
             :status="gatewayStore.gatewayConfig.authKey ? 'info' : 'neutral'"
             :label="gatewayStore.gatewayConfig.authKey ? '已启用鉴权' : '未启用鉴权'"
           />
-        </div>
+        </template>
 
         <div class="auth-layout">
           <div class="auth-form">
@@ -182,19 +119,15 @@
             <p>本地开发可关闭鉴权；如果暴露到局域网或被其他应用调用，建议生成随机 Key 并妥善保存。</p>
           </div>
         </div>
-      </section>
+      </UEDPageSection>
 
-      <section class="panel-card panel-card--wide">
-        <div class="panel-head">
-          <div>
-            <h3 class="section-title">接口调用示例</h3>
-            <p class="panel-description">选择常用端点后复制命令，可快速验证网关转发链路。</p>
-          </div>
+      <UEDPageSection class="panel-card panel-card--wide" title="接口调用示例" description="选择常用端点后复制命令，可快速验证网关转发链路。">
+        <template #actions>
           <button class="btn btn-secondary" type="button" @click="copyCurlCommand">
             <Copy :size="14" />
             复制示例
           </button>
-        </div>
+        </template>
 
         <div class="example-tabs">
           <button
@@ -219,7 +152,7 @@
 
           <pre class="code-block"><code>{{ activeCurlCommand }}</code></pre>
         </div>
-      </section>
+      </UEDPageSection>
     </div>
   </div>
 </template>
@@ -229,7 +162,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useGatewayStore } from '@/stores/gateway';
 import { useProviderStore } from '@/stores/provider';
 import { Activity, Boxes, Cpu, Network, Play, Server, ShieldCheck, Square, RefreshCw, Copy } from 'lucide-vue-next';
-import PageHeader from '@/components/layout/PageHeader.vue';
+import { UEDPageHeader, UEDPageSection } from '@/components/layout';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import { useToast } from '@/composables/useToast';
 
@@ -271,16 +204,64 @@ const activeRequestMode = computed(
 );
 
 const providerHealthPercent = computed(() => {
-  if (gatewayStore.providerCount === 0) return 0;
-  return Math.round((gatewayStore.healthyCount / gatewayStore.providerCount) * 100);
+  if (enabledProviderCount.value === 0) return 0;
+  return Math.round((healthyProviderCount.value / enabledProviderCount.value) * 100);
+});
+
+const enabledProviderCount = computed(() =>
+  providerStore.providers.filter((item) => item.enabled).length
+);
+
+const healthyProviderCount = computed(() =>
+  providerStore.providers.filter((item) => item.enabled && item.healthy).length
+);
+
+const configuredModelNames = computed(() => {
+  const names = new Set();
+
+  providerStore.providers
+    .filter((item) => item.enabled)
+    .forEach((item) => {
+      const llms = Array.isArray(item.llms) ? item.llms : [];
+      llms.forEach((model) => {
+        const name = (model?.model || '').trim();
+        if (name) names.add(name);
+      });
+    });
+
+  return Array.from(names);
+});
+
+const syncedModelNames = computed(() => {
+  const names = new Set();
+
+  gatewayStore.models.forEach((model) => {
+    const name = (model?.id || model?.name || '').trim();
+    if (name) names.add(name);
+  });
+
+  return Array.from(names);
+});
+
+const availableModelCount = computed(() =>
+  syncedModelNames.value.length > 0 ? syncedModelNames.value.length : configuredModelNames.value.length
+);
+
+const modelReadinessLabel = computed(() => {
+  if (syncedModelNames.value.length > 0) return '模型清单已同步';
+  if (configuredModelNames.value.length > 0) return '已配置待刷新';
+  return '等待配置模型';
 });
 
 const readinessLabel = computed(() => {
   if (!gatewayStore.running) return "等待启动";
-  if (gatewayStore.providerCount === 0) return "需要供应商";
-  if (gatewayStore.models.length === 0) return "等待模型";
+  if (enabledProviderCount.value === 0) return "需要供应商";
+  if (configuredModelNames.value.length === 0) return "需要模型映射";
+  if (syncedModelNames.value.length === 0) return "等待模型";
   return "可接入";
 });
+
+const gatewayAddress = computed(() => `${gatewayStore.host}:${gatewayStore.port}`);
 
 const summaryMetrics = computed(() => [
   {
@@ -288,32 +269,91 @@ const summaryMetrics = computed(() => [
     value: `:${gatewayStore.port}`,
     hint: `127.0.0.1:${gatewayStore.port}`,
     icon: Network,
+    tone: gatewayStore.running ? "info" : "warning",
   },
   {
     label: "供应商",
-    value: `${gatewayStore.providerCount} 个`,
-    hint: `${gatewayStore.healthyCount} 个健康`,
+    value: `${enabledProviderCount.value} 个`,
+    hint: enabledProviderCount.value > 0
+      ? `${healthyProviderCount.value} 个健康，${providerStore.providers.length - enabledProviderCount.value} 个禁用`
+      : providerStore.providers.length > 0
+        ? '当前供应商均为禁用状态'
+        : '尚未配置供应商',
     icon: Server,
+    tone: enabledProviderCount.value === 0 ? "warning" : healthyProviderCount.value > 0 ? "success" : "danger",
   },
   {
     label: "可用模型",
-    value: `${gatewayStore.models.length} 个`,
-    hint: gatewayStore.models.length > 0 ? "模型清单已同步" : "等待刷新模型",
+    value: `${availableModelCount.value} 个`,
+    hint: modelReadinessLabel.value,
     icon: Boxes,
+    tone: syncedModelNames.value.length > 0 ? "success" : configuredModelNames.value.length > 0 ? "info" : "warning",
   },
   {
     label: "访问鉴权",
     value: gatewayStore.gatewayConfig.authKey ? "已启用" : "未启用",
     hint: gatewayStore.gatewayConfig.authKey ? "Bearer / x-api-key" : "本地免鉴权",
     icon: ShieldCheck,
+    tone: gatewayStore.gatewayConfig.authKey ? "success" : "info",
   },
   {
     label: "运行状态",
     value: gatewayStore.running ? "运行中" : "已停止",
     hint: readinessLabel.value,
     icon: Cpu,
+    tone: gatewayStore.running ? "success" : "danger",
   },
 ]);
+
+const nextStep = computed(() => {
+  if (!gatewayStore.running) {
+    return {
+      title: "先启动网关",
+      description: "网关尚未监听本地端口，启动后客户端才能通过统一 /v1 入口接入。",
+    };
+  }
+
+  if (enabledProviderCount.value === 0) {
+    return {
+      title: "补充供应商配置",
+      description: "当前没有已启用供应商，先启用并验证至少一个上游连接。",
+    };
+  }
+
+  if (configuredModelNames.value.length === 0) {
+    return {
+      title: "配置模型映射",
+      description: "供应商已启用，但还没有可供网关暴露的模型映射，请先在供应商中补齐模型配置。",
+    };
+  }
+
+  if (syncedModelNames.value.length === 0) {
+    return {
+      title: "刷新模型列表",
+      description: "模型映射已存在，但网关尚未同步公开模型。刷新后再验证 /v1/models 返回。",
+    };
+  }
+
+  if (!gatewayStore.gatewayConfig.authKey) {
+    return {
+      title: "建议启用访问鉴权",
+      description: "当前已具备调用条件；如果网关会被其他应用或局域网设备访问，建议立即配置认证 Key。",
+    };
+  }
+
+  return {
+    title: "可以接入客户端",
+    description: "网关、模型与鉴权均已就绪，可直接复制 API Base 和调试示例进行联调。",
+  };
+});
+
+const authPreviewValue = computed(() => {
+  if (!gatewayStore.gatewayConfig.authKey) {
+    return "Authorization: disabled";
+  }
+
+  return `Authorization: Bearer ${gatewayStore.gatewayConfig.authKey}`;
+});
 
 const diagnosticItems = computed(() => [
   {
@@ -324,18 +364,20 @@ const diagnosticItems = computed(() => [
       : "启动网关后才会开放本地 /v1 兼容接口。",
   },
   {
-    ok: gatewayStore.providerCount > 0,
-    label: gatewayStore.providerCount > 0 ? "已配置供应商" : "尚未配置供应商",
-    description: gatewayStore.providerCount > 0
-      ? `${gatewayStore.healthyCount} / ${gatewayStore.providerCount} 个供应商处于健康状态。`
-      : "请先在供应商管理中添加至少一个上游服务。",
+    ok: enabledProviderCount.value > 0,
+    label: enabledProviderCount.value > 0 ? "已启用供应商" : "尚未启用供应商",
+    description: enabledProviderCount.value > 0
+      ? `${healthyProviderCount.value} / ${enabledProviderCount.value} 个启用供应商处于健康状态。`
+      : "请先在供应商管理中启用至少一个上游服务。",
   },
   {
-    ok: gatewayStore.models.length > 0,
-    label: gatewayStore.models.length > 0 ? "模型列表已同步" : "模型尚未刷新",
-    description: gatewayStore.models.length > 0
-      ? `当前向客户端暴露 ${gatewayStore.models.length} 个模型。`
-      : "刷新模型后，客户端才能通过 /v1/models 看到可用模型。",
+    ok: configuredModelNames.value.length > 0,
+    label: configuredModelNames.value.length > 0 ? "已配置模型映射" : "模型映射尚未配置",
+    description: configuredModelNames.value.length > 0
+      ? syncedModelNames.value.length > 0
+        ? `当前向客户端暴露 ${availableModelCount.value} 个模型。`
+        : `已配置 ${configuredModelNames.value.length} 个模型映射，等待刷新到 /v1/models。`
+      : "请先在供应商中配置至少一个模型映射。",
   },
 ]);
 
@@ -366,8 +408,8 @@ async function handleStop() {
 
 async function handleRefresh() {
   await gatewayStore.fetchStatus();
-  await gatewayStore.fetchModels();
   await providerStore.fetchProviders();
+  await gatewayStore.refreshModels();
 }
 
 async function handleSaveAuthKey() {
@@ -435,8 +477,15 @@ onUnmounted(() => {
 <style scoped>
 .gateway-view {
   display: flex;
+  min-height: 0;
   flex-direction: column;
   gap: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.gateway-view > * {
+  flex-shrink: 0;
 }
 
 .gateway-hero {
@@ -621,6 +670,109 @@ onUnmounted(() => {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.summary-card.is-success {
+  border-color: color-mix(in srgb, var(--color-success) 28%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-success) 7%, var(--ui-bg-surface));
+}
+
+.summary-card.is-success .summary-card__icon {
+  border-color: color-mix(in srgb, var(--color-success) 26%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-success) 14%, var(--ui-bg-surface));
+  color: var(--color-success);
+}
+
+.summary-card.is-warning {
+  border-color: color-mix(in srgb, var(--color-warning) 28%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--ui-bg-surface));
+}
+
+.summary-card.is-warning .summary-card__icon {
+  border-color: color-mix(in srgb, var(--color-warning) 28%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--ui-bg-surface));
+  color: var(--color-warning);
+}
+
+.summary-card.is-danger {
+  border-color: color-mix(in srgb, var(--color-danger) 26%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-danger) 7%, var(--ui-bg-surface));
+}
+
+.summary-card.is-danger .summary-card__icon {
+  border-color: color-mix(in srgb, var(--color-danger) 24%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--ui-bg-surface));
+  color: var(--color-danger);
+}
+
+.summary-card.is-info {
+  border-color: color-mix(in srgb, var(--color-accent) 26%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--ui-bg-surface));
+}
+
+.summary-card.is-info .summary-card__icon {
+  border-color: color-mix(in srgb, var(--color-accent) 24%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--ui-bg-surface));
+  color: var(--color-accent);
+}
+
+.overview-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-strip__card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ui-bg-surface) 95%, transparent), var(--ui-bg-surface-muted));
+  box-shadow: var(--shadow-rest);
+}
+
+.overview-strip__card--actions {
+  justify-content: space-between;
+}
+
+.overview-strip__label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.overview-strip__value {
+  color: var(--color-text-primary);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.overview-strip__value--mono {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-strip__description {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.overview-strip__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .gateway-grid {
@@ -834,6 +986,10 @@ onUnmounted(() => {
   .gateway-hero,
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview-strip {
+    grid-template-columns: 1fr;
   }
 
   .gateway-grid {
