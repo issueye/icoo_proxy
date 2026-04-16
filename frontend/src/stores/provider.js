@@ -21,6 +21,7 @@ export const useProviderStore = defineStore('provider', () => {
     try {
       const result = await window.go.services.App.GetProviders();
       providers.value = JSON.parse(result);
+      console.log('providers.value', providers.value);
     } catch (e) {
       error.value = e.message;
       providers.value = [];

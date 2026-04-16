@@ -26,8 +26,7 @@
           :loading="gatewayStore.logsLoading"
           row-key="id"
           clickable
-          empty-title="暂时还没有请求记录"
-          empty-text="启动网关并发起一次请求后，这里会显示转发记录。"
+          empty-title="暂无数据"
           @row-click="handleSelectLog"
         >
           <template #cell-createdAt="{ value }">

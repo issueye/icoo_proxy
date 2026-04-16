@@ -42,8 +42,7 @@
           :columns="columns"
           :data="filteredProviders"
           :loading="providerStore.loading"
-          empty-title="没有符合筛选条件的供应商"
-          empty-text="调整筛选条件后再试，或直接新增供应商。"
+          empty-title="暂无数据"
           row-key="id"
         >
           <template #cell-name="{ row }">
@@ -381,7 +380,6 @@ const defaultForm = () => ({
 
 const form = ref(defaultForm());
 const endpointModeOptions = computed(() => endpointModeOptionsMap[form.value.type] || endpointModeOptionsMap.openai);
-const healthyProviders = computed(() => providerStore.providers.filter((item) => item.healthy).length);
 
 const filteredProviders = computed(() => {
   return providerStore.providers.filter((item) => {
