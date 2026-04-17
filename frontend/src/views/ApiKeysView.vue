@@ -1,33 +1,40 @@
 <template>
   <div class="app-page api-keys-view">
-    <UEDPageHeader title="API 密钥管理" description="统一管理网关访问凭证，并为后续按供应商/端点限制访问范围做准备。" divided>
+    <UEDPageHeader
+      title="API 密钥管理"
+      description="统一管理网关访问凭证，并为后续按供应商/端点限制访问范围做准备。"
+      divided
+    >
       <template #actions>
-        <button class="btn btn-primary" @click="openCreate">
-          新增密钥
-        </button>
+        <button class="btn btn-primary" @click="openCreate">新增密钥</button>
       </template>
     </UEDPageHeader>
 
     <section class="toolbar-surface page-toolbar">
       <div class="toolbar-group">
-        <div class="toolbar-field">
+        <div class="toolbar-field toolbar-field--search">
           <label class="toolbar-label">搜索</label>
-          <input v-model="keyword" class="form-input toolbar-input" placeholder="按名称、描述或密钥搜索" />
+          <input
+            v-model="keyword"
+            class="form-input toolbar-input"
+            placeholder="按名称、描述或密钥搜索"
+          />
         </div>
         <div class="toolbar-field">
           <label class="toolbar-label">范围</label>
-          <select v-model="scopeFilter" class="form-input toolbar-input">
-            <option value="all">全部</option>
-            <option value="restricted">受限</option>
-          </select>
+          <Select
+            v-model="scopeFilter"
+            :options="scopeFilterOptions"
+            class="toolbar-select"
+          />
         </div>
         <div class="toolbar-field">
           <label class="toolbar-label">状态</label>
-          <select v-model="statusFilter" class="form-input toolbar-input">
-            <option value="all">全部</option>
-            <option value="enabled">启用</option>
-            <option value="disabled">禁用</option>
-          </select>
+          <Select
+            v-model="statusFilter"
+            :options="statusFilterOptions"
+            class="toolbar-select"
+          />
         </div>
       </div>
       <div class="toolbar-summary">
@@ -38,123 +45,196 @@
     </section>
 
     <section class="table-panel panel-card">
-      <div v-if="filteredApiKeys.length === 0" class="empty-state compact-empty">
-        <div class="empty-title">暂无 API 密钥</div>
-        <p>可先创建全局密钥，后续再逐步切换到按供应商或端点受限的访问控制。</p>
-      </div>
+      <DataTable
+        :columns="columns"
+        :data="filteredApiKeys"
+        :loading="apiKeyStore.loading"
+        empty-text="暂无 API 密钥"
+        row-key="id"
+      >
+        <template #cell-name="{ row }">
+          <div class="cell-main">{{ row.name || '-' }}</div>
+          <div class="cell-sub">{{ row.description || '无描述' }}</div>
+        </template>
 
-      <table v-else class="simple-table">
-        <thead>
-          <tr>
-            <th>名称</th>
-            <th>密钥</th>
-            <th>范围</th>
-            <th>状态</th>
-            <th>供应商 / 端点</th>
-            <th>更新时间</th>
-            <th class="actions-col">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in filteredApiKeys" :key="item.id">
-            <td>
-              <div class="cell-main">{{ item.name || '-' }}</div>
-              <div class="cell-sub">{{ item.description || '无描述' }}</div>
-            </td>
-            <td>
-              <code class="secret-code">{{ maskKey(item.key) }}</code>
-            </td>
-            <td>
-              <span class="table-tag">{{ item.scopeMode === 'restricted' ? '受限' : '全局' }}</span>
-            </td>
-            <td>
-              <StatusBadge :status="item.enabled ? 'success' : 'neutral'" :label="item.enabled ? '启用' : '禁用'" />
-            </td>
-            <td>
-              <div class="cell-sub">供应商 {{ item.providerIds.length }} 个</div>
-              <div class="cell-sub">端点 {{ item.endpointIds.length }} 个</div>
-            </td>
-            <td>{{ formatDate(item.updatedAt || item.createdAt) }}</td>
-            <td class="actions-col">
-              <div class="row-actions">
-                <button class="btn btn-secondary btn-sm" @click="openEdit(item)">编辑</button>
-                <button class="btn btn-danger btn-sm" @click="handleDelete(item)">删除</button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+        <template #cell-key="{ row }">
+          <code class="secret-code">{{ maskKey(row.key) }}</code>
+        </template>
+
+        <template #cell-scopeMode="{ row }">
+          <span class="table-tag">{{ row.scopeMode === 'restricted' ? '受限' : '全局' }}</span>
+        </template>
+
+        <template #cell-enabled="{ row }">
+          <StatusBadge
+            :status="row.enabled ? 'success' : 'neutral'"
+            :label="row.enabled ? '启用' : '禁用'"
+          />
+        </template>
+
+        <template #cell-binding="{ row }">
+          <div v-if="row.scopeMode !== 'restricted'" class="cell-sub">全局访问</div>
+          <template v-else>
+            <div class="cell-sub">供应商 {{ row.providerIds.length }} 个</div>
+            <div class="cell-sub">端点 {{ row.endpointIds.length }} 个</div>
+          </template>
+        </template>
+
+        <template #cell-updatedAt="{ row }">
+          {{ formatDate(row.updatedAt || row.createdAt) }}
+        </template>
+
+        <template #cell-actions="{ row }">
+          <div class="row-actions" @click.stop>
+            <button class="btn btn-secondary btn-sm" @click="openEdit(row)">编辑</button>
+            <button class="btn btn-danger btn-sm" @click="handleDelete(row)">删除</button>
+          </div>
+        </template>
+      </DataTable>
     </section>
 
-    <section class="panel-card editor-card">
-      <div class="section-head compact">
-        <div class="section-title">{{ editingId ? '编辑密钥' : '新增密钥' }}</div>
-        <button v-if="editingId" class="btn btn-secondary btn-sm" @click="resetForm">取消编辑</button>
-      </div>
+    <FloatingDrawer
+      v-model:visible="drawerVisible"
+      :title="editingId ? '编辑密钥' : '新增密钥'"
+      description="配置网关访问密钥及其供应商/端点访问范围。"
+      kicker="API KEY"
+      width="560px"
+      @close="handleDrawerClose"
+    >
+      <div class="drawer-form">
+        <div class="form-grid two-columns">
+          <div class="form-field">
+            <label class="form-label">名称</label>
+            <input
+              v-model="form.name"
+              class="form-input"
+              placeholder="如：Default Gateway Key"
+            />
+          </div>
 
-      <div class="form-grid two-columns">
-        <div class="form-field">
-          <label class="form-label">名称</label>
-          <input v-model="form.name" class="form-input" placeholder="如：Default Gateway Key" />
-        </div>
-        <div class="form-field">
-          <label class="form-label">范围模式</label>
-          <select v-model="form.scopeMode" class="form-input">
-            <option value="all">全局</option>
-            <option value="restricted">受限</option>
-          </select>
-        </div>
-        <div class="form-field full">
-          <label class="form-label">密钥</label>
-          <div class="inline-actions">
-            <input v-model="form.key" class="form-input" :placeholder="editingId ? '留空则保留原有密钥' : '请输入 API Key'" />
-            <button class="btn btn-secondary btn-sm" type="button" @click="generateKey">生成随机值</button>
+          <div class="form-field">
+            <label class="form-label">范围模式</label>
+            <Select v-model="form.scopeMode" :options="scopeModeOptions" />
+          </div>
+
+          <div class="form-field full">
+            <label class="form-label">密钥</label>
+            <div class="inline-actions inline-actions--stretch">
+              <input
+                v-model="form.key"
+                class="form-input"
+                :placeholder="editingId ? '留空则保留原有密钥' : '请输入 API Key'"
+              />
+              <button class="btn btn-secondary btn-sm" type="button" @click="generateKey">
+                生成随机值
+              </button>
+            </div>
+          </div>
+
+          <div class="form-field full">
+            <label class="form-label">描述</label>
+            <input
+              v-model="form.description"
+              class="form-input"
+              placeholder="说明此密钥的用途"
+            />
+          </div>
+
+          <div class="form-field full checkbox-field">
+            <label class="checkbox-row">
+              <input v-model="form.enabled" type="checkbox" />
+              <span>启用此密钥</span>
+            </label>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">关联供应商</label>
+            <Select
+              v-model="form.providerIds"
+              :options="providerOptions"
+              :disabled="form.scopeMode !== 'restricted'"
+              multiple
+              searchable
+              placeholder="选择允许访问的供应商"
+            />
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">关联端点</label>
+            <Select
+              v-model="form.endpointIds"
+              :options="endpointOptions"
+              :disabled="form.scopeMode !== 'restricted'"
+              multiple
+              searchable
+              placeholder="选择允许访问的端点"
+            />
+            <p class="form-hint">
+              {{ form.scopeMode === 'restricted' ? '仅允许命中的供应商和端点。' : '全局模式下不限制供应商和端点。' }}
+            </p>
           </div>
         </div>
-        <div class="form-field full">
-          <label class="form-label">描述</label>
-          <input v-model="form.description" class="form-input" placeholder="说明此密钥的用途" />
-        </div>
-        <div class="form-field full checkbox-field">
-          <label class="checkbox-row">
-            <input v-model="form.enabled" type="checkbox" />
-            <span>启用此密钥</span>
-          </label>
-        </div>
-        <div class="form-field">
-          <label class="form-label">关联供应商 ID（每行一个）</label>
-          <textarea v-model="providerIdsInput" class="form-input form-textarea" rows="5" placeholder="provider-1&#10;provider-2"></textarea>
-        </div>
-        <div class="form-field">
-          <label class="form-label">关联端点 ID（每行一个）</label>
-          <textarea v-model="endpointIdsInput" class="form-input form-textarea" rows="5" placeholder="endpoint-1&#10;endpoint-2"></textarea>
-        </div>
       </div>
 
-      <div class="editor-actions">
-        <button class="btn btn-secondary" @click="resetForm">重置</button>
-        <button class="btn btn-primary" :disabled="apiKeyStore.loading || !form.name.trim()" @click="handleSubmit">
-          {{ apiKeyStore.loading ? '保存中...' : editingId ? '保存修改' : '创建密钥' }}
-        </button>
-      </div>
-    </section>
+      <template #footer>
+        <div class="drawer-footer">
+          <button class="btn btn-secondary" @click="handleDrawerClose">取消</button>
+          <button
+            class="btn btn-primary"
+            :disabled="apiKeyStore.loading || !form.name.trim()"
+            @click="handleSubmit"
+          >
+            {{ apiKeyStore.loading ? '保存中...' : editingId ? '保存修改' : '创建密钥' }}
+          </button>
+        </div>
+      </template>
+    </FloatingDrawer>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { UEDPageHeader } from '@/components/layout';
-import StatusBadge from '@/components/ui/StatusBadge.vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { DataTable, UEDPageHeader } from '@/components/layout';
+import { FloatingDrawer, Select, StatusBadge } from '@/components/ui';
 import { useApiKeyStore } from '@/stores/api-key';
+import { useEndpointStore } from '@/stores/endpoint';
+import { useProviderStore } from '@/stores/provider';
 
 const apiKeyStore = useApiKeyStore();
+const endpointStore = useEndpointStore();
+const providerStore = useProviderStore();
+
+const columns = [
+  { key: 'name', title: '名称' },
+  { key: 'key', title: '密钥', class: 'w-[160px]' },
+  { key: 'scopeMode', title: '范围', class: 'w-[96px]' },
+  { key: 'enabled', title: '状态', class: 'w-[96px]' },
+  { key: 'binding', title: '供应商 / 端点', class: 'w-[160px]' },
+  { key: 'updatedAt', title: '更新时间', class: 'w-[180px]' },
+  { key: 'actions', title: '操作', class: 'w-[160px]' },
+];
+
+const scopeFilterOptions = [
+  { label: '全部', value: 'all' },
+  { label: '受限', value: 'restricted' },
+];
+
+const statusFilterOptions = [
+  { label: '全部', value: 'all' },
+  { label: '启用', value: 'enabled' },
+  { label: '禁用', value: 'disabled' },
+];
+
+const scopeModeOptions = [
+  { label: '全局', value: 'all' },
+  { label: '受限', value: 'restricted' },
+];
 
 const keyword = ref('');
 const scopeFilter = ref('all');
 const statusFilter = ref('all');
+const drawerVisible = ref(false);
 const editingId = ref('');
-const providerIdsInput = ref('');
-const endpointIdsInput = ref('');
 const form = ref(createEmptyForm());
 
 function createEmptyForm() {
@@ -165,8 +245,27 @@ function createEmptyForm() {
     description: '',
     enabled: true,
     scopeMode: 'all',
+    providerIds: [],
+    endpointIds: [],
   };
 }
+
+const providerOptions = computed(() =>
+  providerStore.providers.map((item) => ({
+    label: item.name || item.id,
+    value: item.id,
+  })),
+);
+
+const endpointOptions = computed(() => {
+  const providerIds = Array.isArray(form.value.providerIds) ? form.value.providerIds : [];
+  return endpointStore.endpoints
+    .filter((item) => providerIds.length === 0 || providerIds.includes(item.providerId))
+    .map((item) => ({
+      label: item.name || item.id,
+      value: item.id,
+    }));
+});
 
 const filteredApiKeys = computed(() => {
   const q = keyword.value.trim().toLowerCase();
@@ -175,16 +274,33 @@ const filteredApiKeys = computed(() => {
     if (statusFilter.value === 'enabled' && !item.enabled) return false;
     if (statusFilter.value === 'disabled' && item.enabled) return false;
     if (!q) return true;
-    return [item.name, item.description, item.key].some((value) => (value || '').toLowerCase().includes(q));
+    return [item.name, item.description, item.key].some((value) =>
+      (value || '').toLowerCase().includes(q),
+    );
   });
 });
 
-function splitLines(value) {
-  return value
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+watch(
+  () => form.value.scopeMode,
+  (scopeMode) => {
+    if (scopeMode === 'restricted') return;
+    form.value.providerIds = [];
+    form.value.endpointIds = [];
+  },
+);
+
+watch(
+  () => [...form.value.providerIds],
+  (providerIds) => {
+    if (!providerIds.length) return;
+    const allowedEndpointIds = new Set(
+      endpointStore.endpoints
+        .filter((item) => providerIds.includes(item.providerId))
+        .map((item) => item.id),
+    );
+    form.value.endpointIds = form.value.endpointIds.filter((id) => allowedEndpointIds.has(id));
+  },
+);
 
 function generateKey() {
   form.value.key = `ik_${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
@@ -205,13 +321,17 @@ function formatDate(value) {
 
 function resetForm() {
   editingId.value = '';
-  providerIdsInput.value = '';
-  endpointIdsInput.value = '';
   form.value = createEmptyForm();
+}
+
+function handleDrawerClose() {
+  drawerVisible.value = false;
+  resetForm();
 }
 
 function openCreate() {
   resetForm();
+  drawerVisible.value = true;
 }
 
 function openEdit(item) {
@@ -223,16 +343,17 @@ function openEdit(item) {
     description: item.description,
     enabled: item.enabled,
     scopeMode: item.scopeMode || 'all',
+    providerIds: [...(item.providerIds || [])],
+    endpointIds: [...(item.endpointIds || [])],
   };
-  providerIdsInput.value = (item.providerIds || []).join('\n');
-  endpointIdsInput.value = (item.endpointIds || []).join('\n');
+  drawerVisible.value = true;
 }
 
 async function handleSubmit() {
   const payload = {
     ...form.value,
-    providerIds: splitLines(providerIdsInput.value),
-    endpointIds: splitLines(endpointIdsInput.value),
+    providerIds: Array.isArray(form.value.providerIds) ? form.value.providerIds : [],
+    endpointIds: Array.isArray(form.value.endpointIds) ? form.value.endpointIds : [],
   };
 
   if (editingId.value) {
@@ -241,52 +362,42 @@ async function handleSubmit() {
     await apiKeyStore.addAPIKey(payload);
   }
 
-  resetForm();
+  handleDrawerClose();
 }
 
 async function handleDelete(item) {
   if (!window.confirm(`确认删除 API 密钥“${item.name || item.id}”吗？`)) return;
   await apiKeyStore.deleteAPIKey(item.id);
   if (editingId.value === item.id) {
-    resetForm();
+    handleDrawerClose();
   }
 }
 
-onMounted(() => {
-  apiKeyStore.fetchAPIKeys();
+onMounted(async () => {
+  await Promise.all([
+    providerStore.fetchProviders(),
+    endpointStore.fetchEndpoints(),
+    apiKeyStore.fetchAPIKeys(),
+  ]);
 });
 </script>
 
 <style scoped>
-.page-toolbar,
-.editor-card {
+.page-toolbar {
   margin-top: 16px;
 }
 
-.compact-empty {
-  padding: 32px 20px;
+.toolbar-field--search {
+  min-width: min(320px, 100%);
+  flex: 1 1 320px;
 }
 
-.empty-title {
-  font-size: 18px;
-  font-weight: 600;
+.toolbar-select {
+  min-width: 160px;
 }
 
-.simple-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.simple-table th,
-.simple-table td {
-  padding: 14px 12px;
-  border-bottom: 1px solid var(--ui-border-soft);
-  text-align: left;
-  vertical-align: middle;
-}
-
-.actions-col {
-  width: 160px;
+.table-panel {
+  margin-top: 16px;
 }
 
 .cell-main {
@@ -314,10 +425,20 @@ onMounted(() => {
 
 .row-actions,
 .inline-actions,
-.editor-actions {
+.drawer-footer {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.inline-actions--stretch .form-input {
+  flex: 1;
+}
+
+.drawer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .form-grid.two-columns {
@@ -330,11 +451,6 @@ onMounted(() => {
   grid-column: 1 / -1;
 }
 
-.form-textarea {
-  min-height: 120px;
-  resize: vertical;
-}
-
 .checkbox-field {
   display: flex;
   align-items: center;
@@ -344,6 +460,16 @@ onMounted(() => {
   display: inline-flex;
   gap: 8px;
   align-items: center;
+}
+
+.form-hint {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.drawer-footer {
+  justify-content: flex-end;
 }
 
 @media (max-width: 960px) {
