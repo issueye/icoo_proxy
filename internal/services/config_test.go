@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"icoo_proxy/internal/config"
 )
 
 func TestConfigServiceSaveLoadRoundTrip(t *testing.T) {
@@ -12,9 +14,15 @@ func TestConfigServiceSaveLoadRoundTrip(t *testing.T) {
 	service := &ConfigService{config: defaultConfig(), configPath: path, keyPath: filepath.Join(filepath.Dir(path), "icoo_proxy.key")}
 	defer service.Close()
 
-	err := service.SetGatewayConfig(GatewayConfig{ListenPort: 26790, DefaultProvider: "openai-main", LogLevel: "debug", RetryCount: 3, RetryIntervalMs: 900, AuthKey: "gateway-secret"})
+	err := service.SetGatewayConfig(GatewayConfig{ListenPort: 26790, DefaultProvider: "openai-main", LogLevel: "debug", RetryCount: 3, RetryIntervalMs: 900})
 	if err != nil {
 		t.Fatalf("SetGatewayConfig() error = %v", err)
+	}
+	if err := service.AddAPIKey(APIKeyConfig{ID: "key-1", Name: "Default Key", Key: "gateway-secret", Enabled: true}); err != nil {
+		t.Fatalf("AddAPIKey() error = %v", err)
+	}
+	if err := service.AddEndpoint(EndpointConfig{ID: "endpoint-1", Name: "Default Endpoint", ProviderID: "openai-main", Path: "/v1/chat/completions", Method: "POST", Capability: "chat", RequestProtocol: "openai_chat", ResponseProtocol: "openai_chat", Enabled: true, Priority: 10, IsDefault: true}); err != nil {
+		t.Fatalf("AddEndpoint() error = %v", err)
 	}
 
 	loaded := &ConfigService{config: defaultConfig(), configPath: path, keyPath: filepath.Join(filepath.Dir(path), "icoo_proxy.key")}
@@ -30,8 +38,59 @@ func TestConfigServiceSaveLoadRoundTrip(t *testing.T) {
 	if cfg.DefaultProvider != "openai-main" {
 		t.Fatalf("DefaultProvider = %q", cfg.DefaultProvider)
 	}
-	if cfg.AuthKey != "gateway-secret" {
+	if cfg.AuthKey != "" {
 		t.Fatalf("AuthKey = %q", cfg.AuthKey)
+	}
+
+	apiKeys := loaded.GetAPIKeys()
+	if len(apiKeys) != 1 {
+		t.Fatalf("apiKeys len = %d", len(apiKeys))
+	}
+	if apiKeys[0].Key != "gateway-secret" {
+		t.Fatalf("apiKeys[0].Key = %q", apiKeys[0].Key)
+	}
+
+	endpoints := loaded.GetEndpoints()
+	if len(endpoints) != 1 {
+		t.Fatalf("endpoints len = %d", len(endpoints))
+	}
+	if endpoints[0].Path != "/v1/chat/completions" {
+		t.Fatalf("endpoints[0].Path = %q", endpoints[0].Path)
+	}
+}
+
+func TestConfigServiceSetGatewayConfigMigratesLegacyAuthKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "icoo_proxy.db")
+	service := &ConfigService{config: defaultConfig(), configPath: path, keyPath: filepath.Join(filepath.Dir(path), "icoo_proxy.key")}
+	defer service.Close()
+
+	err := service.SetGatewayConfig(GatewayConfig{
+		ListenHost:      "127.0.0.1",
+		ListenPort:      26790,
+		DefaultProvider: "openai-main",
+		LogLevel:        "debug",
+		RetryCount:      3,
+		RetryIntervalMs: 900,
+		AuthKey:         "legacy-gateway-secret",
+	})
+	if err != nil {
+		t.Fatalf("SetGatewayConfig() error = %v", err)
+	}
+
+	cfg := service.GetGatewayConfig()
+	if cfg.AuthKey != "" {
+		t.Fatalf("AuthKey = %q", cfg.AuthKey)
+	}
+
+	apiKeys := service.GetAPIKeys()
+	if len(apiKeys) != 1 {
+		t.Fatalf("apiKeys len = %d", len(apiKeys))
+	}
+	if apiKeys[0].Key != "legacy-gateway-secret" {
+		t.Fatalf("apiKeys[0].Key = %q", apiKeys[0].Key)
+	}
+	if apiKeys[0].ScopeMode != config.ApiKeyScopeAll {
+		t.Fatalf("apiKeys[0].ScopeMode = %q", apiKeys[0].ScopeMode)
 	}
 }
 
@@ -83,6 +142,7 @@ default_provider = "openai-main"
 log_level = "debug"
 retry_count = 3
 retry_interval_ms = 900
+auth_key = "gateway-secret"
 
 [[providers]]
 id = "openai-main"
@@ -93,6 +153,7 @@ api_key = "secret"
 enabled = true
 priority = 10
 default_model = "gpt-4o"
+endpoint_mode = "responses"
 
 [[providers.llms]]
 model = "chat-default"
@@ -115,6 +176,9 @@ target = "gpt-4o"
 	if gwCfg.DefaultProvider != "openai-main" {
 		t.Fatalf("DefaultProvider = %q", gwCfg.DefaultProvider)
 	}
+	if gwCfg.AuthKey != "" {
+		t.Fatalf("AuthKey = %q", gwCfg.AuthKey)
+	}
 
 	providers := service.GetProviders()
 	if len(providers) != 1 {
@@ -125,6 +189,31 @@ target = "gpt-4o"
 	}
 	if len(providers[0].LLMs) != 1 || providers[0].LLMs[0].Target != "gpt-4o" {
 		t.Fatalf("unexpected provider llms: %+v", providers[0].LLMs)
+	}
+
+	apiKeys := service.GetAPIKeys()
+	if len(apiKeys) != 1 {
+		t.Fatalf("apiKeys len = %d", len(apiKeys))
+	}
+	if apiKeys[0].Key != "gateway-secret" {
+		t.Fatalf("apiKeys[0].Key = %q", apiKeys[0].Key)
+	}
+	if apiKeys[0].ScopeMode != config.ApiKeyScopeAll {
+		t.Fatalf("apiKeys[0].ScopeMode = %q", apiKeys[0].ScopeMode)
+	}
+
+	endpoints := service.GetEndpoints()
+	if len(endpoints) != 1 {
+		t.Fatalf("endpoints len = %d", len(endpoints))
+	}
+	if endpoints[0].ProviderID != "openai-main" {
+		t.Fatalf("endpoints[0].ProviderID = %q", endpoints[0].ProviderID)
+	}
+	if endpoints[0].Path != "/v1/responses" {
+		t.Fatalf("endpoints[0].Path = %q", endpoints[0].Path)
+	}
+	if !endpoints[0].IsDefault {
+		t.Fatalf("expected migrated endpoint to be default")
 	}
 }
 
@@ -172,26 +261,5 @@ func TestConfigServiceEncryptsProviderAPIKeyAtRest(t *testing.T) {
 	}
 	if reloaded[0].EndpointMode != "responses" {
 		t.Fatalf("reloaded EndpointMode = %q", reloaded[0].EndpointMode)
-	}
-}
-
-func TestConfigServicePersistsGatewayAuthKey(t *testing.T) {
-	dir := t.TempDir()
-	service := &ConfigService{config: defaultConfig(), configPath: filepath.Join(dir, "icoo_proxy.db"), keyPath: filepath.Join(dir, "icoo_proxy.key")}
-	defer service.Close()
-
-	err := service.SetGatewayConfig(GatewayConfig{ListenPort: 16790, DefaultProvider: "openai-main", LogLevel: "info", RetryCount: 2, RetryIntervalMs: 500, AuthKey: "gateway-secret"})
-	if err != nil {
-		t.Fatalf("SetGatewayConfig() error = %v", err)
-	}
-
-	loaded := &ConfigService{config: defaultConfig(), configPath: filepath.Join(dir, "icoo_proxy.db"), keyPath: filepath.Join(dir, "icoo_proxy.key")}
-	defer loaded.Close()
-	if err := loaded.Load(); err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	if loaded.GetGatewayConfig().AuthKey != "gateway-secret" {
-		t.Fatalf("AuthKey = %q", loaded.GetGatewayConfig().AuthKey)
 	}
 }

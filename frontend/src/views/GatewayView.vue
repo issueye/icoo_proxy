@@ -2,6 +2,7 @@
   <div class="gateway-view app-page">
     <UEDPageHeader
       title="网关总览"
+      description="统一查看本地代理状态、接入准备度和客户端调用方式。"
       divided
     >
       <template #actions>
@@ -36,7 +37,7 @@
         </div>
         <div class="console-line">
           <span class="console-label">Auth</span>
-          <code>{{ gatewayStore.gatewayConfig.authKey ? "Bearer / x-api-key" : "disabled" }}</code>
+          <code>{{ apiKeyStatusLabel }}</code>
         </div>
         <div class="gateway-hero__actions">
           <button v-if="!gatewayStore.running" class="btn btn-success" @click="handleStart" :disabled="gatewayStore.loading">
@@ -72,38 +73,24 @@
       <UEDPageSection class="panel-card panel-card--wide" title="访问鉴权">
         <template #actions>
           <StatusBadge
-            :status="gatewayStore.gatewayConfig.authKey ? 'info' : 'neutral'"
-            :label="gatewayStore.gatewayConfig.authKey ? '已启用鉴权' : '未启用鉴权'"
+            :status="gatewayStore.apiKeyCount > 0 ? 'info' : 'neutral'"
+            :label="gatewayStore.apiKeyCount > 0 ? `已配置 ${gatewayStore.apiKeyCount} 个 API Key` : '未配置 API Key'"
           />
         </template>
 
         <div class="auth-layout">
           <div class="auth-form">
             <p class="auth-helper">
-              设置后客户端需要携带 <code>Authorization: Bearer</code> 或 <code>x-api-key</code>，留空保存则关闭访问鉴权。
+              网关访问鉴权已迁移到 <code>API 密钥</code> 管理模块。客户端可使用 <code>Authorization: Bearer</code>
+              或 <code>x-api-key</code> 携带任一有效密钥访问网关。
             </p>
-            <div class="auth-input-shell">
-              <input
-                v-model="authKeyDraft"
-                :type="showAuthKey ? 'text' : 'password'"
-                class="auth-input"
-                placeholder="留空表示关闭鉴权"
-              >
-              <button class="btn btn-secondary btn-sm" type="button" @click="showAuthKey = !showAuthKey">
-                {{ showAuthKey ? "隐藏" : "显示" }}
-              </button>
-              <button class="btn btn-secondary btn-sm" type="button" @click="copyAuthKey" :disabled="!authKeyDraft">
-                <Copy :size="13" />
-                复制
-              </button>
+            <div class="info-row">
+              <span class="info-row-label">当前状态</span>
+              <span class="info-row-value">{{ apiKeyDetailText }}</span>
             </div>
-
             <div class="auth-actions">
-              <button class="btn btn-secondary" type="button" @click="handleGenerateAuthKey">
-                生成随机 Key
-              </button>
-              <button class="btn btn-primary" type="button" @click="handleSaveAuthKey" :disabled="gatewayStore.loading">
-                保存设置
+              <button class="btn btn-primary" type="button" @click="openApiKeysPage">
+                管理 API 密钥
               </button>
             </div>
           </div>
@@ -148,6 +135,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { useGatewayStore } from '@/stores/gateway';
 import { useProviderStore } from '@/stores/provider';
 import { Activity, Boxes, Cpu, Network, Play, Server, ShieldCheck, Square, RefreshCw, Copy } from 'lucide-vue-next';
@@ -158,10 +146,9 @@ import { useToast } from '@/composables/useToast';
 const gatewayStore = useGatewayStore();
 const providerStore = useProviderStore();
 const { toast } = useToast();
+const router = useRouter();
 
 let timer = null;
-const showAuthKey = ref(false);
-const authKeyDraft = ref("");
 const activeExample = ref("chat");
 
 const requestModes = [
@@ -250,7 +237,15 @@ const readinessLabel = computed(() => {
   return "可接入";
 });
 
-const gatewayAddress = computed(() => `${gatewayStore.host}:${gatewayStore.port}`);
+const apiKeyStatusLabel = computed(() =>
+  gatewayStore.apiKeyCount > 0 ? "Bearer / x-api-key" : "disabled"
+);
+
+const apiKeyDetailText = computed(() =>
+  gatewayStore.apiKeyCount > 0
+    ? `已配置 ${gatewayStore.apiKeyCount} 个 API Key，网关会校验客户端请求密钥。`
+    : "未配置 API Key，当前网关不启用访问鉴权。"
+);
 
 const summaryMetrics = computed(() => [
   {
@@ -280,10 +275,10 @@ const summaryMetrics = computed(() => [
   },
   {
     label: "访问鉴权",
-    value: gatewayStore.gatewayConfig.authKey ? "已启用" : "未启用",
-    hint: gatewayStore.gatewayConfig.authKey ? "Bearer / x-api-key" : "本地免鉴权",
+    value: gatewayStore.apiKeyCount > 0 ? "已启用" : "未启用",
+    hint: gatewayStore.apiKeyCount > 0 ? `${gatewayStore.apiKeyCount} 个 API Key` : "本地免鉴权",
     icon: ShieldCheck,
-    tone: gatewayStore.gatewayConfig.authKey ? "success" : "info",
+    tone: gatewayStore.apiKeyCount > 0 ? "success" : "info",
   },
   {
     label: "运行状态",
@@ -294,85 +289,9 @@ const summaryMetrics = computed(() => [
   },
 ]);
 
-const nextStep = computed(() => {
-  if (!gatewayStore.running) {
-    return {
-      title: "先启动网关",
-      description: "网关尚未监听本地端口，启动后客户端才能通过统一 /v1 入口接入。",
-    };
-  }
-
-  if (enabledProviderCount.value === 0) {
-    return {
-      title: "补充供应商配置",
-      description: "当前没有已启用供应商，先启用并验证至少一个上游连接。",
-    };
-  }
-
-  if (configuredModelNames.value.length === 0) {
-    return {
-      title: "配置模型映射",
-      description: "供应商已启用，但还没有可供网关暴露的模型映射，请先在供应商中补齐模型配置。",
-    };
-  }
-
-  if (syncedModelNames.value.length === 0) {
-    return {
-      title: "刷新模型列表",
-      description: "模型映射已存在，但网关尚未同步公开模型。刷新后再验证 /v1/models 返回。",
-    };
-  }
-
-  if (!gatewayStore.gatewayConfig.authKey) {
-    return {
-      title: "建议启用访问鉴权",
-      description: "当前已具备调用条件；如果网关会被其他应用或局域网设备访问，建议立即配置认证 Key。",
-    };
-  }
-
-  return {
-    title: "可以接入客户端",
-    description: "网关、模型与鉴权均已就绪，可直接复制 API Base 和调试示例进行联调。",
-  };
-});
-
-const authPreviewValue = computed(() => {
-  if (!gatewayStore.gatewayConfig.authKey) {
-    return "Authorization: disabled";
-  }
-
-  return `Authorization: Bearer ${gatewayStore.gatewayConfig.authKey}`;
-});
-
-const diagnosticItems = computed(() => [
-  {
-    ok: gatewayStore.running,
-    label: gatewayStore.running ? "网关正在监听请求" : "网关尚未启动",
-    description: gatewayStore.running
-      ? `当前监听 127.0.0.1:${gatewayStore.port}，客户端可以接入。`
-      : "启动网关后才会开放本地 /v1 兼容接口。",
-  },
-  {
-    ok: enabledProviderCount.value > 0,
-    label: enabledProviderCount.value > 0 ? "已启用供应商" : "尚未启用供应商",
-    description: enabledProviderCount.value > 0
-      ? `${healthyProviderCount.value} / ${enabledProviderCount.value} 个启用供应商处于健康状态。`
-      : "请先在供应商管理中启用至少一个上游服务。",
-  },
-  {
-    ok: configuredModelNames.value.length > 0,
-    label: configuredModelNames.value.length > 0 ? "已配置模型映射" : "模型映射尚未配置",
-    description: configuredModelNames.value.length > 0
-      ? syncedModelNames.value.length > 0
-        ? `当前向客户端暴露 ${availableModelCount.value} 个模型。`
-        : `已配置 ${configuredModelNames.value.length} 个模型映射，等待刷新到 /v1/models。`
-      : "请先在供应商中配置至少一个模型映射。",
-  },
-]);
-
 const authHeader = computed(() =>
-  gatewayStore.gatewayConfig.authKey
-    ? `-H "Authorization: Bearer ${gatewayStore.gatewayConfig.authKey}" \\\n  `
+  gatewayStore.apiKeyCount > 0
+    ? `-H "Authorization: Bearer <YOUR_API_KEY>" \\\n  `
     : ""
 );
 
@@ -382,7 +301,7 @@ const activeCurlCommand = computed(() => {
     return `curl http://localhost:${port}/v1/responses \\\n  ${authHeader.value}-H "Content-Type: application/json" \\\n  -d '{"model":"gpt-4.1","input":"hello"}'`;
   }
   if (activeExample.value === "models") {
-    return `curl http://localhost:${port}/v1/models${gatewayStore.gatewayConfig.authKey ? ` \\\n  -H "Authorization: Bearer ${gatewayStore.gatewayConfig.authKey}"` : ""}`;
+    return `curl http://localhost:${port}/v1/models${gatewayStore.apiKeyCount > 0 ? ` \\\n  -H "Authorization: Bearer <YOUR_API_KEY>"` : ""}`;
   }
   return `curl http://localhost:${port}/v1/chat/completions \\\n  ${authHeader.value}-H "Content-Type: application/json" \\\n  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}'`;
 });
@@ -401,30 +320,17 @@ async function handleRefresh() {
   await gatewayStore.refreshModels();
 }
 
-async function handleSaveAuthKey() {
-  await gatewayStore.saveConfig({ authKey: authKeyDraft.value.trim() });
-}
-
 async function copyApiBase() {
-  const value = `http://localhost:${gatewayStore.port}/v1`;
   try {
-    await navigator.clipboard.writeText(value);
-    toast("API 地址已复制", "success");
+    await navigator.clipboard.writeText(`http://localhost:${gatewayStore.port}/v1`);
+    toast("API Base 已复制", "success");
   } catch {
     toast("复制失败，请手动复制地址", "error");
   }
 }
 
-async function copyAuthKey() {
-  const value = authKeyDraft.value.trim();
-  if (!value) return;
-
-  try {
-    await navigator.clipboard.writeText(value);
-    toast("Auth Key 已复制", "success");
-  } catch {
-    toast("复制失败，请手动复制 Key", "error");
-  }
+function openApiKeysPage() {
+  router.push("/api-keys");
 }
 
 async function copyCurlCommand() {
@@ -436,35 +342,11 @@ async function copyCurlCommand() {
   }
 }
 
-function handleGenerateAuthKey() {
-  authKeyDraft.value = generateGatewayKey();
-  showAuthKey.value = true;
-}
-
-function generateGatewayKey() {
-  const prefix = 'gw_';
-  const size = 24;
-
-  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
-    const bytes = new Uint8Array(size);
-    globalThis.crypto.getRandomValues(bytes);
-    return prefix + Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  }
-
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = prefix;
-  for (let i = 0; i < size * 2; i += 1) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
-}
-
 onMounted(async () => {
   await gatewayStore.fetchStatus();
   await gatewayStore.fetchModels();
   await gatewayStore.fetchConfig();
   await providerStore.fetchProviders();
-  authKeyDraft.value = gatewayStore.gatewayConfig.authKey || "";
   timer = window.setInterval(() => {
     gatewayStore.fetchStatus();
   }, 10000);
@@ -696,14 +578,14 @@ onUnmounted(() => {
 }
 
 .summary-card.is-danger {
-  border-color: color-mix(in srgb, var(--color-danger) 26%, var(--ui-border-default));
-  background: color-mix(in srgb, var(--color-danger) 7%, var(--ui-bg-surface));
+  border-color: color-mix(in srgb, var(--color-error) 26%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-error) 7%, var(--ui-bg-surface));
 }
 
 .summary-card.is-danger .summary-card__icon {
-  border-color: color-mix(in srgb, var(--color-danger) 24%, var(--ui-border-default));
-  background: color-mix(in srgb, var(--color-danger) 12%, var(--ui-bg-surface));
-  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-error) 24%, var(--ui-border-default));
+  background: color-mix(in srgb, var(--color-error) 12%, var(--ui-bg-surface));
+  color: var(--color-error);
 }
 
 .summary-card.is-info {

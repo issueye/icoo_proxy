@@ -14,10 +14,14 @@ import (
 
 type routeTestConfigProvider struct {
 	providers []config.ProviderConfig
+	apiKeys   []config.ApiKeyConfig
+	endpoints []config.EndpointConfig
 	gateway   config.GatewayConfig
 }
 
-func (r *routeTestConfigProvider) GetProviders() []config.ProviderConfig { return r.providers }
+func (r *routeTestConfigProvider) GetProviders() []config.ProviderConfig  { return r.providers }
+func (r *routeTestConfigProvider) GetAPIKeys() []config.ApiKeyConfig      { return r.apiKeys }
+func (r *routeTestConfigProvider) GetEndpoints() []config.EndpointConfig  { return r.endpoints }
 func (r *routeTestConfigProvider) GetGatewayConfig() config.GatewayConfig { return r.gateway }
 func (r *routeTestConfigProvider) AddProvider(p config.ProviderConfig) error {
 	r.providers = append(r.providers, p)
@@ -34,6 +38,18 @@ func (r *routeTestConfigProvider) UpdateProvider(p config.ProviderConfig) error 
 	return nil
 }
 func (r *routeTestConfigProvider) DeleteProvider(id string) error { return nil }
+func (r *routeTestConfigProvider) AddAPIKey(k config.ApiKeyConfig) error {
+	r.apiKeys = append(r.apiKeys, k)
+	return nil
+}
+func (r *routeTestConfigProvider) UpdateAPIKey(k config.ApiKeyConfig) error { return nil }
+func (r *routeTestConfigProvider) DeleteAPIKey(id string) error             { return nil }
+func (r *routeTestConfigProvider) AddEndpoint(e config.EndpointConfig) error {
+	r.endpoints = append(r.endpoints, e)
+	return nil
+}
+func (r *routeTestConfigProvider) UpdateEndpoint(e config.EndpointConfig) error { return nil }
+func (r *routeTestConfigProvider) DeleteEndpoint(id string) error               { return nil }
 func (r *routeTestConfigProvider) SetGatewayConfig(cfg config.GatewayConfig) error {
 	r.gateway = cfg
 	return nil
@@ -49,7 +65,7 @@ func TestTestConnectionUsesStoredAPIKeyWhenRequestKeyMissing(t *testing.T) {
 	m.mu.Lock()
 	m.providers = map[string]*ProviderRuntime{
 		"openai-main": {
-			Config: config.ProviderConfig{ID: "openai-main", Name: "OpenAI", Type: "openai", APIBase: "https://api.openai.com/v1", APIKey: "stored-secret", Enabled: true},
+			Config:  config.ProviderConfig{ID: "openai-main", Name: "OpenAI", Type: "openai", APIBase: "https://api.openai.com/v1", APIKey: "stored-secret", Enabled: true},
 			Adapter: &protocol.OpenAIAdapter{},
 			Healthy: true,
 		},
@@ -171,5 +187,112 @@ func TestDoRequestUsesStreamClientForStreamingRequests(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("StatusCode = %d", resp.StatusCode)
+	}
+}
+
+func TestResolveRequestWithOptionsPrefersMatchedEndpoint(t *testing.T) {
+	protocol.RegisterDefaults()
+	m := GetManager()
+	m.mu.Lock()
+	m.providers = map[string]*ProviderRuntime{
+		"openai-main": {
+			Config:  config.ProviderConfig{ID: "openai-main", Name: "OpenAI", Type: "openai", Enabled: true, LLMs: []config.ModelEntry{{Model: "gpt-4o-mini", Target: "gpt-4o-mini-upstream"}}},
+			Adapter: &protocol.OpenAIAdapter{},
+		},
+		"openai-fallback": {
+			Config:  config.ProviderConfig{ID: "openai-fallback", Name: "Fallback", Type: "openai", Enabled: true},
+			Adapter: &protocol.OpenAIAdapter{},
+		},
+	}
+	m.mu.Unlock()
+	m.SetConfigProvider(&routeTestConfigProvider{
+		gateway: config.GatewayConfig{DefaultProvider: "openai-fallback"},
+		endpoints: []config.EndpointConfig{
+			{ID: "ep-fallback", ProviderID: "openai-fallback", Path: "/v1/chat/completions", Method: "POST", Enabled: true, Priority: 1},
+			{ID: "ep-main", ProviderID: "openai-main", Path: "/v1/chat/completions", Method: "POST", Enabled: true, IsDefault: true, Priority: 10},
+		},
+	})
+
+	decision := m.ResolveRequestWithOptions(&protocol.InternalRequest{Model: "gpt-4o-mini"}, ResolveRequestOptions{GatewayPath: "/v1/chat/completions", Method: "POST"})
+	if decision == nil || decision.Provider == nil || decision.Endpoint == nil {
+		t.Fatalf("expected route decision with endpoint")
+	}
+	if decision.Provider.Config.ID != "openai-main" {
+		t.Fatalf("provider id = %q", decision.Provider.Config.ID)
+	}
+	if decision.Endpoint.ID != "ep-main" {
+		t.Fatalf("endpoint id = %q", decision.Endpoint.ID)
+	}
+	if decision.TargetModel != "gpt-4o-mini-upstream" {
+		t.Fatalf("target model = %q", decision.TargetModel)
+	}
+}
+
+func TestResolveRequestWithOptionsRespectsRestrictedAPIKeyScope(t *testing.T) {
+	protocol.RegisterDefaults()
+	m := GetManager()
+	m.mu.Lock()
+	m.providers = map[string]*ProviderRuntime{
+		"openai-main": {
+			Config:  config.ProviderConfig{ID: "openai-main", Name: "OpenAI", Type: "openai", Enabled: true},
+			Adapter: &protocol.OpenAIAdapter{},
+		},
+		"openai-alt": {
+			Config:  config.ProviderConfig{ID: "openai-alt", Name: "OpenAI Alt", Type: "openai", Enabled: true},
+			Adapter: &protocol.OpenAIAdapter{},
+		},
+	}
+	m.mu.Unlock()
+	m.SetConfigProvider(&routeTestConfigProvider{
+		apiKeys: []config.ApiKeyConfig{{
+			ID:          "key-1",
+			Key:         "secret-key",
+			Enabled:     true,
+			ScopeMode:   config.ApiKeyScopeRestricted,
+			EndpointIDs: []string{"ep-main"},
+		}},
+		endpoints: []config.EndpointConfig{
+			{ID: "ep-main", ProviderID: "openai-main", Path: "/v1/chat/completions", Method: "POST", Enabled: true, Priority: 10},
+			{ID: "ep-alt", ProviderID: "openai-alt", Path: "/v1/chat/completions", Method: "POST", Enabled: true, Priority: 20},
+		},
+	})
+
+	decision := m.ResolveRequestWithOptions(&protocol.InternalRequest{Model: "gpt-4o-mini"}, ResolveRequestOptions{GatewayPath: "/v1/chat/completions", Method: "POST", APIKey: "secret-key"})
+	if decision == nil || decision.Provider == nil || decision.Endpoint == nil {
+		t.Fatalf("expected route decision with endpoint")
+	}
+	if decision.Endpoint.ID != "ep-main" {
+		t.Fatalf("endpoint id = %q", decision.Endpoint.ID)
+	}
+	if decision.Provider.Config.ID != "openai-main" {
+		t.Fatalf("provider id = %q", decision.Provider.Config.ID)
+	}
+}
+
+func TestResolveRequestWithOptionsFallsBackWithoutEndpointMatch(t *testing.T) {
+	protocol.RegisterDefaults()
+	m := GetManager()
+	m.mu.Lock()
+	m.providers = map[string]*ProviderRuntime{
+		"openai-main": {
+			Config:  config.ProviderConfig{ID: "openai-main", Name: "OpenAI", Type: "openai", Enabled: true},
+			Adapter: &protocol.OpenAIAdapter{},
+			Models:  []protocol.ModelInfo{{ID: "gpt-4o-mini"}},
+		},
+	}
+	m.mu.Unlock()
+	m.SetConfigProvider(&routeTestConfigProvider{
+		endpoints: []config.EndpointConfig{{ID: "ep-other", ProviderID: "openai-main", Path: "/v1/responses", Method: "POST", Enabled: true}},
+	})
+
+	decision := m.ResolveRequestWithOptions(&protocol.InternalRequest{Model: "gpt-4o-mini"}, ResolveRequestOptions{GatewayPath: "/v1/chat/completions", Method: "POST"})
+	if decision == nil || decision.Provider == nil {
+		t.Fatalf("expected fallback route decision")
+	}
+	if decision.Provider.Config.ID != "openai-main" {
+		t.Fatalf("provider id = %q", decision.Provider.Config.ID)
+	}
+	if decision.Endpoint != nil {
+		t.Fatalf("expected nil endpoint on fallback, got %q", decision.Endpoint.ID)
 	}
 }

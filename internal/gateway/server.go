@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"icoo_proxy/internal/config"
 	"icoo_proxy/internal/provider"
 )
 
@@ -120,6 +121,10 @@ func (s *Server) GetPort() int {
 
 // --- Middleware ---
 
+type contextKey string
+
+const apiKeyContextKey contextKey = "api-key"
+
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -163,9 +168,8 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gwCfg := provider.GetManager().GetGatewayConfig()
-		requiredKey := strings.TrimSpace(gwCfg.AuthKey)
-		if requiredKey == "" {
+		apiKeys := provider.GetManager().GetAPIKeys()
+		if len(apiKeys) == 0 {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -178,15 +182,35 @@ func authMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		if providedKey != requiredKey {
+		if !isAuthorizedAPIKey(apiKeys, providedKey) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"error":{"message":"Unauthorized","type":"authentication_error"}}`))
 			return
 		}
 
+		if providedKey != "" {
+			r = r.WithContext(context.WithValue(r.Context(), apiKeyContextKey, providedKey))
+		}
+
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isAuthorizedAPIKey(apiKeys []config.ApiKeyConfig, providedKey string) bool {
+	providedKey = strings.TrimSpace(providedKey)
+	if providedKey == "" {
+		return false
+	}
+	for _, item := range apiKeys {
+		if !item.Enabled {
+			continue
+		}
+		if strings.TrimSpace(item.Key) == providedKey {
+			return true
+		}
+	}
+	return false
 }
 
 type responseWriter struct {

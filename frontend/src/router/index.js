@@ -14,6 +14,16 @@ const routes = [
     component: () => import('../views/ProvidersView.vue'),
   },
   {
+    path: '/api-keys',
+    name: 'ApiKeys',
+    component: () => import('../views/ApiKeysView.vue'),
+  },
+  {
+    path: '/endpoints',
+    name: 'Endpoints',
+    component: () => import('../views/EndpointsView.vue'),
+  },
+  {
     path: '/logs',
     name: 'Logs',
     component: () => import('../views/LogsView.vue'),

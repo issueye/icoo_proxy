@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // GatewayConfig holds gateway server configuration.
 type GatewayConfig struct {
 	ListenHost      string `json:"listenHost" toml:"listen_host"`
@@ -8,7 +10,39 @@ type GatewayConfig struct {
 	LogLevel        string `json:"logLevel" toml:"log_level"`
 	RetryCount      int    `json:"retryCount" toml:"retry_count"`
 	RetryIntervalMs int    `json:"retryIntervalMs" toml:"retry_interval_ms"`
-	AuthKey         string `json:"authKey" toml:"auth_key"`
+	// Deprecated: retained only for one-way migration from legacy config.
+	AuthKey string `json:"authKey,omitempty" toml:"auth_key,omitempty"`
+}
+
+// ApiKeyConfig holds gateway access credentials and scope.
+type ApiKeyConfig struct {
+	ID          string    `json:"id" toml:"id"`
+	Name        string    `json:"name" toml:"name"`
+	Key         string    `json:"key" toml:"key"`
+	Description string    `json:"description" toml:"description"`
+	Enabled     bool      `json:"enabled" toml:"enabled"`
+	ScopeMode   string    `json:"scopeMode" toml:"scope_mode"`
+	ProviderIDs []string  `json:"providerIds" toml:"provider_ids"`
+	EndpointIDs []string  `json:"endpointIds" toml:"endpoint_ids"`
+	LastUsedAt  time.Time `json:"lastUsedAt" toml:"last_used_at"`
+	CreatedAt   time.Time `json:"createdAt" toml:"created_at"`
+	UpdatedAt   time.Time `json:"updatedAt" toml:"updated_at"`
+}
+
+// EndpointConfig describes an upstream endpoint.
+type EndpointConfig struct {
+	ID               string `json:"id" toml:"id"`
+	Name             string `json:"name" toml:"name"`
+	ProviderID       string `json:"providerId" toml:"provider_id"`
+	Path             string `json:"path" toml:"path"`
+	Method           string `json:"method" toml:"method"`
+	Capability       string `json:"capability" toml:"capability"`
+	RequestProtocol  string `json:"requestProtocol" toml:"request_protocol"`
+	ResponseProtocol string `json:"responseProtocol" toml:"response_protocol"`
+	Enabled          bool   `json:"enabled" toml:"enabled"`
+	Priority         int    `json:"priority" toml:"priority"`
+	IsDefault        bool   `json:"isDefault" toml:"is_default"`
+	Remark           string `json:"remark" toml:"remark"`
 }
 
 // ProviderConfig holds a single AI provider configuration.
@@ -31,6 +65,9 @@ const (
 	ProviderEndpointModeResponses         = "responses"
 	ProviderEndpointModeAnthropicMessages = "anthropic_messages"
 	ProviderEndpointModeGeminiGenerate    = "gemini_generate_content"
+
+	ApiKeyScopeAll        = "all"
+	ApiKeyScopeRestricted = "restricted"
 )
 
 func NormalizeProviderEndpointMode(providerType, endpointMode string) string {
@@ -47,6 +84,15 @@ func NormalizeProviderEndpointMode(providerType, endpointMode string) string {
 	}
 }
 
+func NormalizeAPIKeyScopeMode(scopeMode string) string {
+	switch scopeMode {
+	case ApiKeyScopeRestricted:
+		return ApiKeyScopeRestricted
+	default:
+		return ApiKeyScopeAll
+	}
+}
+
 // ModelEntry represents a model with optional target mapping.
 type ModelEntry struct {
 	Model  string `json:"model" toml:"model"`   // 对外暴露的模型名称
@@ -59,9 +105,17 @@ type ModelEntry struct {
 // This decouples the provider/gateway packages from the services package.
 type ConfigProvider interface {
 	GetProviders() []ProviderConfig
+	GetAPIKeys() []ApiKeyConfig
+	GetEndpoints() []EndpointConfig
 	GetGatewayConfig() GatewayConfig
 	AddProvider(p ProviderConfig) error
 	UpdateProvider(p ProviderConfig) error
 	DeleteProvider(id string) error
+	AddAPIKey(k ApiKeyConfig) error
+	UpdateAPIKey(k ApiKeyConfig) error
+	DeleteAPIKey(id string) error
+	AddEndpoint(e EndpointConfig) error
+	UpdateEndpoint(e EndpointConfig) error
+	DeleteEndpoint(id string) error
 	SetGatewayConfig(cfg GatewayConfig) error
 }

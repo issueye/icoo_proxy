@@ -51,9 +51,9 @@ const alertVariants = cva(
 }
 
 .alert-box--destructive {
-  border-color: color-mix(in srgb, var(--color-danger) 32%, white);
-  background: color-mix(in srgb, var(--color-danger) 8%, white);
-  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-error) 32%, white);
+  background: color-mix(in srgb, var(--color-error) 8%, white);
+  color: var(--color-error);
 }
 
 .alert-box :deep(svg) {

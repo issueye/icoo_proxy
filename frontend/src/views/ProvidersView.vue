@@ -1,6 +1,6 @@
 <template>
   <div class="providers-view app-page">
-    <UEDPageHeader title="供应商管理" divided>
+    <UEDPageHeader title="供应商管理" description="管理上游服务、连接状态与模型映射，决定网关如何对外路由。" divided>
       <template #actions>
         <button class="btn btn-primary" @click="openAddDialog">
           <Plus :size="14" />
@@ -23,6 +23,12 @@
           <label class="toolbar-label">状态</label>
           <Select v-model="statusFilter" :options="statusFilterOptions" class="toolbar-select" />
         </div>
+      </div>
+      <div class="toolbar-summary providers-summary">
+        <span class="toolbar-chip">共 {{ providerStore.providers.length }} 个</span>
+        <span class="toolbar-chip">启用 {{ enabledProviderCount }} 个</span>
+        <span class="toolbar-chip">健康 {{ healthyProviderCount }} 个</span>
+        <span class="toolbar-chip">当前显示 {{ filteredProviders.length }} 个</span>
       </div>
     </section>
 
@@ -392,6 +398,14 @@ const filteredProviders = computed(() => {
     return matchesKeyword && matchesType && matchesStatus;
   });
 });
+
+const enabledProviderCount = computed(() =>
+  providerStore.providers.filter((item) => item.enabled).length
+);
+
+const healthyProviderCount = computed(() =>
+  providerStore.providers.filter((item) => item.enabled && item.healthy).length
+);
 
 function normalizeEndpointMode(type, endpointMode = '') {
   const options = endpointModeOptionsMap[type] || endpointModeOptionsMap.openai;
@@ -817,6 +831,10 @@ onMounted(() => {
   font-size: 18px;
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+.providers-summary {
+  justify-content: flex-end;
 }
 
 @media (max-width: 820px) {

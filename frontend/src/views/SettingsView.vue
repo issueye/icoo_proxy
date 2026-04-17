@@ -1,242 +1,224 @@
 <template>
-    <div class="page-shell settings-page">
-        <div class="page-frame">
-            <aside class="settings-sidebar surface-muted page-panel">
-                <div class="settings-sidebar-top">
-                    <div class="settings-sidebar-header">
-                        <div>
-                            <div class="section-title">设置中心</div>
-                        </div>
-                        <button @click="router.back()" class="btn btn-secondary btn-icon">
-                            <ArrowLeftIcon :size="18" />
-                        </button>
-                    </div>
-                </div>
-
-                <nav class="settings-nav">
-                    <button
-                        v-for="item in menuItems"
-                        :key="item.key"
-                        @click="activeSection = item.key"
-                        class="settings-nav-item"
-                        :class="{ 'is-active': activeSection === item.key }"
-                    >
-                        <div class="settings-nav-icon">
-                            <component :is="item.icon" :size="16" />
-                        </div>
-                        <span class="settings-nav-label">{{ item.label }}</span>
-                    </button>
-                </nav>
-
-                <div class="settings-sidebar-bottom">
-                    <div class="info-chip settings-sidebar-chip">
-                        当前分区 · {{ currentMenuLabel }}
-                    </div>
-                </div>
-            </aside>
-
-            <main class="settings-main surface-panel page-panel">
-                <div class="settings-main-inner">
-                    <GatewaySettings v-if="activeSection === 'gateway'" />
-                    <AppearanceSettings v-else-if="activeSection === 'appearance'" />
-                    <AboutSettings v-else-if="activeSection === 'about'" />
-                </div>
-            </main>
+  <UEDPageShell class="settings-page" sidebar-width="280px" gap="16px">
+    <template #sidebar>
+      <div class="settings-sidebar-shell">
+        <div class="settings-sidebar-top">
+          <UEDPageHeader
+            title="设置中心"
+            description="统一管理网关接入、界面主题与版本信息。"
+            compact
+          >
+            <template #actions>
+              <button @click="router.back()" class="btn btn-secondary btn-icon" title="返回">
+                <ArrowLeftIcon :size="16" />
+              </button>
+            </template>
+          </UEDPageHeader>
         </div>
+
+        <nav class="settings-nav">
+          <button
+            v-for="item in menuItems"
+            :key="item.key"
+            @click="activeSection = item.key"
+            class="settings-nav-item"
+            :class="{ 'is-active': activeSection === item.key }"
+          >
+            <div class="settings-nav-icon">
+              <component :is="item.icon" :size="16" />
+            </div>
+            <div class="settings-nav-copy">
+              <span class="settings-nav-label">{{ item.label }}</span>
+              <span class="settings-nav-meta">{{ item.badge }}</span>
+            </div>
+          </button>
+        </nav>
+
+        <div class="settings-sidebar-bottom">
+          <div class="info-chip settings-sidebar-chip">
+            当前分区 · {{ currentMenuLabel }}
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div class="app-page settings-main-page">
+      <UEDPageHeader
+        :title="currentMenu.label"
+        :description="currentMenu.badge"
+        :icon="currentMenu.icon"
+        divided
+      />
+
+      <section class="settings-main-panel ued-panel ued-panel--raised">
+        <div class="settings-main-inner">
+          <GatewaySettings v-if="activeSection === 'gateway'" />
+          <AppearanceSettings v-else-if="activeSection === 'appearance'" />
+          <AboutSettings v-else-if="activeSection === 'about'" />
+        </div>
+      </section>
     </div>
+  </UEDPageShell>
 </template>
 
 <script setup>
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
-    ArrowLeft as ArrowLeftIcon,
-    Palette as PaletteIcon,
-    Info as InfoIcon,
-    Network as NetworkIcon,
+  ArrowLeft as ArrowLeftIcon,
+  Palette as PaletteIcon,
+  Info as InfoIcon,
+  Network as NetworkIcon,
 } from "lucide-vue-next";
 
 import GatewaySettings from "@/components/settings/GatewaySettings.vue";
 import AppearanceSettings from "@/components/settings/AppearanceSettings.vue";
 import AboutSettings from "@/components/settings/AboutSettings.vue";
+import { UEDPageHeader, UEDPageShell } from "@/components/layout";
 
 const router = useRouter();
 
 const menuItems = [
-    { key: "gateway", label: "网关", icon: NetworkIcon, badge: "监听地址" },
-    { key: "appearance", label: "外观", icon: PaletteIcon, badge: "视觉主题" },
-    { key: "about", label: "关于", icon: InfoIcon, badge: "版本信息" },
+  { key: "gateway", label: "网关", icon: NetworkIcon, badge: "监听地址、API 密钥与基础行为" },
+  { key: "appearance", label: "外观", icon: PaletteIcon, badge: "主题、配色与视觉偏好" },
+  { key: "about", label: "关于", icon: InfoIcon, badge: "版本信息与项目说明" },
 ];
 
 const activeSection = ref("gateway");
 const currentMenu = computed(
-    () => menuItems.find((item) => item.key === activeSection.value) || menuItems[0],
+  () => menuItems.find((item) => item.key === activeSection.value) || menuItems[0],
 );
 const currentMenuLabel = computed(() => currentMenu.value.label || "设置");
-const currentMenuIcon = computed(() => currentMenu.value.icon || NetworkIcon);
-const currentMenuBadge = computed(() => currentMenu.value.badge || "设置项");
 </script>
 
 <style scoped>
-.settings-sidebar {
-    width: 264px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border: 1px solid var(--ui-border-default);
-    border-radius: var(--radius-lg);
-    background: var(--ui-bg-surface);
-    box-shadow: var(--shadow-rest);
+.settings-page {
+  height: 100%;
+}
+
+.settings-sidebar-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 .settings-sidebar-top,
 .settings-sidebar-bottom {
-    padding: 16px;
+  padding: 8px;
 }
 
 .settings-sidebar-top {
-    border-bottom: 1px solid var(--ui-border-subtle);
+  border-bottom: 1px solid var(--ued-border-subtle);
 }
 
 .settings-sidebar-bottom {
-    border-top: 1px solid var(--ui-border-subtle);
-}
-
-.settings-sidebar-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.settings-sidebar-description {
-    margin: 4px 0 0;
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--color-text-muted);
+  margin-top: auto;
+  border-top: 1px solid var(--ued-border-subtle);
 }
 
 .settings-nav {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 8px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .settings-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 36px;
-    padding: 0 10px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    color: var(--color-text-secondary);
-    text-align: left;
-    transition: all 0.14s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--ued-radius-md);
+  color: var(--ued-text-secondary);
+  text-align: left;
+  transition: all 0.14s ease;
 }
 
 .settings-nav-item:hover {
-    background: var(--ui-bg-surface-hover);
-    border-color: var(--ui-border-subtle);
-    color: var(--color-text-primary);
+  background: var(--ued-bg-panel-hover);
+  border-color: var(--ued-border-subtle);
+  color: var(--ued-text-primary);
 }
 
 .settings-nav-item.is-active {
-    background: var(--color-accent-soft);
-    border-color: color-mix(in srgb, var(--color-accent) 24%, var(--ui-border-default));
-    color: var(--color-accent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ued-accent-soft) 88%, white), var(--ued-accent-soft));
+  border-color: color-mix(in srgb, var(--ued-accent) 22%, var(--ued-border-default));
+  color: var(--ued-accent);
+  box-shadow: var(--ued-shadow-rest);
 }
 
 .settings-nav-icon {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--ui-border-default);
-    border-radius: var(--radius-sm);
-    background: var(--ui-bg-surface-muted);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ued-border-default);
+  border-radius: var(--ued-radius-sm);
+  background: var(--ued-bg-panel-muted);
+  flex-shrink: 0;
+}
+
+.settings-nav-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .settings-nav-label {
-    font-size: 13px;
-    font-weight: 600;
+  font-size: 13px;
+  font-weight: 600;
+  color: currentColor;
+}
+
+.settings-nav-meta {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ued-text-muted);
 }
 
 .settings-sidebar-chip {
-    width: 100%;
-    justify-content: center;
+  width: 100%;
+  justify-content: center;
 }
 
-.settings-main {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    border: 1px solid var(--ui-border-default);
-    border-radius: var(--radius-lg);
-    background: var(--ui-bg-surface);
-    box-shadow: var(--shadow-rest);
+.settings-main-page {
+  padding: 0;
+  gap: 16px;
+  background: transparent;
+}
+
+.settings-main-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .settings-main-inner {
-    padding: 16px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.settings-hero {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 16px;
-    padding: 14px 16px;
-    border: 1px solid var(--ui-border-default);
-    border-radius: var(--radius-md);
-    background: var(--ui-bg-surface-muted);
-}
-
-.settings-page :deep(.page-panel) {
-    border-radius: var(--radius-lg);
-}
-
-.settings-hero-badges {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
-@media (max-width: 1024px) {
-    .settings-sidebar {
-        width: 236px;
-    }
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px;
 }
 
 @media (max-width: 860px) {
-    .page-frame {
-        flex-direction: column;
-    }
+  .settings-page :deep(.ued-page-shell__sidebar) {
+    min-height: auto;
+  }
 
-    .settings-sidebar {
-        width: 100%;
-    }
+  .settings-nav-meta {
+    display: none;
+  }
 
-    .settings-hero {
-        flex-direction: column;
-    }
-
-    .settings-hero-badges {
-        justify-content: flex-start;
-    }
+  .settings-main-page {
+    min-height: auto;
+  }
 }
 </style>
-

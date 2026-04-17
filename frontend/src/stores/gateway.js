@@ -12,6 +12,7 @@ export const useGatewayStore = defineStore('gateway', () => {
   const port = ref(16790);
   const providerCount = ref(0);
   const healthyCount = ref(0);
+  const apiKeyCount = ref(0);
   const models = ref([]);
   const requestLogs = ref([]);
   const logsLoading = ref(false);
@@ -22,7 +23,6 @@ export const useGatewayStore = defineStore('gateway', () => {
     logLevel: "info",
     retryCount: 2,
     retryIntervalMs: 500,
-    authKey: "",
   });
   const loading = ref(false);
   const error = ref(null);
@@ -58,6 +58,18 @@ export const useGatewayStore = defineStore('gateway', () => {
     }
   }
 
+  async function fetchAPIKeys() {
+    if (!isWailsEnv()) return;
+    try {
+      const result = await window.go.services.App.GetAPIKeys();
+      const data = JSON.parse(result);
+      apiKeyCount.value = Array.isArray(data) ? data.length : 0;
+    } catch (e) {
+      error.value = e.message;
+      apiKeyCount.value = 0;
+    }
+  }
+
   async function fetchConfig() {
     if (!isWailsEnv()) return;
     try {
@@ -70,10 +82,10 @@ export const useGatewayStore = defineStore('gateway', () => {
         logLevel: data.logLevel ?? "info",
         retryCount: data.retryCount ?? 2,
         retryIntervalMs: data.retryIntervalMs ?? 500,
-        authKey: data.authKey ?? "",
       };
       host.value = gatewayConfig.value.listenHost;
       port.value = gatewayConfig.value.listenPort;
+      await fetchAPIKeys();
     } catch (e) {
       error.value = e.message;
     }
@@ -94,12 +106,12 @@ export const useGatewayStore = defineStore('gateway', () => {
         nextConfig.logLevel || "info",
         Number(nextConfig.retryCount) || 2,
         Number(nextConfig.retryIntervalMs) || 500,
-        nextConfig.authKey || "",
       );
       gatewayConfig.value = nextConfig;
       host.value = nextConfig.listenHost || '127.0.0.1';
       port.value = Number(nextConfig.listenPort) || 16790;
       await fetchStatus();
+      await fetchAPIKeys();
     } catch (e) {
       error.value = e.message;
       throw e;
@@ -158,9 +170,9 @@ export const useGatewayStore = defineStore('gateway', () => {
   }
 
   return {
-    running, host, port, providerCount, healthyCount, models, requestLogs, logsLoading, gatewayConfig, loading, error,
+    running, host, port, providerCount, healthyCount, apiKeyCount, models, requestLogs, logsLoading, gatewayConfig, loading, error,
     statusText, statusColor,
-    fetchStatus, fetchModels, fetchConfig, saveConfig, fetchRequestLogs, refreshModels, startGateway, stopGateway,
+    fetchStatus, fetchModels, fetchAPIKeys, fetchConfig, saveConfig, fetchRequestLogs, refreshModels, startGateway, stopGateway,
   };
 });
 

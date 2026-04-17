@@ -91,7 +91,11 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// Find provider for this request
 	pm := provider.GetManager()
-	decision := pm.ResolveRequest(internalReq)
+	decision := pm.ResolveRequestWithOptions(internalReq, provider.ResolveRequestOptions{
+		GatewayPath: r.URL.Path,
+		Method:      r.Method,
+		APIKey:      requestAPIKey(r),
+	})
 	if decision == nil || decision.Provider == nil {
 		logEntry.ErrorMessage = fmt.Sprintf("no provider found for model: %s", model)
 		writeError(w, http.StatusNotFound, fmt.Sprintf("No provider found for model: %s", model), "model_not_found")
@@ -131,13 +135,13 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	populateUpstreamTarget(&logEntry, p, internalReq)
+	populateUpstreamTarget(&logEntry, decision, internalReq)
 
 	// Need protocol conversion
 	if internalReq.Stream {
-		h.handleStreamWithConversion(w, r, p, internalReq, &logEntry)
+		h.handleStreamWithConversion(w, r, decision, internalReq, &logEntry)
 	} else {
-		h.handleNonStreamWithConversion(w, r, p, internalReq, &logEntry)
+		h.handleNonStreamWithConversion(w, r, decision, internalReq, &logEntry)
 	}
 }
 
@@ -195,7 +199,11 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pm := provider.GetManager()
-	decision := pm.ResolveRequest(internalReq)
+	decision := pm.ResolveRequestWithOptions(internalReq, provider.ResolveRequestOptions{
+		GatewayPath: r.URL.Path,
+		Method:      r.Method,
+		APIKey:      requestAPIKey(r),
+	})
 	if decision == nil || decision.Provider == nil {
 		logEntry.ErrorMessage = fmt.Sprintf("no provider found for model: %s", model)
 		writeError(w, http.StatusNotFound, fmt.Sprintf("No provider found for model: %s", model), "model_not_found")
@@ -214,13 +222,13 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	}
 	internalReq.Model = actualModel
 	logEntry.TargetModel = actualModel
-	populateUpstreamTarget(&logEntry, p, internalReq)
+	populateUpstreamTarget(&logEntry, decision, internalReq)
 
 	if internalReq.Stream {
-		h.handleResponsesStream(w, r, p, internalReq, &logEntry)
+		h.handleResponsesStream(w, r, decision, internalReq, &logEntry)
 		return
 	}
-	h.handleResponsesNonStream(w, r, p, internalReq, &logEntry)
+	h.handleResponsesNonStream(w, r, decision, internalReq, &logEntry)
 }
 
 // handlePassthrough forwards requests directly to OpenAI-compatible providers.
@@ -255,14 +263,15 @@ func (h *Handler) handlePassthrough(w http.ResponseWriter, r *http.Request, p *p
 }
 
 // handleNonStreamWithConversion handles non-streaming requests with protocol conversion.
-func (h *Handler) handleNonStreamWithConversion(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
-	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
+func (h *Handler) handleNonStreamWithConversion(w http.ResponseWriter, r *http.Request, decision *provider.RouteDecision, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
+	resp, err := provider.GetManager().DoRequestWithRetryForDecision(r.Context(), decision, internalReq)
 	if err != nil {
 		writeProviderError(w, logEntry, err)
 		return
 	}
 	defer resp.Body.Close()
 
+	p := decision.Provider
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		logEntry.ErrorMessage = string(body)
@@ -306,14 +315,15 @@ func (h *Handler) handleNonStreamWithConversion(w http.ResponseWriter, r *http.R
 }
 
 // handleStreamWithConversion handles streaming requests with protocol conversion.
-func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
-	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
+func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Request, decision *provider.RouteDecision, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
+	resp, err := provider.GetManager().DoRequestWithRetryForDecision(r.Context(), decision, internalReq)
 	if err != nil {
 		writeProviderError(w, logEntry, err)
 		return
 	}
 	defer resp.Body.Close()
 
+	p := decision.Provider
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		logEntry.ErrorMessage = string(body)
@@ -441,14 +451,15 @@ func (h *Handler) handleStreamWithConversion(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
-	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
+func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, r *http.Request, decision *provider.RouteDecision, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
+	resp, err := provider.GetManager().DoRequestWithRetryForDecision(r.Context(), decision, internalReq)
 	if err != nil {
 		writeProviderError(w, logEntry, err)
 		return
 	}
 	defer resp.Body.Close()
 
+	p := decision.Provider
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		logEntry.ErrorMessage = string(body)
@@ -486,14 +497,15 @@ func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, r *http.Reques
 	w.Write(responsesResp)
 }
 
-func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
-	resp, err := provider.GetManager().DoRequestWithRetry(r.Context(), p, internalReq)
+func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, decision *provider.RouteDecision, internalReq *protocol.InternalRequest, logEntry *audit.RequestLogInput) {
+	resp, err := provider.GetManager().DoRequestWithRetryForDecision(r.Context(), decision, internalReq)
 	if err != nil {
 		writeProviderError(w, logEntry, err)
 		return
 	}
 	defer resp.Body.Close()
 
+	p := decision.Provider
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		logEntry.ErrorMessage = string(body)
@@ -768,12 +780,25 @@ func serializeHeaders(header http.Header) string {
 	return truncatePayload(payload)
 }
 
-func populateUpstreamTarget(logEntry *audit.RequestLogInput, p *provider.ProviderRuntime, internalReq *protocol.InternalRequest) {
-	if logEntry == nil || p == nil {
+func requestAPIKey(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	value, _ := r.Context().Value(apiKeyContextKey).(string)
+	return strings.TrimSpace(value)
+}
+
+func populateUpstreamTarget(logEntry *audit.RequestLogInput, decision *provider.RouteDecision, internalReq *protocol.InternalRequest) {
+	if logEntry == nil || decision == nil || decision.Provider == nil {
 		return
 	}
+	p := decision.Provider
 	logEntry.EndpointMode = config.NormalizeProviderEndpointMode(p.Config.Type, p.Config.EndpointMode)
 	logEntry.UpstreamBase = p.Config.APIBase
+	if decision.UpstreamPath != "" {
+		logEntry.UpstreamPath = decision.UpstreamPath
+		return
+	}
 	if internalReq == nil {
 		return
 	}

@@ -150,6 +150,8 @@ import { useGatewayStore } from "./stores/gateway";
 import {
   Server,
   Cpu,
+  KeyRound,
+  Route,
   ScrollText,
   Settings,
   RefreshCw,
@@ -183,6 +185,8 @@ function handleRefresh() {
 const menuItems = [
   { path: "/", label: "网关", icon: Server },
   { path: "/providers", label: "供应商", icon: Cpu },
+  { path: "/api-keys", label: "API 密钥", icon: KeyRound },
+  { path: "/endpoints", label: "端点", icon: Route },
   { path: "/logs", label: "日志", icon: ScrollText },
 ];
 
@@ -249,7 +253,9 @@ function handleClose() {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: var(--ui-bg-window);
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-accent) 8%, transparent), transparent 28%),
+    var(--ui-bg-window);
 }
 
 .custom-header {

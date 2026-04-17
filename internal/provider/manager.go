@@ -23,8 +23,17 @@ type ProviderRuntime struct {
 }
 
 type RouteDecision struct {
-	Provider    *ProviderRuntime
-	TargetModel string
+	Provider       *ProviderRuntime
+	Endpoint       *config.EndpointConfig
+	TargetModel    string
+	UpstreamMethod string
+	UpstreamPath   string
+}
+
+type ResolveRequestOptions struct {
+	GatewayPath string
+	Method      string
+	APIKey      string
 }
 
 type HTTPError struct {
@@ -123,6 +132,13 @@ func (m *Manager) GetGatewayConfig() config.GatewayConfig {
 		return config.GatewayConfig{}
 	}
 	return m.configProvider.GetGatewayConfig()
+}
+
+func (m *Manager) GetAPIKeys() []config.ApiKeyConfig {
+	if m.configProvider == nil {
+		return nil
+	}
+	return m.configProvider.GetAPIKeys()
 }
 
 func adapterForConfig(cfg config.ProviderConfig) (protocol.ProtocolAdapter, error) {
@@ -324,10 +340,38 @@ func (m *Manager) ResolveProvider(model string) *ProviderRuntime {
 }
 
 func (m *Manager) ResolveRequest(req *protocol.InternalRequest) *RouteDecision {
-	model := req.Model
+	return m.ResolveRequestWithOptions(req, ResolveRequestOptions{})
+}
+
+func (m *Manager) ResolveRequestWithOptions(req *protocol.InternalRequest, opts ResolveRequestOptions) *RouteDecision {
+	model := strings.TrimSpace(req.Model)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	var decision *RouteDecision
+	if decision = m.resolveByEndpointLocked(model, opts); decision != nil {
+		return m.finalizeRouteDecisionLocked(req, decision)
+	}
+	if decision = m.resolveByModelLocked(model); decision != nil {
+		return m.finalizeRouteDecisionLocked(req, decision)
+	}
+	if decision = m.resolveByPrefixLocked(model, opts); decision != nil {
+		return m.finalizeRouteDecisionLocked(req, decision)
+	}
+	if decision = m.resolveByDefaultProviderLocked(model, opts); decision != nil {
+		return m.finalizeRouteDecisionLocked(req, decision)
+	}
+	for _, p := range m.providers {
+		if !p.Config.Enabled {
+			continue
+		}
+		decision = &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
+		return m.finalizeRouteDecisionLocked(req, decision)
+	}
+	return nil
+}
+
+func (m *Manager) resolveByModelLocked(model string) *RouteDecision {
 	for _, p := range m.providers {
 		if !p.Config.Enabled {
 			continue
@@ -338,23 +382,158 @@ func (m *Manager) ResolveRequest(req *protocol.InternalRequest) *RouteDecision {
 			}
 		}
 	}
+	return nil
+}
+
+func (m *Manager) resolveByPrefixLocked(model string, opts ResolveRequestOptions) *RouteDecision {
 	if p := m.resolveByPrefix(model); p != nil {
-		return &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
+		decision := &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
+		decision.Endpoint = m.selectEndpointLocked(p.Config.ID, opts)
+		return decision
 	}
-	if m.configProvider != nil {
-		gwCfg := m.configProvider.GetGatewayConfig()
-		if gwCfg.DefaultProvider != "" {
-			if p, ok := m.providers[gwCfg.DefaultProvider]; ok && p.Config.Enabled {
-				return &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
-			}
+	return nil
+}
+
+func (m *Manager) resolveByDefaultProviderLocked(model string, opts ResolveRequestOptions) *RouteDecision {
+	if m.configProvider == nil {
+		return nil
+	}
+	gwCfg := m.configProvider.GetGatewayConfig()
+	if gwCfg.DefaultProvider == "" {
+		return nil
+	}
+	p, ok := m.providers[gwCfg.DefaultProvider]
+	if !ok || !p.Config.Enabled {
+		return nil
+	}
+	decision := &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
+	decision.Endpoint = m.selectEndpointLocked(p.Config.ID, opts)
+	return decision
+}
+
+func (m *Manager) resolveByEndpointLocked(model string, opts ResolveRequestOptions) *RouteDecision {
+	endpoint := m.selectEndpointLocked("", opts)
+	if endpoint == nil {
+		return nil
+	}
+	p, ok := m.providers[endpoint.ProviderID]
+	if !ok || !p.Config.Enabled {
+		return nil
+	}
+	return &RouteDecision{
+		Provider:    p,
+		Endpoint:    endpoint,
+		TargetModel: m.resolveTargetModelLocked(endpoint.ProviderID, model),
+	}
+}
+
+func (m *Manager) selectEndpointLocked(providerID string, opts ResolveRequestOptions) *config.EndpointConfig {
+	if m.configProvider == nil {
+		return nil
+	}
+	gatewayPath := normalizeGatewayPath(opts.GatewayPath)
+	method := normalizeMethod(opts.Method)
+	if gatewayPath == "" || method == "" {
+		return nil
+	}
+
+	apiKey := m.findAPIKeyLocked(opts.APIKey)
+	endpoints := m.configProvider.GetEndpoints()
+	var matched []*config.EndpointConfig
+	for i := range endpoints {
+		ep := &endpoints[i]
+		if !ep.Enabled {
+			continue
+		}
+		if providerID != "" && ep.ProviderID != providerID {
+			continue
+		}
+		if normalizeGatewayPath(ep.Path) != gatewayPath {
+			continue
+		}
+		if normalizeMethod(ep.Method) != method {
+			continue
+		}
+		if !m.apiKeyAllowsEndpointLocked(apiKey, ep) {
+			continue
+		}
+		matched = append(matched, ep)
+	}
+	if len(matched) == 0 {
+		return nil
+	}
+	selected := matched[0]
+	for _, ep := range matched[1:] {
+		if ep.IsDefault && !selected.IsDefault {
+			selected = ep
+			continue
+		}
+		if ep.IsDefault == selected.IsDefault && ep.Priority > selected.Priority {
+			selected = ep
 		}
 	}
-	for _, p := range m.providers {
-		if p.Config.Enabled {
-			return &RouteDecision{Provider: p, TargetModel: m.resolveTargetModelLocked(p.Config.ID, model)}
+	return selected
+}
+
+func (m *Manager) findAPIKeyLocked(providedKey string) *config.ApiKeyConfig {
+	providedKey = strings.TrimSpace(providedKey)
+	if providedKey == "" || m.configProvider == nil {
+		return nil
+	}
+	for _, item := range m.configProvider.GetAPIKeys() {
+		if !item.Enabled {
+			continue
+		}
+		if strings.TrimSpace(item.Key) == providedKey {
+			key := item
+			return &key
 		}
 	}
 	return nil
+}
+
+func (m *Manager) apiKeyAllowsEndpointLocked(apiKey *config.ApiKeyConfig, endpoint *config.EndpointConfig) bool {
+	if endpoint == nil {
+		return false
+	}
+	if apiKey == nil {
+		return true
+	}
+	if config.NormalizeAPIKeyScopeMode(apiKey.ScopeMode) != config.ApiKeyScopeRestricted {
+		return true
+	}
+	if len(apiKey.ProviderIDs) == 0 && len(apiKey.EndpointIDs) == 0 {
+		return false
+	}
+	if containsString(apiKey.EndpointIDs, endpoint.ID) {
+		return true
+	}
+	return containsString(apiKey.ProviderIDs, endpoint.ProviderID)
+}
+
+func normalizeGatewayPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path
+}
+
+func normalizeMethod(method string) string {
+	return strings.ToUpper(strings.TrimSpace(method))
+}
+
+func containsString(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.TrimSpace(value) == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) resolveByPrefix(model string) *ProviderRuntime {
@@ -409,6 +588,88 @@ func (m *Manager) resolveTargetModelLocked(providerID, requestedModel string) st
 		}
 	}
 	return requestedModel
+}
+
+func (m *Manager) finalizeRouteDecisionLocked(req *protocol.InternalRequest, decision *RouteDecision) *RouteDecision {
+	if decision == nil || decision.Provider == nil {
+		return decision
+	}
+	method, path, err := m.resolveUpstreamTargetLocked(decision.Provider, req)
+	if err != nil {
+		return decision
+	}
+	decision.UpstreamMethod = method
+	decision.UpstreamPath = path
+	return decision
+}
+
+func (m *Manager) resolveUpstreamTargetLocked(p *ProviderRuntime, req *protocol.InternalRequest) (string, string, error) {
+	if p == nil || p.Adapter == nil {
+		return "", "", fmt.Errorf("provider adapter not available")
+	}
+	_, path, err := p.Adapter.BuildRequest(req)
+	if err != nil {
+		return "", "", err
+	}
+	return http.MethodPost, path, nil
+}
+
+func (m *Manager) DoRequestForDecision(ctx context.Context, decision *RouteDecision, req *protocol.InternalRequest) (*http.Response, error) {
+	if decision == nil || decision.Provider == nil {
+		return nil, fmt.Errorf("route decision provider is required")
+	}
+	body, _, err := decision.Provider.Adapter.BuildRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+	method := decision.UpstreamMethod
+	path := decision.UpstreamPath
+	if method == "" || path == "" {
+		method, path, err = m.resolveUpstreamTargetLocked(decision.Provider, req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve upstream target: %w", err)
+		}
+	}
+	httpReq, err := decision.Provider.Adapter.BuildHTTPRequest(ctx, decision.Provider.Config.APIBase, decision.Provider.Config.APIKey, method, path, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	return m.httpClient(req.Stream).Do(httpReq)
+}
+
+func (m *Manager) DoRequestWithRetryForDecision(ctx context.Context, decision *RouteDecision, req *protocol.InternalRequest) (*http.Response, error) {
+	maxRetries := 2
+	retryInterval := 500 * time.Millisecond
+	if m.configProvider != nil {
+		gwCfg := m.configProvider.GetGatewayConfig()
+		maxRetries = gwCfg.RetryCount
+		retryInterval = time.Duration(gwCfg.RetryIntervalMs) * time.Millisecond
+	}
+
+	var lastErr error
+	for i := 0; i <= maxRetries; i++ {
+		resp, err := m.DoRequestForDecision(ctx, decision, req)
+		if err != nil {
+			lastErr = err
+			if i < maxRetries {
+				time.Sleep(retryInterval)
+				continue
+			}
+			return nil, lastErr
+		}
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			lastErr = &HTTPError{StatusCode: resp.StatusCode, Body: body, Header: resp.Header.Clone()}
+			if i < maxRetries {
+				time.Sleep(retryInterval)
+				continue
+			}
+			return nil, lastErr
+		}
+		return resp, nil
+	}
+	return nil, lastErr
 }
 
 func (m *Manager) DoRequest(ctx context.Context, p *ProviderRuntime, req *protocol.InternalRequest) (*http.Response, error) {

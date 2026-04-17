@@ -138,6 +138,7 @@
     --color-success: var(--ui-success);
     --color-warning: var(--ui-warning);
     --color-error: var(--ui-danger);
+    --color-danger: var(--ui-danger);
     --color-user-bubble: #edf4ff;
     --color-ai-bubble: #ffffff;
 

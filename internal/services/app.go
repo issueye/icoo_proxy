@@ -105,7 +105,7 @@ func (a *App) GetGatewayConfig() string {
 	return string(data)
 }
 
-func (a *App) SetGatewayConfig(listenHost string, listenPort int, defaultProvider, logLevel string, retryCount, retryIntervalMs int, authKey string) error {
+func (a *App) SetGatewayConfig(listenHost string, listenPort int, defaultProvider, logLevel string, retryCount, retryIntervalMs int) error {
 	return GetConfigService().SetGatewayConfig(config.GatewayConfig{
 		ListenHost:      strings.TrimSpace(listenHost),
 		ListenPort:      listenPort,
@@ -113,13 +113,90 @@ func (a *App) SetGatewayConfig(listenHost string, listenPort int, defaultProvide
 		LogLevel:        logLevel,
 		RetryCount:      retryCount,
 		RetryIntervalMs: retryIntervalMs,
-		AuthKey:         strings.TrimSpace(authKey),
 	})
 }
 
 func (a *App) GetProviders() string {
 	pm := provider.GetManager()
 	return provider.ProviderListJSON(pm.GetAll())
+}
+
+func (a *App) GetAPIKeys() string {
+	data, _ := json.Marshal(GetConfigService().GetAPIKeys())
+	return string(data)
+}
+
+func (a *App) AddAPIKey(id, name, key, description string, enabled bool, scopeMode string, providerIDs, endpointIDs []string) error {
+	return GetConfigService().AddAPIKey(config.ApiKeyConfig{
+		ID:          strings.TrimSpace(id),
+		Name:        strings.TrimSpace(name),
+		Key:         strings.TrimSpace(key),
+		Description: strings.TrimSpace(description),
+		Enabled:     enabled,
+		ScopeMode:   strings.TrimSpace(scopeMode),
+		ProviderIDs: providerIDs,
+		EndpointIDs: endpointIDs,
+	})
+}
+
+func (a *App) UpdateAPIKey(id, name, key, description string, enabled bool, scopeMode string, providerIDs, endpointIDs []string) error {
+	return GetConfigService().UpdateAPIKey(config.ApiKeyConfig{
+		ID:          strings.TrimSpace(id),
+		Name:        strings.TrimSpace(name),
+		Key:         strings.TrimSpace(key),
+		Description: strings.TrimSpace(description),
+		Enabled:     enabled,
+		ScopeMode:   strings.TrimSpace(scopeMode),
+		ProviderIDs: providerIDs,
+		EndpointIDs: endpointIDs,
+	})
+}
+
+func (a *App) DeleteAPIKey(id string) error {
+	return GetConfigService().DeleteAPIKey(strings.TrimSpace(id))
+}
+
+func (a *App) GetEndpoints() string {
+	data, _ := json.Marshal(GetConfigService().GetEndpoints())
+	return string(data)
+}
+
+func (a *App) AddEndpoint(id, name, providerID, path, method, capability, requestProtocol, responseProtocol string, enabled bool, priority int, isDefault bool, remark string) error {
+	return GetConfigService().AddEndpoint(config.EndpointConfig{
+		ID:               strings.TrimSpace(id),
+		Name:             strings.TrimSpace(name),
+		ProviderID:       strings.TrimSpace(providerID),
+		Path:             strings.TrimSpace(path),
+		Method:           strings.TrimSpace(method),
+		Capability:       strings.TrimSpace(capability),
+		RequestProtocol:  strings.TrimSpace(requestProtocol),
+		ResponseProtocol: strings.TrimSpace(responseProtocol),
+		Enabled:          enabled,
+		Priority:         priority,
+		IsDefault:        isDefault,
+		Remark:           strings.TrimSpace(remark),
+	})
+}
+
+func (a *App) UpdateEndpoint(id, name, providerID, path, method, capability, requestProtocol, responseProtocol string, enabled bool, priority int, isDefault bool, remark string) error {
+	return GetConfigService().UpdateEndpoint(config.EndpointConfig{
+		ID:               strings.TrimSpace(id),
+		Name:             strings.TrimSpace(name),
+		ProviderID:       strings.TrimSpace(providerID),
+		Path:             strings.TrimSpace(path),
+		Method:           strings.TrimSpace(method),
+		Capability:       strings.TrimSpace(capability),
+		RequestProtocol:  strings.TrimSpace(requestProtocol),
+		ResponseProtocol: strings.TrimSpace(responseProtocol),
+		Enabled:          enabled,
+		Priority:         priority,
+		IsDefault:        isDefault,
+		Remark:           strings.TrimSpace(remark),
+	})
+}
+
+func (a *App) DeleteEndpoint(id string) error {
+	return GetConfigService().DeleteEndpoint(strings.TrimSpace(id))
 }
 
 func (a *App) AddProvider(id, name, providerType, apiBase, apiKey, endpointMode string, enabled bool, priority int) error {
