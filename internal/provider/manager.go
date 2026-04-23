@@ -19,6 +19,7 @@ type ProviderRuntime struct {
 	Config  config.ProviderConfig
 	Adapter protocol.ProtocolAdapter
 	Healthy bool
+	Checked bool
 	Models  []protocol.ModelInfo
 }
 
@@ -208,7 +209,7 @@ func (m *Manager) Add(cfg config.ProviderConfig) error {
 		}
 	}
 	m.mu.Lock()
-	m.providers[cfg.ID] = &ProviderRuntime{Config: cfg, Adapter: adapter, Healthy: false}
+	m.providers[cfg.ID] = &ProviderRuntime{Config: cfg, Adapter: adapter, Healthy: false, Checked: false}
 	m.mu.Unlock()
 	return nil
 }
@@ -231,7 +232,7 @@ func (m *Manager) Update(cfg config.ProviderConfig) error {
 		}
 	}
 	m.mu.Lock()
-	m.providers[cfg.ID] = &ProviderRuntime{Config: cfg, Adapter: adapter, Healthy: false}
+	m.providers[cfg.ID] = &ProviderRuntime{Config: cfg, Adapter: adapter, Healthy: false, Checked: false}
 	m.mu.Unlock()
 	return nil
 }
@@ -266,14 +267,29 @@ func (m *Manager) TestConnection(ctx context.Context, cfg config.ProviderConfig)
 	}
 	resp, err := m.client.Do(req)
 	if err != nil {
+		m.setProviderHealth(cfg.ID, false)
 		return fmt.Errorf("connection failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
+		m.setProviderHealth(cfg.ID, false)
 		return fmt.Errorf("provider returned status %d: %s", resp.StatusCode, string(body))
 	}
+	m.setProviderHealth(cfg.ID, true)
 	return nil
+}
+
+func (m *Manager) setProviderHealth(providerID string, healthy bool) {
+	if strings.TrimSpace(providerID) == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if p, ok := m.providers[providerID]; ok {
+		p.Healthy = healthy
+		p.Checked = true
+	}
 }
 
 func (m *Manager) RefreshModels(ctx context.Context) {
@@ -746,6 +762,7 @@ func ProviderListJSON(providers []*ProviderRuntime) string {
 		EndpointMode string           `json:"endpointMode,omitempty"`
 		Enabled      bool             `json:"enabled"`
 		Healthy      bool             `json:"healthy"`
+		Checked      bool             `json:"checked"`
 		Priority     int              `json:"priority"`
 		LLMs         []config.ModelEntry `json:"llms"`
 		DefaultModel string           `json:"defaultModel"`
@@ -760,6 +777,7 @@ func ProviderListJSON(providers []*ProviderRuntime) string {
 			EndpointMode: p.Config.EndpointMode,
 			Enabled:      p.Config.Enabled,
 			Healthy:      p.Healthy,
+			Checked:      p.Checked,
 			Priority:     p.Config.Priority,
 			LLMs:         p.Config.LLMs,
 			DefaultModel: p.Config.DefaultModel,

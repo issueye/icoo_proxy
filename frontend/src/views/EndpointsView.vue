@@ -88,7 +88,6 @@
     <FloatingDrawer
       v-model:visible="drawerVisible"
       :title="editingId ? '编辑端点' : '新增端点'"
-      description="配置网关入口端点及其关联供应商、协议和优先级。"
       kicker="ENDPOINT"
       width="620px"
       @close="handleDrawerClose"
@@ -203,11 +202,13 @@
 import { computed, onMounted, ref } from 'vue';
 import { DataTable, UEDPageHeader } from '@/components/layout';
 import { FloatingDrawer, Select, StatusBadge } from '@/components/ui';
+import { useConfirm } from '@/composables/useConfirm';
 import { useEndpointStore } from '@/stores/endpoint';
 import { useProviderStore } from '@/stores/provider';
 
 const endpointStore = useEndpointStore();
 const providerStore = useProviderStore();
+const { confirm } = useConfirm();
 
 const columns = [
   { key: 'name', title: '名称' },
@@ -216,7 +217,7 @@ const columns = [
   { key: 'protocol', title: '协议转换', class: 'w-[160px]' },
   { key: 'priority', title: '优先级', class: 'w-[88px]' },
   { key: 'enabled', title: '状态', class: 'w-[96px]' },
-  { key: 'actions', title: '操作', class: 'w-[160px]' },
+  { key: 'actions', title: '操作', class: 'w-[140px]' },
 ];
 
 const statusFilterOptions = [
@@ -342,7 +343,13 @@ async function handleSubmit() {
 }
 
 async function handleDelete(item) {
-  if (!window.confirm(`确认删除端点“${item.name || item.id}”吗？`)) return;
+  const ok = await confirm('删除后该路由入口将立即失效，相关请求可能无法继续转发。', {
+    title: `确认删除端点“${item.name || item.id}”吗？`,
+    confirmText: '确认删除',
+    cancelText: '取消',
+    type: 'danger',
+  });
+  if (!ok) return;
   await endpointStore.deleteEndpoint(item.id);
   if (editingId.value === item.id) {
     handleDrawerClose();

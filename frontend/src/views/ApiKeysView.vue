@@ -48,7 +48,6 @@
       >
         <template #cell-name="{ row }">
           <div class="cell-main">{{ row.name || '-' }}</div>
-          <div class="cell-sub">{{ row.description || '无描述' }}</div>
         </template>
 
         <template #cell-key="{ row }">
@@ -90,7 +89,6 @@
     <FloatingDrawer
       v-model:visible="drawerVisible"
       :title="editingId ? '编辑密钥' : '新增密钥'"
-      description="配置网关访问密钥及其供应商/端点访问范围。"
       kicker="API KEY"
       width="560px"
       @close="handleDrawerClose"
@@ -163,9 +161,6 @@
               searchable
               placeholder="选择允许访问的端点"
             />
-            <p class="form-hint">
-              {{ form.scopeMode === 'restricted' ? '仅允许命中的供应商和端点。' : '全局模式下不限制供应商和端点。' }}
-            </p>
           </div>
         </div>
       </div>
@@ -190,6 +185,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { DataTable, UEDPageHeader } from '@/components/layout';
 import { FloatingDrawer, Select, StatusBadge } from '@/components/ui';
+import { useConfirm } from '@/composables/useConfirm';
 import { useApiKeyStore } from '@/stores/api-key';
 import { useEndpointStore } from '@/stores/endpoint';
 import { useProviderStore } from '@/stores/provider';
@@ -197,6 +193,7 @@ import { useProviderStore } from '@/stores/provider';
 const apiKeyStore = useApiKeyStore();
 const endpointStore = useEndpointStore();
 const providerStore = useProviderStore();
+const { confirm } = useConfirm();
 
 const columns = [
   { key: 'name', title: '名称' },
@@ -360,7 +357,13 @@ async function handleSubmit() {
 }
 
 async function handleDelete(item) {
-  if (!window.confirm(`确认删除 API 密钥“${item.name || item.id}”吗？`)) return;
+  const ok = await confirm(`删除后将立即失去该密钥的访问能力，且无法恢复。`, {
+    title: `确认删除 API 密钥“${item.name || item.id}”吗？`,
+    confirmText: '确认删除',
+    cancelText: '取消',
+    type: 'danger',
+  });
+  if (!ok) return;
   await apiKeyStore.deleteAPIKey(item.id);
   if (editingId.value === item.id) {
     handleDrawerClose();

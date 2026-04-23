@@ -6,7 +6,6 @@
           <div class="brand-mark">IC</div>
           <div class="brand-copy">
             <span class="app-title">icoo_proxy</span>
-            <span class="app-subtitle">{{ currentModule }}</span>
           </div>
         </div>
         <div class="header-tools">
@@ -111,11 +110,17 @@
         </div>
       </aside>
       <main class="main-content">
-        <RouterView v-slot="{ Component, route }">
-          <transition name="fade-slide" mode="out-in">
-            <component :is="Component" :key="route.path" />
-          </transition>
-        </RouterView>
+        <div class="main-content__body">
+          <div class="body-subtitle">
+            <span class="body-subtitle__label">当前模块</span>
+            <span class="body-subtitle__value">{{ currentModule }}</span>
+          </div>
+          <RouterView v-slot="{ Component, route }">
+            <transition name="fade-slide" mode="out-in">
+              <component :is="Component" :key="route.path" />
+            </transition>
+          </RouterView>
+        </div>
       </main>
     </div>
 
@@ -311,8 +316,7 @@ function handleClose() {
 
 .brand-copy {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
 }
 
 .app-title {
@@ -320,11 +324,6 @@ function handleClose() {
   font-weight: 700;
   color: var(--color-text-primary);
   white-space: nowrap;
-}
-
-.app-subtitle {
-  font-size: 12px;
-  color: var(--color-text-muted);
 }
 
 .theme-menu {
@@ -539,6 +538,39 @@ function handleClose() {
   background: var(--ui-bg-app);
 }
 
+.main-content__body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.body-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  background: color-mix(in srgb, var(--ui-bg-toolbar) 72%, var(--ui-bg-surface));
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.body-subtitle__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.body-subtitle__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
 /* 底部状态栏 */
 .app-footer {
   display: flex;
@@ -614,7 +646,6 @@ function handleClose() {
   }
 
   .sidebar-section-title,
-  .app-subtitle,
   .footer-meta {
     display: none;
   }

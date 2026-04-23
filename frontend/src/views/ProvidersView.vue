@@ -70,8 +70,8 @@
 
           <template #cell-status="{ row }">
             <StatusBadge
-              :status="row.healthy ? 'success' : row.enabled ? 'warning' : 'error'"
-              :label="row.healthy ? '正常' : row.enabled ? '异常' : '禁用'"
+              :status="providerStatus(row).badge"
+              :label="providerStatus(row).label"
             />
           </template>
 
@@ -200,62 +200,41 @@
       width="560px"
       @close="closeProviderDrawer"
     >
-      <template #summary>
-        <div class="provider-drawer-summary">
-          <div class="summary-meta">
-            <span class="summary-chip">{{ form.enabled ? '启用' : '禁用' }}</span>
-            <span class="summary-chip">优先级 {{ form.priority }}</span>
+      <div class="provider-form-stack">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">名称</label>
+            <input v-model="form.name" class="form-input" placeholder="如: OpenAI" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">类型</label>
+            <Select v-model="form.type" :options="providerTypeOptions" @update:modelValue="handleTypeChange" />
           </div>
         </div>
-      </template>
 
-      <div class="provider-form-stack">
-        <section class="provider-form-section">
-          <div class="section-head compact">
-            <div class="section-title">基础信息</div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">端点转发</label>
+            <Select v-model="form.endpointMode" :options="endpointModeOptions" />
           </div>
-          <div class="form-grid">
-            <div class="form-field">
-              <label class="form-label">名称</label>
-              <input v-model="form.name" class="form-input" placeholder="如: OpenAI" />
-            </div>
-            <div class="form-field">
-              <label class="form-label">类型</label>
-              <Select v-model="form.type" :options="providerTypeOptions" @update:modelValue="handleTypeChange" />
-            </div>
+          <div class="form-field">
+            <label class="form-label">优先级</label>
+            <input v-model.number="form.priority" class="form-input" type="number" min="0" />
           </div>
-        </section>
+          <div class="form-field full">
+            <label class="form-label">API Base URL</label>
+            <input v-model="form.apiBase" class="form-input" placeholder="https://api.openai.com/v1" />
+          </div>
+          <div class="form-field full">
+            <label class="form-label">API Key</label>
+            <input v-model="form.apiKey" class="form-input" type="password" :placeholder="isEditing ? '留空则保留原有密钥' : 'sk-...'" />
+          </div>
+        </div>
 
-        <section class="provider-form-section">
-          <div class="section-head compact">
-            <div class="section-title">连接配置</div>
-          </div>
-          <div class="form-grid">
-            <div class="form-field">
-              <label class="form-label">端点转发</label>
-              <Select v-model="form.endpointMode" :options="endpointModeOptions" />
-            </div>
-            <div class="form-field">
-              <label class="form-label">优先级</label>
-              <input v-model.number="form.priority" class="form-input" type="number" min="0" />
-            </div>
-            <div class="form-field full">
-              <label class="form-label">API Base URL</label>
-              <input v-model="form.apiBase" class="form-input" placeholder="https://api.openai.com/v1" />
-            </div>
-            <div class="form-field full">
-              <label class="form-label">API Key</label>
-              <input v-model="form.apiKey" class="form-input" type="password" :placeholder="isEditing ? '留空则保留原有密钥' : 'sk-...'" />
-            </div>
-          </div>
-        </section>
-
-        <section class="provider-form-section">
-          <div class="section-head compact">
-            <div class="section-title">状态</div>
-          </div>
+        <div class="form-field full">
+          <label class="form-label">状态</label>
           <Select v-model="form.enabled" :options="enabledOptions" />
-        </section>
+        </div>
       </div>
 
       <template #footer>
@@ -351,6 +330,7 @@ const typeFilterOptions = [
 
 const statusFilterOptions = [
   { label: '全部状态', value: 'all' },
+  { label: '未检测', value: 'unchecked' },
   { label: '健康', value: 'healthy' },
   { label: '异常', value: 'warning' },
   { label: '禁用', value: 'disabled' },
@@ -387,7 +367,7 @@ const filteredProviders = computed(() => {
       || item.name.toLowerCase().includes(keyword.value.toLowerCase())
       || item.apiBase.toLowerCase().includes(keyword.value.toLowerCase());
     const matchesType = typeFilter.value === 'all' || item.type === typeFilter.value;
-    const status = item.healthy ? 'healthy' : item.enabled ? 'warning' : 'disabled';
+    const status = providerStatus(item).value;
     const matchesStatus = statusFilter.value === 'all' || status === statusFilter.value;
     return matchesKeyword && matchesType && matchesStatus;
   });
@@ -400,6 +380,19 @@ const enabledProviderCount = computed(() =>
 const healthyProviderCount = computed(() =>
   providerStore.providers.filter((item) => item.enabled && item.healthy).length
 );
+
+function providerStatus(item) {
+  if (!item.enabled) {
+    return { value: 'disabled', label: '禁用', badge: 'neutral' };
+  }
+  if (!item.checked) {
+    return { value: 'unchecked', label: '未检测', badge: 'info' };
+  }
+  if (item.healthy) {
+    return { value: 'healthy', label: '正常', badge: 'success' };
+  }
+  return { value: 'warning', label: '异常', badge: 'warning' };
+}
 
 function normalizeEndpointMode(type, endpointMode = '') {
   const options = endpointModeOptionsMap[type] || endpointModeOptionsMap.openai;
@@ -486,6 +479,7 @@ async function handleTest(p) {
     } else {
       toast(`${p.name} 连接失败: ${result.error}`, 'error');
     }
+    await providerStore.fetchProviders();
   } finally {
     testing.value = false;
   }
@@ -499,6 +493,9 @@ async function handleTestForm() {
       toast('连接测试成功', 'success');
     } else {
       toast('连接测试失败: ' + result.error, 'error');
+    }
+    if (form.value.id) {
+      await providerStore.fetchProviders();
     }
   } finally {
     testing.value = false;
