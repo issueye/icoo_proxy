@@ -5,7 +5,6 @@
         <div class="settings-sidebar-top">
           <UEDPageHeader
             title="设置中心"
-            description="统一管理网关接入、界面主题与版本信息。"
             compact
           >
             <template #actions>
@@ -79,9 +78,9 @@ import { UEDPageHeader, UEDPageShell } from "@/components/layout";
 const router = useRouter();
 
 const menuItems = [
-  { key: "gateway", label: "网关", icon: NetworkIcon, badge: "监听地址、API 密钥与基础行为" },
-  { key: "appearance", label: "外观", icon: PaletteIcon, badge: "主题、配色与视觉偏好" },
-  { key: "about", label: "关于", icon: InfoIcon, badge: "版本信息与项目说明" },
+  { key: "gateway", label: "网关", icon: NetworkIcon },
+  { key: "appearance", label: "外观", icon: PaletteIcon },
+  { key: "about", label: "关于", icon: InfoIcon },
 ];
 
 const activeSection = ref("gateway");

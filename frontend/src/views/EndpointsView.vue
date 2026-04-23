@@ -2,7 +2,6 @@
   <div class="app-page endpoints-view">
     <UEDPageHeader
       title="端点管理"
-      description="将上游能力抽象为可路由资源，为不同协议之间的转换和精细化暴露打基础。"
       divided
     >
       <template #actions>
@@ -36,11 +35,6 @@
             class="toolbar-select"
           />
         </div>
-      </div>
-      <div class="toolbar-summary">
-        <span class="toolbar-chip">共 {{ endpointStore.endpointCount }} 个</span>
-        <span class="toolbar-chip">启用 {{ endpointStore.enabledEndpoints.length }} 个</span>
-        <span class="toolbar-chip">当前显示 {{ filteredEndpoints.length }} 个</span>
       </div>
     </section>
 

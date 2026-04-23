@@ -1,6 +1,6 @@
 <template>
   <div class="logs-view app-page">
-    <UEDPageHeader title="请求日志" description="集中查看最近请求、上游路由结果与响应状态，便于联调和排障。" divided>
+    <UEDPageHeader title="请求日志" divided>
       <template #actions>
         <button class="btn btn-secondary" @click="handleRefreshLogs" :disabled="gatewayStore.logsLoading">
           <RefreshCw :size="14" :class="{ spinning: gatewayStore.logsLoading }" />
@@ -23,11 +23,6 @@
         >
           仅看错误
         </button>
-      </div>
-      <div class="toolbar-summary logs-summary">
-        <span class="toolbar-chip">总计 {{ gatewayStore.requestLogs.length }} 条</span>
-        <span class="toolbar-chip">错误 {{ errorCount }} 条</span>
-        <span class="toolbar-chip">当前显示 {{ filteredLogs.length }} 条</span>
       </div>
     </section>
 

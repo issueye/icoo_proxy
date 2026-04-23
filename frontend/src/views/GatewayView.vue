@@ -2,7 +2,6 @@
   <div class="gateway-view app-page">
     <UEDPageHeader
       title="网关总览"
-      description="统一查看本地代理状态、接入准备度和客户端调用方式。"
       divided
     >
       <template #actions>
@@ -70,33 +69,6 @@
     </section>
 
     <div class="gateway-grid">
-      <UEDPageSection class="panel-card panel-card--wide" title="访问鉴权">
-        <template #actions>
-          <StatusBadge
-            :status="gatewayStore.apiKeyCount > 0 ? 'info' : 'neutral'"
-            :label="gatewayStore.apiKeyCount > 0 ? `已配置 ${gatewayStore.apiKeyCount} 个 API Key` : '未配置 API Key'"
-          />
-        </template>
-
-        <div class="auth-layout">
-          <div class="auth-form">
-            <p class="auth-helper">
-              网关访问鉴权已迁移到 <code>API 密钥</code> 管理模块。客户端可使用 <code>Authorization: Bearer</code>
-              或 <code>x-api-key</code> 携带任一有效密钥访问网关。
-            </p>
-            <div class="info-row">
-              <span class="info-row-label">当前状态</span>
-              <span class="info-row-value">{{ apiKeyDetailText }}</span>
-            </div>
-            <div class="auth-actions">
-              <button class="btn btn-primary" type="button" @click="openApiKeysPage">
-                管理 API 密钥
-              </button>
-            </div>
-          </div>
-        </div>
-      </UEDPageSection>
-
       <UEDPageSection class="panel-card panel-card--wide" title="接口调用示例">
         <template #actions>
           <button class="btn btn-secondary" type="button" @click="copyCurlCommand">

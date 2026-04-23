@@ -2,7 +2,6 @@
   <div class="app-page api-keys-view">
     <UEDPageHeader
       title="API 密钥管理"
-      description="统一管理网关访问凭证，并为后续按供应商/端点限制访问范围做准备。"
       divided
     >
       <template #actions>
@@ -36,11 +35,6 @@
             class="toolbar-select"
           />
         </div>
-      </div>
-      <div class="toolbar-summary">
-        <span class="toolbar-chip">共 {{ apiKeyStore.apiKeyCount }} 个</span>
-        <span class="toolbar-chip">启用 {{ apiKeyStore.enabledApiKeys.length }} 个</span>
-        <span class="toolbar-chip">当前显示 {{ filteredApiKeys.length }} 个</span>
       </div>
     </section>
 
