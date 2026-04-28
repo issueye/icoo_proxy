@@ -57,6 +57,15 @@ func (s *RoutePolicyService) FindEnabledBySupplierID(supplierID string) (models.
 	return models.RoutePolicyRecord{}, false
 }
 
+func (s *RoutePolicyService) FindEnabledByDownstream(downstream consts.Protocol) (models.RoutePolicyRecord, bool) {
+	for _, item := range s.Enabled() {
+		if item.DownstreamProtocol == downstream {
+			return item, true
+		}
+	}
+	return models.RoutePolicyRecord{}, false
+}
+
 func (s *RoutePolicyService) Upsert(input models.UpsertInput) (models.RoutePolicyRecord, error) {
 	downstream := normalizeProtocol(input.DownstreamProtocol.ToString())
 	if downstream == "" {

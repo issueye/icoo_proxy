@@ -412,6 +412,12 @@ func (a *App) startProxy() error {
 	if err != nil {
 		return err
 	}
+	supplierCache := services.NewSupplierModelCache()
+	if err := supplierCache.Rebuild(svc.Supplier().List()); err != nil {
+		return err
+	}
+	catalog.SetSupplierModelCache(supplierCache)
+	catalog.SetPolicyResolver(services.NewCatalogPolicyResolver(svc.RoutePolicy(), svc.Supplier()))
 	proxyService := services.New(cfg, catalog)
 	if a.traffic != nil {
 		proxyService.SetRequestRecorder(a.traffic)

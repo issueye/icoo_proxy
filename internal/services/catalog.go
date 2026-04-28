@@ -10,9 +10,15 @@ import (
 	"icoo_proxy/internal/models"
 )
 
+type DownstreamPolicyResolver interface {
+	ResolveEnabledSupplierByDownstream(downstream consts.Protocol) (models.SupplierRecord, bool)
+}
+
 type CatalogService struct {
-	defaults map[consts.Protocol]models.Route
-	aliases  map[string]models.Route
+	defaults      map[consts.Protocol]models.Route
+	aliases       map[string]models.Route
+	supplierCache *SupplierModelCache
+	policyLookup  DownstreamPolicyResolver
 }
 
 func NewCatalogService() (*CatalogService, error) {
@@ -37,7 +43,7 @@ func NewCatalogFromEntries(defaults map[consts.Protocol]string, aliasEntries str
 		if err != nil {
 			return nil, err
 		}
-		catalog.defaults[downstream] = route
+		catalog.defaults[downstream] = withRouteSource(route, "default")
 	}
 	for _, entry := range catalogSplitEntries(aliasEntries) {
 		name, target, found := strings.Cut(entry, "=")
@@ -49,35 +55,69 @@ func NewCatalogFromEntries(defaults map[consts.Protocol]string, aliasEntries str
 		if err != nil {
 			return nil, err
 		}
-		catalog.aliases[name] = route
+		catalog.aliases[name] = withRouteSource(route, "alias")
 	}
 	return catalog, nil
+}
+
+func (c *CatalogService) SetSupplierModelCache(cache *SupplierModelCache) {
+	c.supplierCache = cache
+}
+
+func (c *CatalogService) SetPolicyResolver(resolver DownstreamPolicyResolver) {
+	c.policyLookup = resolver
 }
 
 func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel string) (models.Route, error) {
 	model := strings.TrimSpace(requestedModel)
 	slog.Info("下游请求模型和协议", "model", model, "downstream", downstream)
 
-	route, ok := c.defaults[downstream]
+	defaultRoute, hasDefault := c.defaults[downstream]
 	if model == "" {
-		if !ok {
+		if !hasDefault {
 			return models.Route{}, fmt.Errorf("missing model and no default route for %s", downstream)
 		}
-		return route, nil
+		return defaultRoute, nil
+	}
+
+	if route, ok := c.resolveQualifiedSupplierModel(model); ok {
+		return withRouteSource(route, "qualified-supplier-model"), nil
+	}
+	if route, ok := c.resolveRoutePolicyModel(downstream, model); ok {
+		return withRouteSource(route, "route-policy-supplier-model"), nil
 	}
 	if route, ok := c.aliases[model]; ok {
-		return route, nil
+		return withRouteSource(route, "alias"), nil
 	}
-	if !ok {
+	if !hasDefault {
 		return models.Route{}, fmt.Errorf("requested model %q has no default route for %s", model, downstream)
 	}
 
-	copyRoute := route
+	copyRoute := defaultRoute
 	copyRoute.Name = model
 	copyRoute.Model = model
+	copyRoute.Source = "default-fallback"
 
 	slog.Info("最终路由", "copyRoute", copyRoute)
 	return copyRoute, nil
+}
+
+func (c *CatalogService) resolveQualifiedSupplierModel(model string) (models.Route, bool) {
+	if c == nil || c.supplierCache == nil {
+		return models.Route{}, false
+	}
+	return c.supplierCache.ResolveQualified(model)
+}
+
+func (c *CatalogService) resolveRoutePolicyModel(downstream consts.Protocol, model string) (models.Route, bool) {
+	if c == nil || c.supplierCache == nil || c.policyLookup == nil {
+		return models.Route{}, false
+	}
+	supplier, ok := c.policyLookup.ResolveEnabledSupplierByDownstream(downstream)
+	if !ok {
+		return models.Route{}, false
+	}
+	return c.supplierCache.ResolveBySupplierAndModel(supplier.Name, model)
 }
 
 func (c *CatalogService) Defaults() []models.Route {
@@ -102,6 +142,11 @@ func (c *CatalogService) Aliases() []models.Route {
 		return items[i].Name < items[j].Name
 	})
 	return items
+}
+
+func withRouteSource(route models.Route, source string) models.Route {
+	route.Source = source
+	return route
 }
 
 func catalogSplitEntries(raw string) []string {

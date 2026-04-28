@@ -69,6 +69,7 @@ type proxyRequestContext struct {
 	body                  []byte
 	downstreamWantsStream bool
 	route                 models.Route
+	routeSource           string
 }
 
 // newProxyRequestContext 初始化请求上下文，并生成本次请求的追踪 ID。
@@ -188,6 +189,7 @@ func (s *ProxyService) resolveRequestRoute(w http.ResponseWriter, ctx *proxyRequ
 		return false
 	}
 	ctx.route = route
+	ctx.routeSource = route.Source
 	s.logChain("route.resolved",
 		"request_id", ctx.requestID,
 		"downstream", ctx.downstream.ToString(),
@@ -195,6 +197,7 @@ func (s *ProxyService) resolveRequestRoute(w http.ResponseWriter, ctx *proxyRequ
 		"upstream", route.Upstream.ToString(),
 		"target_model", route.Model,
 		"route_name", route.Name,
+		"route_source", ctx.routeSource,
 	)
 	return true
 }
