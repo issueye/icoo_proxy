@@ -26,6 +26,14 @@ export function GetAuthKeySecret(arg1) {
   return window['go']['main']['App']['GetAuthKeySecret'](arg1);
 }
 
+export function GetAuthKeysPage(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetAuthKeysPage'](arg1, arg2, arg3, arg4);
+}
+
+export function GetEndpointsPage(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetEndpointsPage'](arg1, arg2, arg3, arg4);
+}
+
 export function GetOverview() {
   return window['go']['main']['App']['GetOverview']();
 }
@@ -36,6 +44,10 @@ export function GetTrafficPage(arg1, arg2, arg3) {
 
 export function GetProjectSettings() {
   return window['go']['main']['App']['GetProjectSettings']();
+}
+
+export function GetSuppliersPage(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetSuppliersPage'](arg1, arg2, arg3, arg4);
 }
 
 export function GetUiPrefs() {

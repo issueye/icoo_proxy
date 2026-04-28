@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { DeleteAuthKey, GetAuthKeySecret, ListAuthKeys, ReloadProxy, SaveAuthKey } from "../lib/wailsApp";
+import { DeleteAuthKey, GetAuthKeySecret, GetAuthKeysPage, ReloadProxy, SaveAuthKey } from "../lib/wailsApp";
 
 const emptyForm = () => ({
   id: "",
@@ -25,24 +25,54 @@ export const useAuthKeysStore = defineStore("authKeys", {
     copying: "",
     error: "",
     items: [],
+    total: 0,
+    totalCount: 0,
+    enabledCount: 0,
+    page: 1,
+    pageSize: 8,
+    keyword: "",
+    status: "all",
     form: emptyForm(),
   }),
-  getters: {
-    enabledCount(state) {
-      return state.items.filter((item) => item.enabled).length;
-    },
-  },
   actions: {
-    async load() {
+    async fetchPage({ page = this.page, pageSize = this.pageSize } = {}) {
       this.loading = true;
       this.error = "";
+
       try {
-        this.items = await ListAuthKeys();
+        const result = await GetAuthKeysPage(page, pageSize, this.keyword, this.status);
+        this.items = result?.items || [];
+        this.total = Number(result?.total || 0);
+        this.totalCount = Number(result?.total_count || 0);
+        this.enabledCount = Number(result?.enabled_count || 0);
+        this.page = Number(result?.page || page || 1);
+        this.pageSize = Number(result?.page_size || pageSize || 8);
       } catch (error) {
         this.error = error?.message || String(error);
       } finally {
         this.loading = false;
       }
+    },
+    async load() {
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    async changePage({ page, pageSize }) {
+      await this.fetchPage({
+        page: page || this.page,
+        pageSize: pageSize || this.pageSize,
+      });
+    },
+    async applyFilters(filters = {}) {
+      this.keyword = String(filters.keyword ?? this.keyword ?? "").trim();
+      this.status = ["enabled", "disabled"].includes(filters.status) ? filters.status : "all";
+      this.page = 1;
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    async resetFilters() {
+      this.keyword = "";
+      this.status = "all";
+      this.page = 1;
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
     },
     select(item) {
       this.form = {
@@ -63,8 +93,9 @@ export const useAuthKeysStore = defineStore("authKeys", {
       this.saving = true;
       this.error = "";
       try {
-        this.items = await SaveAuthKey({ ...this.form });
+        await SaveAuthKey({ ...this.form });
         this.resetForm();
+        await this.fetchPage({ page: this.page, pageSize: this.pageSize });
       } catch (error) {
         this.error = error?.message || String(error);
       } finally {
@@ -75,7 +106,11 @@ export const useAuthKeysStore = defineStore("authKeys", {
       this.deleting = id;
       this.error = "";
       try {
-        this.items = await DeleteAuthKey(id);
+        await DeleteAuthKey(id);
+        if (this.form.id === id) {
+          this.resetForm();
+        }
+        await this.fetchPage({ page: this.page, pageSize: this.pageSize });
       } catch (error) {
         this.error = error?.message || String(error);
       } finally {

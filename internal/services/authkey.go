@@ -33,6 +33,66 @@ func (s *AuthKeyService) List() []models.AuthKeyRecord {
 	return items
 }
 
+func (s *AuthKeyService) QueryPage(page int, pageSize int, keyword string, status string) AuthKeyPageResult {
+	page = normalizePage(page)
+	pageSize = normalizePageSize(pageSize)
+	keyword = normalizeKeyword(keyword)
+	status = normalizeAuthKeyStatus(status)
+
+	result := AuthKeyPageResult{
+		Items:    make([]models.AuthKeyRecord, 0, pageSize),
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	if s == nil || s.db == nil {
+		return result
+	}
+
+	var totalCount int64
+	_ = s.db.Model(&models.AuthKeyModel{}).Count(&totalCount).Error
+	result.TotalCount = int(totalCount)
+
+	var enabledCount int64
+	_ = s.db.Model(&models.AuthKeyModel{}).Where("enabled = ?", true).Count(&enabledCount).Error
+	result.EnabledCount = int(enabledCount)
+
+	query := s.db.Model(&models.AuthKeyModel{})
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("lower(name) LIKE ? OR lower(description) LIKE ?", like, like)
+	}
+
+	switch status {
+	case "enabled":
+		query = query.Where("enabled = ?", true)
+	case "disabled":
+		query = query.Where("enabled = ?", false)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return result
+	}
+
+	result.Total = int(total)
+	result.Page = clampPage(page, total, pageSize)
+
+	var rows []models.AuthKeyModel
+	if err := query.
+		Order("lower(name) asc").
+		Offset((result.Page - 1) * result.PageSize).
+		Limit(result.PageSize).
+		Find(&rows).Error; err != nil {
+		return result
+	}
+
+	for _, item := range rows {
+		result.Items = append(result.Items, toAuthKeyRecord(item))
+	}
+	return result
+}
+
 func (s *AuthKeyService) EnabledSecrets() []string {
 	var rows []models.AuthKeyModel
 	if err := s.db.Where("enabled = ?", true).Order("lower(name) asc").Find(&rows).Error; err != nil {
@@ -174,6 +234,15 @@ func generateSecret() string {
 		return fmt.Sprintf("icoo_%d", time.Now().UnixNano())
 	}
 	return "icoo_" + hex.EncodeToString(buf)
+}
+
+func normalizeAuthKeyStatus(status string) string {
+	switch strings.TrimSpace(strings.ToLower(status)) {
+	case "enabled", "disabled":
+		return strings.TrimSpace(strings.ToLower(status))
+	default:
+		return "all"
+	}
 }
 
 func MergeSecrets(groups ...[]string) []string {

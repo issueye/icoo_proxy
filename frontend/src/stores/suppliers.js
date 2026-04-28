@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import {
   CheckSupplier,
   DeleteSupplier,
+  GetSuppliersPage,
   ListRoutePolicies,
   ListSupplierHealth,
   ListSuppliers,
@@ -69,16 +70,21 @@ export const useSuppliersStore = defineStore("suppliers", {
     checking: "",
     error: "",
     items: [],
+    allSuppliers: [],
     policies: [],
     health: [],
+    total: 0,
+    totalCount: 0,
+    enabledCount: 0,
+    page: 1,
+    pageSize: 8,
+    keyword: "",
+    protocol: "all",
     form: emptyForm(),
     modelForm: emptyModelForm(),
     policyForm: emptyPolicyForm(),
   }),
   getters: {
-    enabledCount(state) {
-      return state.items.filter((item) => item.enabled).length;
-    },
     checkedCount(state) {
       return state.health.length;
     },
@@ -106,7 +112,7 @@ export const useSuppliersStore = defineStore("suppliers", {
     },
     routeManagementRows() {
       const supplierLookup = {};
-      this.items.forEach((item) => {
+      this.allSuppliers.forEach((item) => {
         supplierLookup[item.id] = item;
       });
       return this.policiesByProtocol.map((item) => {
@@ -135,16 +141,38 @@ export const useSuppliersStore = defineStore("suppliers", {
     },
   },
   actions: {
+    applySupplierPage(result, fallbackPage = this.page, fallbackPageSize = this.pageSize) {
+      this.items = result?.items || [];
+      this.total = Number(result?.total || 0);
+      this.totalCount = Number(result?.total_count || 0);
+      this.enabledCount = Number(result?.enabled_count || 0);
+      this.page = Number(result?.page || fallbackPage || 1);
+      this.pageSize = Number(result?.page_size || fallbackPageSize || 8);
+    },
+    async fetchPage({ page = this.page, pageSize = this.pageSize } = {}) {
+      const result = await GetSuppliersPage(page, pageSize, this.keyword, this.protocol);
+      this.applySupplierPage(result, page, pageSize);
+    },
+    async refreshSupplierCatalog() {
+      const [allSuppliers, policies] = await Promise.all([
+        ListSuppliers(),
+        ListRoutePolicies(),
+      ]);
+      this.allSuppliers = allSuppliers;
+      this.policies = policies;
+    },
     async load() {
       this.loading = true;
       this.error = "";
       try {
-        const [items, policies, health] = await Promise.all([
+        const [pageResult, allSuppliers, policies, health] = await Promise.all([
+          GetSuppliersPage(1, this.pageSize, this.keyword, this.protocol),
           ListSuppliers(),
           ListRoutePolicies(),
           ListSupplierHealth(),
         ]);
-        this.items = items;
+        this.applySupplierPage(pageResult, 1, this.pageSize);
+        this.allSuppliers = allSuppliers;
         this.policies = policies;
         this.health = health;
       } catch (error) {
@@ -152,6 +180,42 @@ export const useSuppliersStore = defineStore("suppliers", {
       } finally {
         this.loading = false;
       }
+    },
+    async changePage({ page, pageSize }) {
+      this.loading = true;
+      this.error = "";
+      try {
+        await this.fetchPage({
+          page: page || this.page,
+          pageSize: pageSize || this.pageSize,
+        });
+      } catch (error) {
+        this.error = error?.message || String(error);
+      } finally {
+        this.loading = false;
+      }
+    },
+    async applyFilters(filters = {}) {
+      this.loading = true;
+      this.error = "";
+      try {
+        this.keyword = String(filters.keyword ?? this.keyword ?? "").trim();
+        this.protocol = this.policyOptions.some((item) => item.value === filters.protocol)
+          ? filters.protocol
+          : "all";
+        this.page = 1;
+        await this.fetchPage({ page: 1, pageSize: this.pageSize });
+      } catch (error) {
+        this.error = error?.message || String(error);
+      } finally {
+        this.loading = false;
+      }
+    },
+    async resetFilters() {
+      await this.applyFilters({
+        keyword: "",
+        protocol: "all",
+      });
     },
     select(item) {
       this.form = {
@@ -209,16 +273,15 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.saving = true;
       this.error = "";
       try {
-        const [items, policies] = await Promise.all([
-          SaveSupplier({
+        await SaveSupplier({
             ...this.form,
             default_model: String(this.form.default_model || "").trim(),
             models: normalizeModels(this.form.models).join(", "),
-          }),
-          ListRoutePolicies(),
+          });
+        await Promise.all([
+          this.fetchPage({ page: this.page, pageSize: this.pageSize }),
+          this.refreshSupplierCatalog(),
         ]);
-        this.items = items;
-        this.policies = policies;
         this.resetForm();
       } catch (error) {
         this.error = error?.message || String(error);
@@ -230,18 +293,17 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.saving = true;
       this.error = "";
       try {
-        const [items, policies] = await Promise.all([
-          SaveSupplier({
+        await SaveSupplier({
             ...this.modelForm,
             default_model: String(this.modelForm.default_model || "").trim(),
             models: normalizeModels(this.modelForm.models).join(", "),
-          }),
-          ListRoutePolicies(),
+          });
+        await Promise.all([
+          this.fetchPage({ page: this.page, pageSize: this.pageSize }),
+          this.refreshSupplierCatalog(),
         ]);
-        this.items = items;
-        this.policies = policies;
         if (this.form.id) {
-          const current = items.find((item) => item.id === this.form.id);
+          const current = this.allSuppliers.find((item) => item.id === this.form.id);
           if (current) {
             this.select(current);
           }
@@ -269,9 +331,11 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.deleting = id;
       this.error = "";
       try {
-        const [items, policies] = await Promise.all([DeleteSupplier(id), ListRoutePolicies()]);
-        this.items = items;
-        this.policies = policies;
+        await DeleteSupplier(id);
+        await Promise.all([
+          this.fetchPage({ page: this.page, pageSize: this.pageSize }),
+          this.refreshSupplierCatalog(),
+        ]);
         this.health = this.health.filter((item) => item.supplier_id !== id);
         if (this.form.id === id) {
           this.resetForm();

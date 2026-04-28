@@ -11,7 +11,7 @@
     </div>
 
     <div class="section-grid grid-cols-2 lg:grid-cols-4">
-      <StatCard icon="server" label="供应商总数" :value="String(store.items.length)" tone="info" />
+      <StatCard icon="server" label="供应商总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
       <StatCard icon="heart-pulse" label="已健康检查" :value="String(store.checkedCount)" />
       <StatCard icon="layers" label="已配置协议" :value="String(store.configuredPolicyCount)" tone="info" />
@@ -54,11 +54,22 @@
         <div v-if="store.loading" class="empty-state">
           正在加载供应商...
         </div>
-        <div v-else-if="!store.items.length" class="empty-state">
+        <div v-else-if="store.total === 0" class="empty-state">
           当前尚未配置供应商。
         </div>
         <UTable v-else :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed min-width="1480px"
-          table-class="supplier-table">
+          table-class="supplier-table" pagination pagination-mode="server" :page="store.page" :page-size="store.pageSize"
+          :total="store.total" :page-size-options="[8, 20, 50]" @page-change="store.changePage">
+          <template #query>
+            <div class="table-query-form">
+              <UInput v-model="queryForm.keyword" label="关键词" hide-label placeholder="搜索名称、地址或说明" class="table-query-form__field" />
+              <USelect v-model="queryForm.protocol" label="协议" hide-label :options="supplierFilterOptions" class="table-query-form__field table-query-form__field--compact" />
+              <div class="table-query-form__actions">
+                <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
+                <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
+              </div>
+            </div>
+          </template>
           <template #cell-supplier="{ row }">
             <div class="flex items-center gap-2">
               <p class="font-medium text-[#262626]">{{ row.name }}</p>
@@ -265,6 +276,7 @@ import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
+import UInput from "../components/ued/UInput.vue";
 import UModal from "../components/ued/UModal.vue";
 import USelect from "../components/ued/USelect.vue";
 import UTable from "../components/ued/UTable.vue";
@@ -275,6 +287,10 @@ const store = useSuppliersStore();
 const supplierModalOpen = ref(false);
 const modelModalOpen = ref(false);
 const policyModalOpen = ref(false);
+const queryForm = reactive({
+  keyword: "",
+  protocol: "all",
+});
 const confirmState = reactive({
   open: false,
   id: "",
@@ -287,6 +303,11 @@ const protocolOptions = [
   { label: "openai-responses", value: "openai-responses" },
 ];
 
+const supplierFilterOptions = [
+  { label: "全部协议", value: "all" },
+  ...protocolOptions,
+];
+
 const vendorOptions = [
   { label: "openai", value: "openai" },
   { label: "deepseek", value: "deepseek" },
@@ -294,7 +315,7 @@ const vendorOptions = [
 ];
 
 const supplierOptions = computed(() =>
-  store.items.map((supplier) => ({
+  store.allSuppliers.map((supplier) => ({
     label: `${supplier.name} (${supplier.protocol})`,
     value: supplier.id,
   })),
@@ -356,6 +377,16 @@ function openDeleteConfirm(item) {
   confirmState.open = true;
   confirmState.id = item.id;
   confirmState.message = `确定要删除供应商"${item.name}"吗？`;
+}
+
+async function submitQuery() {
+  await store.applyFilters(queryForm);
+}
+
+async function resetQuery() {
+  queryForm.keyword = "";
+  queryForm.protocol = "all";
+  await store.resetFilters();
 }
 
 function openSupplierCreate() {
@@ -461,6 +492,42 @@ async function checkSupplier(id) {
 }
 
 onMounted(() => {
+  queryForm.keyword = store.keyword;
+  queryForm.protocol = store.protocol;
   store.load();
 });
 </script>
+
+<style scoped>
+.table-query-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.table-query-form__field {
+  width: 240px;
+  min-width: 0;
+}
+
+.table-query-form__field--compact {
+  width: 180px;
+}
+
+.table-query-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .table-query-form__field,
+  .table-query-form__field--compact,
+  .table-query-form__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+</style>

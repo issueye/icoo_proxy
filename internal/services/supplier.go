@@ -33,6 +33,67 @@ func (s *SupplierService) List() []models.SupplierRecord {
 	return items
 }
 
+func (s *SupplierService) QueryPage(page int, pageSize int, keyword string, protocol string) SupplierPageResult {
+	page = normalizePage(page)
+	pageSize = normalizePageSize(pageSize)
+	keyword = normalizeKeyword(keyword)
+	protocol = normalizeSupplierFilter(protocol)
+
+	result := SupplierPageResult{
+		Items:    make([]models.SupplierRecord, 0, pageSize),
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	if s == nil || s.db == nil {
+		return result
+	}
+
+	var totalCount int64
+	_ = s.db.Model(&models.SupplierModel{}).Count(&totalCount).Error
+	result.TotalCount = int(totalCount)
+
+	var enabledCount int64
+	_ = s.db.Model(&models.SupplierModel{}).Where("enabled = ?", true).Count(&enabledCount).Error
+	result.EnabledCount = int(enabledCount)
+
+	query := s.db.Model(&models.SupplierModel{})
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where(
+			"lower(name) LIKE ? OR lower(base_url) LIKE ? OR lower(description) LIKE ?",
+			like,
+			like,
+			like,
+		)
+	}
+	if protocol != "all" {
+		query = query.Where("protocol = ?", protocol)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return result
+	}
+
+	result.Total = int(total)
+	result.Page = clampPage(page, total, pageSize)
+
+	var rows []models.SupplierModel
+	if err := query.
+		Order("lower(name) asc").
+		Offset((result.Page - 1) * result.PageSize).
+		Limit(result.PageSize).
+		Find(&rows).Error; err != nil {
+		return result
+	}
+
+	for _, item := range rows {
+		result.Items = append(result.Items, toSupplierRecord(item))
+	}
+	return result
+}
+
 func (s *SupplierService) Resolve(id string) (models.Snapshot, bool) {
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -162,6 +223,14 @@ func normalizeSupplierProtocol(raw string) consts.Protocol {
 	default:
 		return consts.Protocol("")
 	}
+}
+
+func normalizeSupplierFilter(raw string) string {
+	protocol := normalizeProtocol(raw)
+	if protocol == consts.Protocol("") {
+		return "all"
+	}
+	return protocol.ToString()
 }
 
 func normalizeVendor(raw string, protocol consts.Protocol) consts.Vendor {

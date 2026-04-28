@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { DeleteEndpoint, ListEndpoints, ReloadProxy, SaveEndpoint } from "../lib/wailsApp";
+import { DeleteEndpoint, GetEndpointsPage, ReloadProxy, SaveEndpoint } from "../lib/wailsApp";
 
 const emptyForm = () => ({
   id: "",
@@ -17,15 +17,17 @@ export const useEndpointsStore = defineStore("endpoints", {
     reloading: false,
     error: "",
     items: [],
+    total: 0,
+    totalCount: 0,
+    enabledCount: 0,
+    customCount: 0,
+    page: 1,
+    pageSize: 8,
+    keyword: "",
+    protocol: "all",
     form: emptyForm(),
   }),
   getters: {
-    enabledCount(state) {
-      return state.items.filter((item) => item.enabled).length;
-    },
-    customCount(state) {
-      return state.items.filter((item) => !item.built_in).length;
-    },
     protocolOptions() {
       return [
         { label: "anthropic", value: "anthropic" },
@@ -33,18 +35,54 @@ export const useEndpointsStore = defineStore("endpoints", {
         { label: "openai-responses", value: "openai-responses" },
       ];
     },
+    filterProtocolOptions() {
+      return [
+        { label: "全部协议", value: "all" },
+        ...this.protocolOptions,
+      ];
+    },
   },
   actions: {
-    async load() {
+    async fetchPage({ page = this.page, pageSize = this.pageSize } = {}) {
       this.loading = true;
       this.error = "";
       try {
-        this.items = await ListEndpoints();
+        const result = await GetEndpointsPage(page, pageSize, this.keyword, this.protocol);
+        this.items = result?.items || [];
+        this.total = Number(result?.total || 0);
+        this.totalCount = Number(result?.total_count || 0);
+        this.enabledCount = Number(result?.enabled_count || 0);
+        this.customCount = Number(result?.custom_count || 0);
+        this.page = Number(result?.page || page || 1);
+        this.pageSize = Number(result?.page_size || pageSize || 8);
       } catch (error) {
         this.error = error?.message || String(error);
       } finally {
         this.loading = false;
       }
+    },
+    async load() {
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    async changePage({ page, pageSize }) {
+      await this.fetchPage({
+        page: page || this.page,
+        pageSize: pageSize || this.pageSize,
+      });
+    },
+    async applyFilters(filters = {}) {
+      this.keyword = String(filters.keyword ?? this.keyword ?? "").trim();
+      this.protocol = this.filterProtocolOptions.some((item) => item.value === filters.protocol)
+        ? filters.protocol
+        : "all";
+      this.page = 1;
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    async resetFilters() {
+      this.keyword = "";
+      this.protocol = "all";
+      this.page = 1;
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
     },
     select(item) {
       this.form = {
@@ -62,8 +100,9 @@ export const useEndpointsStore = defineStore("endpoints", {
       this.saving = true;
       this.error = "";
       try {
-        this.items = await SaveEndpoint({ ...this.form });
+        await SaveEndpoint({ ...this.form });
         this.resetForm();
+        await this.fetchPage({ page: this.page, pageSize: this.pageSize });
       } catch (error) {
         this.error = error?.message || String(error);
       } finally {
@@ -74,7 +113,11 @@ export const useEndpointsStore = defineStore("endpoints", {
       this.deleting = id;
       this.error = "";
       try {
-        this.items = await DeleteEndpoint(id);
+        await DeleteEndpoint(id);
+        if (this.form.id === id) {
+          this.resetForm();
+        }
+        await this.fetchPage({ page: this.page, pageSize: this.pageSize });
       } catch (error) {
         this.error = error?.message || String(error);
       } finally {

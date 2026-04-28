@@ -20,7 +20,7 @@
     </div>
 
     <div class="section-grid grid-cols-3">
-      <StatCard icon="key" label="Key 总数" :value="String(store.items.length)" tone="info" />
+      <StatCard icon="key" label="Key 总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
       <StatCard icon="endpoint" label="使用方式" value="Bearer / x-api-key" />
     </div>
@@ -29,10 +29,33 @@
       <div v-if="store.loading" class="empty-state">
         正在加载授权 Key...
       </div>
-      <div v-else-if="!store.items.length" class="empty-state">
+      <div v-else-if="store.total === 0" class="empty-state">
         当前尚未添加授权 Key。本地信任模式仍按配置生效。
       </div>
-      <UTable v-else :columns="tableColumns" :rows="store.items" action-width="118px" fixed>
+      <UTable
+        v-else
+        :columns="tableColumns"
+        :rows="store.items"
+        action-width="118px"
+        fixed
+        pagination
+        pagination-mode="server"
+        :page="store.page"
+        :page-size="store.pageSize"
+        :total="store.total"
+        :page-size-options="[8, 20, 50]"
+        @page-change="store.changePage"
+      >
+        <template #query>
+          <div class="table-query-form">
+            <UInput v-model="queryForm.keyword" label="关键词" hide-label placeholder="搜索名称或说明" class="table-query-form__field" />
+            <USelect v-model="queryForm.status" label="状态" hide-label :options="statusOptions" class="table-query-form__field table-query-form__field--compact" />
+            <div class="table-query-form__actions">
+              <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
+              <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
+            </div>
+          </div>
+        </template>
         <template #cell-name="{ row }">
           <p class="font-medium text-[#262626]">{{ row.name }}</p>
           <p class="mt-0.5 table-meta">更新时间：{{ formatDateTime(row.updated_at) }}</p>
@@ -128,7 +151,9 @@ import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
+import UInput from "../components/ued/UInput.vue";
 import UModal from "../components/ued/UModal.vue";
+import USelect from "../components/ued/USelect.vue";
 import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
@@ -136,11 +161,20 @@ import { useAuthKeysStore } from "../stores/authKeys";
 
 const store = useAuthKeysStore();
 const modalOpen = ref(false);
+const queryForm = reactive({
+  keyword: "",
+  status: "all",
+});
 const confirmState = reactive({
   open: false,
   id: "",
   message: "",
 });
+const statusOptions = [
+  { label: "全部状态", value: "all" },
+  { label: "启用", value: "enabled" },
+  { label: "停用", value: "disabled" },
+];
 const tableColumns = [
   { key: "name", title: "名称", width: "22%" },
   { key: "secret", title: "Key", width: "22%" },
@@ -176,6 +210,16 @@ function openDeleteConfirm(item) {
   confirmState.open = true;
   confirmState.id = item.id;
   confirmState.message = `确定要删除授权 Key"${item.name}"吗？`;
+}
+
+async function submitQuery() {
+  await store.applyFilters(queryForm);
+}
+
+async function resetQuery() {
+  queryForm.keyword = "";
+  queryForm.status = "all";
+  await store.resetFilters();
 }
 
 async function confirmDelete() {
@@ -218,6 +262,42 @@ function formatDateTime(value) {
 }
 
 onMounted(() => {
+  queryForm.keyword = store.keyword;
+  queryForm.status = store.status;
   store.load();
 });
 </script>
+
+<style scoped>
+.table-query-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.table-query-form__field {
+  width: 220px;
+  min-width: 0;
+}
+
+.table-query-form__field--compact {
+  width: 168px;
+}
+
+.table-query-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .table-query-form__field,
+  .table-query-form__field--compact,
+  .table-query-form__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+</style>

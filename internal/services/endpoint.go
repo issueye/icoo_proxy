@@ -51,6 +51,66 @@ func (s *EndpointService) List() []models.EndpointRecord {
 	return items
 }
 
+func (s *EndpointService) QueryPage(page int, pageSize int, keyword string, protocol string) EndpointPageResult {
+	page = normalizePage(page)
+	pageSize = normalizePageSize(pageSize)
+	keyword = normalizeKeyword(keyword)
+	protocol = normalizeEndpointFilter(protocol)
+
+	result := EndpointPageResult{
+		Items:    make([]models.EndpointRecord, 0, pageSize),
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	if s == nil || s.db == nil {
+		return result
+	}
+
+	var totalCount int64
+	_ = s.db.Model(&models.EndpointModel{}).Count(&totalCount).Error
+	result.TotalCount = int(totalCount)
+
+	var enabledCount int64
+	_ = s.db.Model(&models.EndpointModel{}).Where("enabled = ?", true).Count(&enabledCount).Error
+	result.EnabledCount = int(enabledCount)
+
+	var customCount int64
+	_ = s.db.Model(&models.EndpointModel{}).Where("built_in = ?", false).Count(&customCount).Error
+	result.CustomCount = int(customCount)
+
+	query := s.db.Model(&models.EndpointModel{})
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("lower(path) LIKE ? OR lower(description) LIKE ?", like, like)
+	}
+	if protocol != "all" {
+		query = query.Where("protocol = ?", protocol)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return result
+	}
+
+	result.Total = int(total)
+	result.Page = clampPage(page, total, pageSize)
+
+	var rows []models.EndpointModel
+	if err := query.
+		Order("built_in desc, path asc").
+		Offset((result.Page - 1) * result.PageSize).
+		Limit(result.PageSize).
+		Find(&rows).Error; err != nil {
+		return result
+	}
+
+	for _, item := range rows {
+		result.Items = append(result.Items, toEndpointRecord(item))
+	}
+	return result
+}
+
 func (s *EndpointService) Enabled() []models.EndpointRecord {
 	var rows []models.EndpointModel
 	if err := s.db.Where("enabled = ?", true).Order("built_in desc, path asc").Find(&rows).Error; err != nil {
@@ -179,6 +239,14 @@ func normalizeProtocol(raw string) consts.Protocol {
 	default:
 		return ""
 	}
+}
+
+func normalizeEndpointFilter(raw string) string {
+	protocol := normalizeProtocol(raw)
+	if protocol == consts.Protocol("") {
+		return "all"
+	}
+	return protocol.ToString()
 }
 
 func buildID(path string) string {

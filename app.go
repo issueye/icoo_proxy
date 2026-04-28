@@ -170,6 +170,39 @@ func (a *App) GetTrafficPage(page int, pageSize int, filter string) map[string]i
 	}
 }
 
+func (a *App) GetSuppliersPage(page int, pageSize int, keyword string, protocol string) services.SupplierPageResult {
+	if a.app == nil {
+		return services.SupplierPageResult{
+			Items:    []models.SupplierRecord{},
+			Page:     1,
+			PageSize: 10,
+		}
+	}
+	return a.app.Services().Supplier().QueryPage(page, pageSize, keyword, protocol)
+}
+
+func (a *App) GetEndpointsPage(page int, pageSize int, keyword string, protocol string) services.EndpointPageResult {
+	if a.app == nil {
+		return services.EndpointPageResult{
+			Items:    []models.EndpointRecord{},
+			Page:     1,
+			PageSize: 10,
+		}
+	}
+	return a.app.Services().Endpoint().QueryPage(page, pageSize, keyword, protocol)
+}
+
+func (a *App) GetAuthKeysPage(page int, pageSize int, keyword string, status string) services.AuthKeyPageResult {
+	if a.app == nil {
+		return services.AuthKeyPageResult{
+			Items:    []models.AuthKeyRecord{},
+			Page:     1,
+			PageSize: 10,
+		}
+	}
+	return a.app.Services().AuthKey().QueryPage(page, pageSize, keyword, status)
+}
+
 func (a *App) GetProjectSettings() (services.Values, error) {
 	if a.app == nil || strings.TrimSpace(a.root) == "" {
 		return services.Values{}, context.Canceled

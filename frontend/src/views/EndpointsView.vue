@@ -20,7 +20,7 @@
     </div>
 
     <div class="section-grid grid-cols-2 lg:grid-cols-4">
-      <StatCard icon="endpoint" label="端点总数" :value="String(store.items.length)" tone="info" />
+      <StatCard icon="endpoint" label="端点总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
       <StatCard icon="layers" label="自定义端点" :value="String(store.customCount)" />
     </div>
@@ -29,10 +29,33 @@
       <div v-if="store.loading" class="empty-state">
         正在加载端点...
       </div>
-      <div v-else-if="!store.items.length" class="empty-state">
+      <div v-else-if="store.total === 0" class="empty-state">
         当前尚未配置端点。
       </div>
-      <UTable v-else :columns="tableColumns" :rows="store.items" action-width="90px" fixed>
+      <UTable
+        v-else
+        :columns="tableColumns"
+        :rows="store.items"
+        action-width="90px"
+        fixed
+        pagination
+        pagination-mode="server"
+        :page="store.page"
+        :page-size="store.pageSize"
+        :total="store.total"
+        :page-size-options="[8, 20, 50]"
+        @page-change="store.changePage"
+      >
+        <template #query>
+          <div class="table-query-form">
+            <UInput v-model="queryForm.keyword" label="关键词" hide-label placeholder="搜索路径或说明" class="table-query-form__field" />
+            <USelect v-model="queryForm.protocol" label="协议" hide-label :options="store.filterProtocolOptions" class="table-query-form__field table-query-form__field--compact" />
+            <div class="table-query-form__actions">
+              <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
+              <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
+            </div>
+          </div>
+        </template>
         <template #cell-path="{ row }">
           <UTag code size="xs">{{ row.path }}</UTag>
         </template>
@@ -125,6 +148,7 @@ import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
+import UInput from "../components/ued/UInput.vue";
 import UModal from "../components/ued/UModal.vue";
 import USelect from "../components/ued/USelect.vue";
 import UTable from "../components/ued/UTable.vue";
@@ -134,6 +158,10 @@ import { useEndpointsStore } from "../stores/endpoints";
 
 const store = useEndpointsStore();
 const modalOpen = ref(false);
+const queryForm = reactive({
+  keyword: "",
+  protocol: "all",
+});
 const confirmState = reactive({
   open: false,
   id: "",
@@ -177,6 +205,16 @@ function openDeleteConfirm(item) {
   confirmState.message = `确定要删除端点"${item.path}"吗？`;
 }
 
+async function submitQuery() {
+  await store.applyFilters(queryForm);
+}
+
+async function resetQuery() {
+  queryForm.keyword = "";
+  queryForm.protocol = "all";
+  await store.resetFilters();
+}
+
 async function confirmDelete() {
   if (!confirmState.id) {
     return;
@@ -205,6 +243,42 @@ function formatDateTime(value) {
 }
 
 onMounted(() => {
+  queryForm.keyword = store.keyword;
+  queryForm.protocol = store.protocol;
   store.load();
 });
 </script>
+
+<style scoped>
+.table-query-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.table-query-form__field {
+  width: 220px;
+  min-width: 0;
+}
+
+.table-query-form__field--compact {
+  width: 180px;
+}
+
+.table-query-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .table-query-form__field,
+  .table-query-form__field--compact,
+  .table-query-form__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+</style>

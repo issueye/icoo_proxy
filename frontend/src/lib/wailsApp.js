@@ -39,6 +39,14 @@ export function GetAuthKeySecret(arg1) {
   return invoke("GetAuthKeySecret", arg1);
 }
 
+export function GetAuthKeysPage(arg1, arg2, arg3, arg4) {
+  return invoke("GetAuthKeysPage", arg1, arg2, arg3, arg4);
+}
+
+export function GetEndpointsPage(arg1, arg2, arg3, arg4) {
+  return invoke("GetEndpointsPage", arg1, arg2, arg3, arg4);
+}
+
 export function GetOverview() {
   return invoke("GetOverview");
 }
@@ -49,6 +57,10 @@ export function GetTrafficPage(arg1, arg2, arg3) {
 
 export function GetProjectSettings() {
   return invoke("GetProjectSettings");
+}
+
+export function GetSuppliersPage(arg1, arg2, arg3, arg4) {
+  return invoke("GetSuppliersPage", arg1, arg2, arg3, arg4);
 }
 
 export function GetUiPrefs() {
