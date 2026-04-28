@@ -36,9 +36,9 @@
           <UTag code size="xs">{{ row.upstreamProtocol }}</UTag>
         </template>
 
-          <template #cell-status="{ row }">
-            <UTag :variant="row.statusVariant" size="xs" dot>{{ row.statusText }}</UTag>
-          </template>
+        <template #cell-status="{ row }">
+          <UTag :variant="row.statusVariant" size="xs" dot>{{ row.statusText }}</UTag>
+        </template>
 
         <template #actions="{ row }">
           <div class="table-actions">
@@ -49,94 +49,89 @@
       </UTable>
     </div>
 
-    <div class="section-grid">
-      <PanelBlock title="供应商列表">
-        <div v-if="store.loading" class="empty-state">
-          正在加载供应商...
+    <UTable :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed min-width="1480px"
+      table-class="supplier-table" pagination pagination-mode="server" :page="store.page" :page-size="store.pageSize"
+      :total="store.total" :page-size-options="[8, 20, 50]" @page-change="store.changePage">
+      <template #empty>
+        当前尚未配置供应商。
+      </template>
+      <template #query>
+        <div class="table-query-form">
+          <UInput v-model="queryForm.keyword" label="关键词" hide-label placeholder="搜索名称、地址或说明"
+            class="table-query-form__field" />
+          <USelect v-model="queryForm.protocol" label="协议" hide-label :options="supplierFilterOptions"
+            class="table-query-form__field table-query-form__field--compact" />
+          <div class="table-query-form__actions">
+            <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
+            <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
+          </div>
         </div>
-        <div v-else-if="store.total === 0" class="empty-state">
-          当前尚未配置供应商。
+      </template>
+      <template #cell-supplier="{ row }">
+        <div class="flex items-center gap-2">
+          <p class="font-medium text-[#262626]">{{ row.name }}</p>
         </div>
-        <UTable v-else :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed min-width="1480px"
-          table-class="supplier-table" pagination pagination-mode="server" :page="store.page" :page-size="store.pageSize"
-          :total="store.total" :page-size-options="[8, 20, 50]" @page-change="store.changePage">
-          <template #query>
-            <div class="table-query-form">
-              <UInput v-model="queryForm.keyword" label="关键词" hide-label placeholder="搜索名称、地址或说明" class="table-query-form__field" />
-              <USelect v-model="queryForm.protocol" label="协议" hide-label :options="supplierFilterOptions" class="table-query-form__field table-query-form__field--compact" />
-              <div class="table-query-form__actions">
-                <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
-                <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
-              </div>
-            </div>
-          </template>
-          <template #cell-supplier="{ row }">
-            <div class="flex items-center gap-2">
-              <p class="font-medium text-[#262626]">{{ row.name }}</p>
-            </div>
-            <p class="mt-0.5 text-sm leading-5 text-[#595959] table-cell-wrap">
-              {{ row.description || "暂无描述。" }}
-            </p>
-          </template>
-          <template #cell-protocol="{ row }">
-            <p class="font-medium text-[#262626]">{{ row.protocol }}</p>
-            <div class="mt-1 flex flex-wrap gap-1.5">
-              <UTag v-if="row.only_stream" variant="warning" size="xs">only_stream</UTag>
-            </div>
-          </template>
-          <template #cell-address="{ row }">
-            <p class="mt-0.5 break-all table-meta table-cell-wrap">{{ row.base_url }}</p>
-          </template>
-          <template #cell-user_agent="{ row }">
-            <p v-if="row.user_agent" class="mt-0.5 table-meta table-cell-wrap">UA: {{ row.user_agent }}</p>
-          </template>
-          <template #cell-key="{ row }">
-            <UTag code size="xs">{{ row.api_key_masked || "未保存 API Key" }}</UTag>
-          </template>
-          <template #cell-models="{ row }">
-            <div class="flex flex-wrap gap-1.5">
-              <UTag v-for="model in row.models || []" :key="model"
-                :variant="row.default_model === model ? 'success' : 'info'" size="xs">
-                {{ row.default_model === model ? `${model} · 默认` : model }}
-              </UTag>
-              <span v-if="!(row.models || []).length" class="table-meta">无模型</span>
-            </div>
-          </template>
-          <template #cell-health="{ row }">
-            <template v-if="store.healthFor(row.id)">
-              <div class="flex flex-wrap items-center gap-1.5">
-                <UTag :variant="healthTone(store.healthFor(row.id))" size="xs">
-                  {{ store.healthFor(row.id).status }}
-                </UTag>
-                <UTag variant="info" size="xs">{{ store.healthFor(row.id).duration_ms }} ms</UTag>
-              </div>
-              <p class="mt-0.5 table-meta">
-                HTTP {{ store.healthFor(row.id).status_code || "无状态码" }}
-              </p>
-              <p class="mt-0.5 text-sm leading-5 text-[#595959] table-cell-wrap">
-                {{ store.healthFor(row.id).message }}
-              </p>
-            </template>
-            <span v-else class="table-meta">尚未检查</span>
-          </template>
-          <template #cell-status="{ row }">
-            <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
-              {{ row.enabled ? "启用" : "停用" }}
+        <p class="mt-0.5 text-sm leading-5 text-[#595959] table-cell-wrap">
+          {{ row.description || "暂无描述。" }}
+        </p>
+      </template>
+      <template #cell-protocol="{ row }">
+        <p class="font-medium text-[#262626]">{{ row.protocol }}</p>
+        <div class="mt-1 flex flex-wrap gap-1.5">
+          <UTag v-if="row.only_stream" variant="warning" size="xs">only_stream</UTag>
+        </div>
+      </template>
+      <template #cell-address="{ row }">
+        <p class="mt-0.5 break-all table-meta table-cell-wrap">{{ row.base_url }}</p>
+      </template>
+      <template #cell-user_agent="{ row }">
+        <p v-if="row.user_agent" class="mt-0.5 table-meta table-cell-wrap">UA: {{ row.user_agent }}</p>
+      </template>
+      <template #cell-key="{ row }">
+        <UTag code size="xs">{{ row.api_key_masked || "未保存 API Key" }}</UTag>
+      </template>
+      <template #cell-models="{ row }">
+        <div class="flex flex-wrap gap-1.5">
+          <UTag v-for="model in row.models || []" :key="model"
+            :variant="row.default_model === model ? 'success' : 'info'" size="xs">
+            {{ row.default_model === model ? `${model} · 默认` : model }}
+          </UTag>
+          <span v-if="!(row.models || []).length" class="table-meta">无模型</span>
+        </div>
+      </template>
+      <template #cell-health="{ row }">
+        <template v-if="store.healthFor(row.id)">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <UTag :variant="healthTone(store.healthFor(row.id))" size="xs">
+              {{ store.healthFor(row.id).status }}
             </UTag>
-          </template>
-          <template #actions="{ row }">
-            <div class="table-actions">
-              <UIconButton icon="inspect" label="检查供应商" variant="info" :loading="store.checking === row.id"
-                :disabled="store.checking === row.id" @click="checkSupplier(row.id)" />
-              <UIconButton icon="edit" label="编辑供应商" @click="openSupplierEdit(row)" />
-              <UIconButton icon="models" label="管理模型" @click="openModelEditor(row)" />
-              <UIconButton icon="delete" label="删除供应商" variant="error" :loading="store.deleting === row.id"
-                :disabled="store.deleting === row.id" @click="openDeleteConfirm(row)" />
-            </div>
-          </template>
-        </UTable>
-      </PanelBlock>
-    </div>
+            <UTag variant="info" size="xs">{{ store.healthFor(row.id).duration_ms }} ms</UTag>
+          </div>
+          <p class="mt-0.5 table-meta">
+            HTTP {{ store.healthFor(row.id).status_code || "无状态码" }}
+          </p>
+          <p class="mt-0.5 text-sm leading-5 text-[#595959] table-cell-wrap">
+            {{ store.healthFor(row.id).message }}
+          </p>
+        </template>
+        <span v-else class="table-meta">尚未检查</span>
+      </template>
+      <template #cell-status="{ row }">
+        <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
+          {{ row.enabled ? "启用" : "停用" }}
+        </UTag>
+      </template>
+      <template #actions="{ row }">
+        <div class="table-actions">
+          <UIconButton icon="inspect" label="检查供应商" variant="info" :loading="store.checking === row.id"
+            :disabled="store.checking === row.id" @click="checkSupplier(row.id)" />
+          <UIconButton icon="edit" label="编辑供应商" @click="openSupplierEdit(row)" />
+          <UIconButton icon="models" label="管理模型" @click="openModelEditor(row)" />
+          <UIconButton icon="delete" label="删除供应商" variant="error" :loading="store.deleting === row.id"
+            :disabled="store.deleting === row.id" @click="openDeleteConfirm(row)" />
+        </div>
+      </template>
+    </UTable>
 
     <UModal v-model:open="supplierModalOpen" :title="store.form.id ? '编辑供应商' : '新建供应商'" width="640px"
       @close="store.resetForm">
@@ -523,6 +518,7 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
+
   .table-query-form__field,
   .table-query-form__field--compact,
   .table-query-form__actions {

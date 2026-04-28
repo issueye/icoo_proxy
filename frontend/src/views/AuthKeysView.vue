@@ -29,9 +29,6 @@
       <div v-if="store.loading" class="empty-state">
         正在加载授权 Key...
       </div>
-      <div v-else-if="store.total === 0" class="empty-state">
-        当前尚未添加授权 Key。本地信任模式仍按配置生效。
-      </div>
       <UTable
         v-else
         :columns="tableColumns"
@@ -46,6 +43,9 @@
         :page-size-options="[8, 20, 50]"
         @page-change="store.changePage"
       >
+        <template #empty>
+          当前尚未添加授权 Key。本地信任模式仍按配置生效。
+        </template>
         <template #query>
           <div class="table-query-form">
             <UInput v-model="queryForm.keyword" label="关键词" hide-label placeholder="搜索名称或说明" class="table-query-form__field" />

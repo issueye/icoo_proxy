@@ -343,7 +343,7 @@ button:disabled {
   }
 
   .panel-body {
-    @apply p-4;
+    @apply h-full p-4;
   }
 
   .panel-title {

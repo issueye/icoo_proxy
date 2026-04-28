@@ -308,7 +308,7 @@ const visibleRows = computed(() => {
 
 const hasRows = computed(() => visibleRows.value.length > 0);
 
-const showPagination = computed(() => props.pagination && totalRows.value > 0);
+const showPagination = computed(() => props.pagination);
 
 const hasColumnSizing = computed(() =>
   tableColumns.value.some((column) => Boolean(column.width || column.minWidth)),
@@ -372,18 +372,18 @@ const pageSizeSelectOptions = computed(() =>
 const pageItems = computed(() => buildPageItems(currentPage.value, pageCount.value));
 
 const paginationSummary = computed(() => {
-  if (!props.showTotal || totalRows.value === 0) {
+  if (!props.showTotal) {
     return "";
+  }
+
+  if (totalRows.value === 0) {
+    return "共 0 条";
   }
 
   const start = props.paginationMode === "server"
     ? (currentPage.value - 1) * currentPageSize.value + 1
     : Math.min((currentPage.value - 1) * currentPageSize.value + 1, totalRows.value);
   const end = Math.min(currentPage.value * currentPageSize.value, totalRows.value);
-
-  if (totalRows.value === 0) {
-    return "共 0 条";
-  }
 
   return `第 ${start}-${end} 条，共 ${totalRows.value} 条`;
 });

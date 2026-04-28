@@ -3,12 +3,8 @@
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
         <button class="btn btn-primary" @click="openCreate">新增端点</button>
-        <button
-          class="btn btn-secondary"
-          :class="{ 'is-loading': store.reloading }"
-          :disabled="store.reloading"
-          @click="reloadProxy"
-        >
+        <button class="btn btn-secondary" :class="{ 'is-loading': store.reloading }" :disabled="store.reloading"
+          @click="reloadProxy">
           <span v-if="store.reloading" class="btn__spinner" />
           {{ store.reloading ? "重载中..." : "重载代理" }}
         </button>
@@ -25,79 +21,54 @@
       <StatCard icon="layers" label="自定义端点" :value="String(store.customCount)" />
     </div>
 
-    <PanelBlock title="代理端点">
-      <div v-if="store.loading" class="empty-state">
-        正在加载端点...
-      </div>
-      <div v-else-if="store.total === 0" class="empty-state">
+    <UTable :columns="tableColumns" :rows="store.items" action-width="90px" fixed pagination pagination-mode="server"
+      :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
+      @page-change="store.changePage">
+      <template #empty>
         当前尚未配置端点。
-      </div>
-      <UTable
-        v-else
-        :columns="tableColumns"
-        :rows="store.items"
-        action-width="90px"
-        fixed
-        pagination
-        pagination-mode="server"
-        :page="store.page"
-        :page-size="store.pageSize"
-        :total="store.total"
-        :page-size-options="[8, 20, 50]"
-        @page-change="store.changePage"
-      >
-        <template #query>
-          <div class="table-query-form">
-            <UInput v-model="queryForm.keyword" label="关键词" hide-label placeholder="搜索路径或说明" class="table-query-form__field" />
-            <USelect v-model="queryForm.protocol" label="协议" hide-label :options="store.filterProtocolOptions" class="table-query-form__field table-query-form__field--compact" />
-            <div class="table-query-form__actions">
-              <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
-              <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
-            </div>
+      </template>
+      <template #query>
+        <div class="table-query-form">
+          <UInput v-model="queryForm.keyword" label="关键词" hide-label placeholder="搜索路径或说明"
+            class="table-query-form__field" />
+          <USelect v-model="queryForm.protocol" label="协议" hide-label :options="store.filterProtocolOptions"
+            class="table-query-form__field table-query-form__field--compact" />
+          <div class="table-query-form__actions">
+            <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
+            <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
           </div>
-        </template>
-        <template #cell-path="{ row }">
-          <UTag code size="xs">{{ row.path }}</UTag>
-        </template>
-        <template #cell-protocol="{ row }">
-          <UTag variant="info" size="xs">{{ row.protocol }}</UTag>
-        </template>
-        <template #cell-description="{ row }">
-          <p class="max-w-xl text-sm text-[#595959]">{{ row.description || "-" }}</p>
-          <p class="mt-0.5 table-meta">更新时间：{{ formatDateTime(row.updated_at) }}</p>
-        </template>
-        <template #cell-builtIn="{ row }">
-          <UTag :variant="row.built_in ? 'neutral' : 'warning'" size="xs">
-            {{ row.built_in ? "内置" : "自定义" }}
-          </UTag>
-        </template>
-        <template #cell-enabled="{ row }">
-          <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
-            {{ row.enabled ? "启用" : "停用" }}
-          </UTag>
-        </template>
-        <template #actions="{ row }">
-          <div class="table-actions">
-            <UIconButton icon="edit" label="编辑端点" @click="openEdit(row)" />
-            <UIconButton
-              icon="delete"
-              label="删除端点"
-              variant="error"
-              :loading="store.deleting === row.id"
-              :disabled="row.built_in || store.deleting === row.id"
-              @click="openDeleteConfirm(row)"
-            />
-          </div>
-        </template>
-      </UTable>
-    </PanelBlock>
+        </div>
+      </template>
+      <template #cell-path="{ row }">
+        <UTag code size="xs">{{ row.path }}</UTag>
+      </template>
+      <template #cell-protocol="{ row }">
+        <UTag variant="info" size="xs">{{ row.protocol }}</UTag>
+      </template>
+      <template #cell-description="{ row }">
+        <p class="max-w-xl text-sm text-[#595959]">{{ row.description || "-" }}</p>
+        <p class="mt-0.5 table-meta">更新时间：{{ formatDateTime(row.updated_at) }}</p>
+      </template>
+      <template #cell-builtIn="{ row }">
+        <UTag :variant="row.built_in ? 'neutral' : 'warning'" size="xs">
+          {{ row.built_in ? "内置" : "自定义" }}
+        </UTag>
+      </template>
+      <template #cell-enabled="{ row }">
+        <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
+          {{ row.enabled ? "启用" : "停用" }}
+        </UTag>
+      </template>
+      <template #actions="{ row }">
+        <div class="table-actions">
+          <UIconButton icon="edit" label="编辑端点" @click="openEdit(row)" />
+          <UIconButton icon="delete" label="删除端点" variant="error" :loading="store.deleting === row.id"
+            :disabled="row.built_in || store.deleting === row.id" @click="openDeleteConfirm(row)" />
+        </div>
+      </template>
+    </UTable>
 
-    <UModal
-      v-model:open="modalOpen"
-      :title="store.form.id ? '编辑端点' : '新增端点'"
-      width="560px"
-      @close="store.resetForm"
-    >
+    <UModal v-model:open="modalOpen" :title="store.form.id ? '编辑端点' : '新增端点'" width="560px" @close="store.resetForm">
       <form id="endpoint-form" class="space-y-3" @submit.prevent="submit">
         <FieldLabel label="路径">
           <input v-model="store.form.path" class="field-input" placeholder="/custom/v1/chat/completions" />
@@ -114,12 +85,8 @@
       <template #footer>
         <div class="flex justify-end gap-2">
           <button type="button" class="btn btn-secondary" @click="closeModal">取消</button>
-          <button
-            form="endpoint-form"
-            class="btn btn-primary"
-            :class="{ 'is-loading': store.saving }"
-            :disabled="store.saving"
-          >
+          <button form="endpoint-form" class="btn btn-primary" :class="{ 'is-loading': store.saving }"
+            :disabled="store.saving">
             <span v-if="store.saving" class="btn__spinner" />
             {{ store.saving ? "保存中..." : "保存端点" }}
           </button>
@@ -127,17 +94,9 @@
       </template>
     </UModal>
 
-    <UConfirmDialog
-      v-model:open="confirmState.open"
-      title="确认删除端点"
-      :message="confirmState.message"
-      description="删除后该端点路径将不再可用，保存后请重载代理生效。"
-      confirm-text="确认删除"
-      cancel-text="取消"
-      :loading="Boolean(store.deleting)"
-      danger
-      @confirm="confirmDelete"
-    />
+    <UConfirmDialog v-model:open="confirmState.open" title="确认删除端点" :message="confirmState.message"
+      description="删除后该端点路径将不再可用，保存后请重载代理生效。" confirm-text="确认删除" cancel-text="取消" :loading="Boolean(store.deleting)"
+      danger @confirm="confirmDelete" />
   </section>
 </template>
 
@@ -274,6 +233,7 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
+
   .table-query-form__field,
   .table-query-form__field--compact,
   .table-query-form__actions {

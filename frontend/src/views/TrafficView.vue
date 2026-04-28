@@ -32,80 +32,61 @@
     </div>
 
     <div class="traffic-layout">
-      <PanelBlock title="最近请求明细" class="traffic-panel traffic-panel--table">
-        <template #header-extra>
-          <div class="traffic-header-meta">
-            <span class="traffic-header-badge">{{ store.total }} 条</span>
-            <span class="traffic-header-note">最近刷新 {{ formatDateTime(store.lastUpdatedAt) }}</span>
+      <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed stripe size="small"
+        table-class="traffic-table" max-height="100%" min-width="1240px" pagination pagination-mode="server"
+        :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
+        @page-change="store.changePage">
+        <template #empty>
+          当前没有匹配的请求记录。
+        </template>
+        <template #query>
+          <div class="traffic-query-form">
+            <USelect class="traffic-query-form__field traffic-query-form__field--protocol" label="协议筛选" hide-label
+              :model-value="store.filter" :options="normalizedProtocolOptions" @update:model-value="store.setFilter" />
           </div>
         </template>
-
-        <div v-if="store.loading" class="empty-state traffic-empty-state">
-          正在加载流量数据...
-        </div>
-        <div v-else-if="store.total === 0" class="empty-state traffic-empty-state">
-          当前没有匹配的请求记录。
-        </div>
-        <div v-else class="traffic-table-wrap">
-          <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed stripe size="small"
-            table-class="traffic-table" max-height="100%" min-width="1240px" pagination pagination-mode="server"
-            :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
-            @page-change="store.changePage">
-            <template #query>
-              <div class="traffic-query-form">
-                <USelect class="traffic-query-form__field traffic-query-form__field--protocol" label="协议筛选" hide-label
-                  :model-value="store.filter" :options="normalizedProtocolOptions"
-                  @update:model-value="store.setFilter" />
-                <div class="traffic-query-form__meta">
-                  <span class="traffic-query-form__chip">当前协议 {{ currentProtocolLabel }}</span>
-                  <span class="traffic-query-form__hint">当前结果由后端按协议筛选并分页返回。</span>
-                </div>
-              </div>
-            </template>
-            <template #cell-requestId="{ row }">
-              <p class="font-medium text-[#262626] table-cell-wrap">{{ row.request_id }}</p>
-            </template>
-            <template #cell-route="{ row }">
-              <p class="text-sm text-[#595959] table-cell-wrap">{{ row.downstream }}</p>
-              <p class="mt-0.5 table-meta table-cell-wrap">{{ row.upstream || "-" }}</p>
-            </template>
-            <template #cell-model="{ row }">
-              <UTag code size="xs">{{ row.model || "-" }}</UTag>
-            </template>
-            <template #cell-tokens="{ row }">
-              <div class="token-cell">
-                <div class="token-cell__row">
-                  <span class="token-cell__label">入</span>
-                  <span class="token-cell__value">{{ formatTokenCount(row.input_tokens) }}</span>
-                </div>
-                <div class="token-cell__row">
-                  <span class="token-cell__label">出</span>
-                  <span class="token-cell__value">{{ formatTokenCount(row.output_tokens) }}</span>
-                </div>
-                <div class="token-cell__row token-cell__row--total">
-                  <span class="token-cell__label">总</span>
-                  <span class="token-cell__value">{{ formatTokenCount(row.total_tokens) }}</span>
-                </div>
-              </div>
-            </template>
-            <template #cell-status="{ row }">
-              <UTag :variant="row.status_code >= 400 ? 'error' : 'success'" size="xs">
-                {{ row.status_code || "-" }}
-              </UTag>
-            </template>
-            <template #cell-duration="{ row }">
-              <UTag size="xs">{{ row.duration_ms }} ms</UTag>
-            </template>
-            <template #cell-createdAt="{ row }">
-              <span class="table-meta">{{ formatDateTime(row.created_at) }}</span>
-            </template>
-            <template #cell-error="{ row }">
-              <p v-if="row.error" class="text-sm text-[#cf1322] table-cell-wrap">{{ row.error }}</p>
-              <span v-else class="table-meta">无</span>
-            </template>
-          </UTable>
-        </div>
-      </PanelBlock>
+        <template #cell-requestId="{ row }">
+          <p class="font-medium text-[#262626] table-cell-wrap">{{ row.request_id }}</p>
+        </template>
+        <template #cell-route="{ row }">
+          <p class="text-sm text-[#595959] table-cell-wrap">{{ row.downstream }}</p>
+          <p class="mt-0.5 table-meta table-cell-wrap">{{ row.upstream || "-" }}</p>
+        </template>
+        <template #cell-model="{ row }">
+          <UTag code size="xs">{{ row.model || "-" }}</UTag>
+        </template>
+        <template #cell-tokens="{ row }">
+          <div class="token-cell">
+            <div class="token-cell__row">
+              <span class="token-cell__label">入</span>
+              <span class="token-cell__value">{{ formatTokenCount(row.input_tokens) }}</span>
+            </div>
+            <div class="token-cell__row">
+              <span class="token-cell__label">出</span>
+              <span class="token-cell__value">{{ formatTokenCount(row.output_tokens) }}</span>
+            </div>
+            <div class="token-cell__row token-cell__row--total">
+              <span class="token-cell__label">总</span>
+              <span class="token-cell__value">{{ formatTokenCount(row.total_tokens) }}</span>
+            </div>
+          </div>
+        </template>
+        <template #cell-status="{ row }">
+          <UTag :variant="row.status_code >= 400 ? 'error' : 'success'" size="xs">
+            {{ row.status_code || "-" }}
+          </UTag>
+        </template>
+        <template #cell-duration="{ row }">
+          <UTag size="xs">{{ row.duration_ms }} ms</UTag>
+        </template>
+        <template #cell-createdAt="{ row }">
+          <span class="table-meta">{{ formatDateTime(row.created_at) }}</span>
+        </template>
+        <template #cell-error="{ row }">
+          <p v-if="row.error" class="text-sm text-[#cf1322] table-cell-wrap">{{ row.error }}</p>
+          <span v-else class="table-meta">无</span>
+        </template>
+      </UTable>
     </div>
   </section>
 </template>
@@ -114,7 +95,6 @@
 import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { useTrafficStore } from "../stores/traffic";
 
-import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
 import USelect from "../components/ued/USelect.vue";
 import UTable from "../components/ued/UTable.vue";
@@ -149,11 +129,6 @@ const normalizedProtocolOptions = computed(() =>
     };
   }),
 );
-
-const currentProtocolLabel = computed(() => {
-  const currentOption = normalizedProtocolOptions.value.find((option) => option.value === store.filter);
-  return currentOption?.label || "全部协议";
-});
 
 function stopTimer() {
   if (refreshTimer) {
@@ -268,18 +243,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 
-.traffic-panel--table :deep(.panel-header) {
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.traffic-panel--table :deep(.panel-body) {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  padding: 0;
-}
-
 .traffic-query-form {
   display: flex;
   align-items: center;
@@ -325,48 +288,6 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-}
-
-.traffic-query-form__hint {
-  font-size: 12px;
-  color: #6b7a90;
-  white-space: nowrap;
-}
-
-.traffic-table-wrap {
-  min-height: 0;
-  flex: 1;
-}
-
-.traffic-table-wrap :deep(.table-shell) {
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.traffic-table-wrap :deep(.table-scroll) {
-  height: 100%;
-}
-
-.traffic-table-wrap :deep(.admin-table th) {
-  white-space: nowrap;
-}
-
-.traffic-table-wrap :deep(.admin-table td) {
-  padding-top: 10px;
-  padding-bottom: 10px;
-  vertical-align: top;
-}
-
-.traffic-empty-state {
-  display: grid;
-  min-height: 280px;
-  flex: 1;
-  place-items: center;
-  margin: 16px;
-  border-color: #d7e1ef;
-  background: linear-gradient(180deg, #fbfcfe 0%, #f6f9fc 100%);
 }
 
 .traffic-stats :deep(.stat-card) {
@@ -465,14 +386,6 @@ onBeforeUnmount(() => {
   .traffic-query-form__meta {
     width: 100%;
     margin-left: 0;
-  }
-
-  .traffic-query-form__field--protocol :deep(.ued-select__control) {
-    min-width: 100%;
-  }
-
-  .traffic-query-form__hint {
-    white-space: normal;
   }
 }
 </style>
