@@ -80,7 +80,7 @@
         </tbody>
       </table>
 
-      <div v-if="!hasRows" class="empty-state rounded-none border-0">
+      <div v-if="!hasRows" class="table-empty-state empty-state rounded-none border-0" :style="emptyStateStyle">
         <slot name="empty">{{ emptyText }}</slot>
       </div>
     </div>
@@ -350,6 +350,14 @@ const tableStyle = computed(() => {
   const minWidth = resolveTableMinWidth();
   if (minWidth) {
     style.minWidth = minWidth;
+  }
+  return style;
+});
+
+const emptyStateStyle = computed(() => {
+  const style = {};
+  if (tableStyle.value?.minWidth) {
+    style.minWidth = tableStyle.value.minWidth;
   }
   return style;
 });
@@ -733,6 +741,14 @@ function handlePageSizeChange(value) {
 </script>
 
 <style scoped>
+.table-empty-state {
+  display: grid;
+  flex: 1 0 220px;
+  width: 100%;
+  place-items: center;
+  background: #f8fafc;
+}
+
 .table-query {
   padding: 14px;
   border-bottom: 1px solid var(--ued-color-divider, #e6ebf2);
