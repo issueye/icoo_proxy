@@ -84,7 +84,7 @@ type chatToolCallState struct {
 	OutputDone bool
 }
 
-func TranslateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, model, requestID string, logger *slog.Logger) error {
+func TranslateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, model, requestID string, logger *slog.Logger) (TokenUsage, error) {
 	state := &anthropicStreamState{
 		w:          w,
 		logger:     logger,
@@ -105,7 +105,7 @@ func TranslateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, 
 		}
 		if err != nil {
 			_ = state.emitErrorEvent(err.Error())
-			return err
+			return state.tokenUsage(), err
 		}
 		if strings.TrimSpace(event.Data) == "" {
 			continue
@@ -113,15 +113,15 @@ func TranslateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, 
 		state.logUpstreamEvent(event)
 		if strings.TrimSpace(event.Data) == "[DONE]" {
 			if err := state.finish(nil); err != nil {
-				return err
+				return state.tokenUsage(), err
 			}
-			return nil
+			return state.tokenUsage(), nil
 		}
 
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
 			_ = state.emitErrorEvent("failed to decode upstream stream event")
-			return fmt.Errorf("decode upstream stream event: %w", err)
+			return state.tokenUsage(), fmt.Errorf("decode upstream stream event: %w", err)
 		}
 		eventType := strings.TrimSpace(event.Name)
 		if eventType == "" {
@@ -133,20 +133,20 @@ func TranslateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, 
 
 		if err := state.handleResponsesEvent(eventType, payload); err != nil {
 			_ = state.emitErrorEvent(err.Error())
-			return err
+			return state.tokenUsage(), err
 		}
 		if state.messageStopped {
-			return nil
+			return state.tokenUsage(), nil
 		}
 	}
 
 	if err := state.finish(nil); err != nil {
-		return err
+		return state.tokenUsage(), err
 	}
-	return nil
+	return state.tokenUsage(), nil
 }
 
-func TranslateResponsesStreamToChat(w http.ResponseWriter, body io.Reader, model, requestID string, logger *slog.Logger) error {
+func TranslateResponsesStreamToChat(w http.ResponseWriter, body io.Reader, model, requestID string, logger *slog.Logger) (TokenUsage, error) {
 	state := &chatCompletionStreamState{
 		w:             w,
 		logger:        logger,
@@ -167,19 +167,19 @@ func TranslateResponsesStreamToChat(w http.ResponseWriter, body io.Reader, model
 			break
 		}
 		if err != nil {
-			return err
+			return state.tokenUsage(), err
 		}
 		if strings.TrimSpace(event.Data) == "" {
 			continue
 		}
 		state.logUpstreamEvent(event)
 		if strings.TrimSpace(event.Data) == "[DONE]" {
-			return state.finish(nil)
+			return state.tokenUsage(), state.finish(nil)
 		}
 
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
-			return fmt.Errorf("decode upstream stream event: %w", err)
+			return state.tokenUsage(), fmt.Errorf("decode upstream stream event: %w", err)
 		}
 		eventType := strings.TrimSpace(event.Name)
 		if eventType == "" {
@@ -189,14 +189,14 @@ func TranslateResponsesStreamToChat(w http.ResponseWriter, body io.Reader, model
 			continue
 		}
 		if err := state.handleResponsesEvent(eventType, payload); err != nil {
-			return err
+			return state.tokenUsage(), err
 		}
 		if state.streamStopped {
-			return nil
+			return state.tokenUsage(), nil
 		}
 	}
 
-	return state.finish(nil)
+	return state.tokenUsage(), state.finish(nil)
 }
 
 func readSSEEvent(reader *bufio.Reader) (sseEvent, error) {
@@ -990,6 +990,20 @@ func (s *chatCompletionStreamState) logDownstreamEvent(eventName string, payload
 		"event", eventName,
 		"data", utils.RedactJSONBody(payload),
 	)
+}
+
+func (s *anthropicStreamState) tokenUsage() TokenUsage {
+	return TokenUsage{
+		InputTokens:  s.inputTokens,
+		OutputTokens: s.outputTokens,
+	}.Normalize()
+}
+
+func (s *chatCompletionStreamState) tokenUsage() TokenUsage {
+	return TokenUsage{
+		InputTokens:  s.inputTokens,
+		OutputTokens: s.outputTokens,
+	}.Normalize()
 }
 
 func firstNonEmpty(values ...string) string {

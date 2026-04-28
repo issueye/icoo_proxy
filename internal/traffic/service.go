@@ -87,6 +87,27 @@ func (s *Service) ListRecent(limit int) []api.RequestView {
 	return items
 }
 
+func (s *Service) TokenStats() api.TokenStatsView {
+	if s == nil || s.db == nil {
+		return api.TokenStatsView{}
+	}
+
+	iter := s.db.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
+	defer iter.Release()
+
+	stats := api.TokenStatsView{}
+	for iter.Next() {
+		var item api.RequestView
+		if err := json.Unmarshal(iter.Value(), &item); err != nil {
+			continue
+		}
+		stats.InputTokens += item.InputTokens
+		stats.OutputTokens += item.OutputTokens
+		stats.TotalTokens += item.TotalTokens
+	}
+	return stats
+}
+
 func requestKey(item api.RequestView) string {
 	createdAt := parseCreatedAt(item.CreatedAt)
 	reversed := math.MaxInt64 - createdAt.UnixNano()

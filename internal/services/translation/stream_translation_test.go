@@ -75,9 +75,12 @@ func TestTranslateResponsesStreamToChat_TextDeltaAndDone(t *testing.T) {
 	)
 
 	recorder := httptest.NewRecorder()
-	err := TranslateResponsesStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-1", slog.Default())
+	usage, err := TranslateResponsesStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-1", slog.Default())
 	if err != nil {
 		t.Fatalf("TranslateResponsesStreamToChat returned error: %v", err)
+	}
+	if usage.InputTokens != 10 || usage.OutputTokens != 5 || usage.TotalTokens != 15 {
+		t.Fatalf("expected usage 10/5/15, got %#v", usage)
 	}
 
 	frames := parseSSEDataFrames(t, recorder.Body.String())
@@ -155,9 +158,12 @@ func TestTranslateResponsesStreamToChat_ToolCallStream(t *testing.T) {
 	)
 
 	recorder := httptest.NewRecorder()
-	err := TranslateResponsesStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-2", slog.Default())
+	usage, err := TranslateResponsesStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-2", slog.Default())
 	if err != nil {
 		t.Fatalf("TranslateResponsesStreamToChat returned error: %v", err)
+	}
+	if usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.TotalTokens != 0 {
+		t.Fatalf("expected zero usage for stream without usage payload, got %#v", usage)
 	}
 
 	frames := parseSSEDataFrames(t, recorder.Body.String())
@@ -212,9 +218,12 @@ func TestTranslateResponsesStreamToChat_ErrorEvent(t *testing.T) {
 	)
 
 	recorder := httptest.NewRecorder()
-	err := TranslateResponsesStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-3", slog.Default())
+	usage, err := TranslateResponsesStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-3", slog.Default())
 	if err != nil {
 		t.Fatalf("TranslateResponsesStreamToChat returned error: %v", err)
+	}
+	if usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.TotalTokens != 0 {
+		t.Fatalf("expected zero usage for error event, got %#v", usage)
 	}
 
 	frames := parseSSEDataFrames(t, recorder.Body.String())
@@ -228,6 +237,53 @@ func TestTranslateResponsesStreamToChat_ErrorEvent(t *testing.T) {
 	}
 	if got := payload["error"]["message"]; got != "upstream bad" {
 		t.Fatalf("expected error message upstream bad, got %q", got)
+	}
+}
+
+func TestTranslateResponsesStreamToAnthropic_ReturnsUsage(t *testing.T) {
+	body := buildSSEStream(
+		sseJSONEvent("response.created", map[string]any{
+			"type": "response.created",
+			"response": map[string]any{
+				"id": "resp_anthropic",
+				"usage": map[string]any{
+					"input_tokens":  7,
+					"output_tokens": 1,
+					"total_tokens":  8,
+				},
+			},
+		}),
+		sseJSONEvent("response.output_text.delta", map[string]any{
+			"type":          "response.output_text.delta",
+			"item_id":       "msg_1",
+			"output_index":  0,
+			"content_index": 0,
+			"delta":         "Hi",
+		}),
+		sseJSONEvent("response.completed", map[string]any{
+			"type": "response.completed",
+			"response": map[string]any{
+				"id":     "resp_anthropic",
+				"status": "completed",
+				"usage": map[string]any{
+					"input_tokens":  7,
+					"output_tokens": 4,
+					"total_tokens":  11,
+				},
+			},
+		}),
+	)
+
+	recorder := httptest.NewRecorder()
+	usage, err := TranslateResponsesStreamToAnthropic(recorder, strings.NewReader(body), "claude-sonnet", "req-4", slog.Default())
+	if err != nil {
+		t.Fatalf("TranslateResponsesStreamToAnthropic returned error: %v", err)
+	}
+	if usage.InputTokens != 7 || usage.OutputTokens != 4 || usage.TotalTokens != 11 {
+		t.Fatalf("expected usage 7/4/11, got %#v", usage)
+	}
+	if !strings.Contains(recorder.Body.String(), "event: message_start") {
+		t.Fatalf("expected anthropic stream output, got %q", recorder.Body.String())
 	}
 }
 

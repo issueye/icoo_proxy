@@ -23,6 +23,7 @@ type State struct {
 	Endpoints                 []EndpointView         `json:"endpoints"`
 	RoutePolicies             []RoutePolicyView      `json:"route_policies"`
 	RecentRequests            []RequestView          `json:"recent_requests"`
+	TokenStats                TokenStatsView         `json:"token_stats"`
 	Notes                     []string               `json:"notes"`
 	Checks                    map[string]interface{} `json:"checks"`
 }
@@ -40,14 +41,23 @@ type UpstreamView struct {
 }
 
 type RequestView struct {
-	RequestID  string `json:"request_id"`
-	Downstream string `json:"downstream"`
-	Upstream   string `json:"upstream"`
-	Model      string `json:"model"`
-	StatusCode int    `json:"status_code"`
-	DurationMS int64  `json:"duration_ms"`
-	Error      string `json:"error,omitempty"`
-	CreatedAt  string `json:"created_at"`
+	RequestID    string `json:"request_id"`
+	Downstream   string `json:"downstream"`
+	Upstream     string `json:"upstream"`
+	Model        string `json:"model"`
+	StatusCode   int    `json:"status_code"`
+	DurationMS   int64  `json:"duration_ms"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+	TotalTokens  int    `json:"total_tokens"`
+	Error        string `json:"error,omitempty"`
+	CreatedAt    string `json:"created_at"`
+}
+
+type TokenStatsView struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+	TotalTokens  int `json:"total_tokens"`
 }
 
 type RoutePolicyView struct {

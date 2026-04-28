@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -68,6 +69,7 @@ type proxyRequestContext struct {
 	requestedModel        string
 	body                  []byte
 	downstreamWantsStream bool
+	usage                 translation.TokenUsage
 	route                 models.Route
 	routeSource           string
 }
@@ -82,15 +84,19 @@ func newProxyRequestContext(downstream consts.Protocol) proxyRequestContext {
 }
 
 // view 将当前请求上下文转换为前端和流量记录使用的请求视图。
-func (ctx *proxyRequestContext) view(statusCode int, message string) api.RequestView {
+func (ctx *proxyRequestContext) view(statusCode int, message string, usage translation.TokenUsage) api.RequestView {
+	usage = usage.Normalize()
 	item := api.RequestView{
-		RequestID:  ctx.requestID,
-		Downstream: ctx.downstream.ToString(),
-		Model:      ctx.requestedModel,
-		StatusCode: statusCode,
-		DurationMS: time.Since(ctx.start).Milliseconds(),
-		Error:      message,
-		CreatedAt:  time.Now().Format(time.RFC3339),
+		RequestID:    ctx.requestID,
+		Downstream:   ctx.downstream.ToString(),
+		Model:        ctx.requestedModel,
+		StatusCode:   statusCode,
+		DurationMS:   time.Since(ctx.start).Milliseconds(),
+		InputTokens:  usage.InputTokens,
+		OutputTokens: usage.OutputTokens,
+		TotalTokens:  usage.TotalTokens,
+		Error:        message,
+		CreatedAt:    time.Now().Format(time.RFC3339),
 	}
 	if ctx.route.Upstream != "" {
 		item.Upstream = ctx.route.Upstream.ToString()
@@ -130,12 +136,12 @@ func (s *ProxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 func (s *ProxyService) validateDownstreamRequest(w http.ResponseWriter, r *http.Request, ctx *proxyRequestContext) bool {
 	if r.Method != http.MethodPost {
 		s.logRejectedDownstreamRequest(r, ctx, "method not allowed")
-		s.fail(w, ctx.downstream, ctx.view(http.StatusMethodNotAllowed, "method not allowed"))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusMethodNotAllowed, "method not allowed", translation.TokenUsage{}))
 		return false
 	}
 	if err := s.authorize(r); err != nil {
 		s.logRejectedDownstreamRequest(r, ctx, err.Error())
-		s.fail(w, ctx.downstream, ctx.view(http.StatusUnauthorized, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusUnauthorized, err.Error(), ctx.usage))
 		return false
 	}
 	return true
@@ -158,7 +164,7 @@ func (s *ProxyService) readDownstreamRequest(w http.ResponseWriter, r *http.Requ
 	body, err := io.ReadAll(r.Body)
 	_ = r.Body.Close()
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, "failed to read request body"))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, "failed to read request body", ctx.usage))
 		return false
 	}
 	ctx.body = body
@@ -178,14 +184,14 @@ func (s *ProxyService) readDownstreamRequest(w http.ResponseWriter, r *http.Requ
 func (s *ProxyService) resolveRequestRoute(w http.ResponseWriter, ctx *proxyRequestContext) bool {
 	requestModel, err := extractModel(ctx.body)
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error(), ctx.usage))
 		return false
 	}
 	ctx.requestedModel = requestModel
 
 	route, err := s.catalog.Resolve(ctx.downstream, requestModel)
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error(), ctx.usage))
 		return false
 	}
 	ctx.route = route
@@ -207,7 +213,7 @@ func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *pr
 	preparedBody, err := s.prepareRequestBody(ctx.downstream, ctx.route, ctx.body)
 	if err != nil {
 		status := mapPrepareErrorStatus(err)
-		s.fail(w, ctx.downstream, ctx.view(status, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(status, err.Error(), ctx.usage))
 		return nil, false
 	}
 
@@ -216,7 +222,7 @@ func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *pr
 	if s.shouldForceUpstreamStream(ctx.route.Upstream) && !requestUsesStreaming(preparedBody) {
 		preparedBody, err = forceStreamRequest(preparedBody)
 		if err != nil {
-			s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error()))
+			s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error(), ctx.usage))
 			return nil, false
 		}
 		forcedUpstreamStream = true
@@ -241,13 +247,13 @@ func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *pr
 func (s *ProxyService) sendUpstreamRequest(w http.ResponseWriter, r *http.Request, ctx *proxyRequestContext, preparedBody []byte) (*http.Response, bool) {
 	upstreamURL, err := s.upstreamURL(ctx.route.Upstream)
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error(), ctx.usage))
 		return nil, false
 	}
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, strings.NewReader(string(preparedBody)))
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, "failed to build upstream request"))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, "failed to build upstream request", ctx.usage))
 		return nil, false
 	}
 
@@ -265,7 +271,7 @@ func (s *ProxyService) sendUpstreamRequest(w http.ResponseWriter, r *http.Reques
 	resp, err := s.client.Do(req)
 	if err != nil {
 		message := fmt.Sprintf("upstream request failed: %v", err)
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, message))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, message, ctx.usage))
 		return nil, false
 	}
 	return resp, true
@@ -307,19 +313,20 @@ func (s *ProxyService) handleSameProtocolEventStream(w http.ResponseWriter, resp
 	if ctx.downstreamWantsStream {
 		w.WriteHeader(resp.StatusCode)
 		s.logDownstreamResponse(w, resp.StatusCode, "<event-stream body not captured>", ctx)
-		copyStream(w, resp.Body)
+		ctx.usage = relayStreamWithUsage(w, resp.Body, ctx.route.Upstream)
 		return true
 	}
 	if ctx.route.Upstream != consts.ProtocolOpenAIResponses {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusNotImplemented, "stream-only upstream aggregation is not implemented for this protocol"))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusNotImplemented, "stream-only upstream aggregation is not implemented for this protocol", ctx.usage))
 		return false
 	}
 
 	aggregatedBody, err := translation.AggregateResponsesStreamToJSON(resp.Body)
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error(), ctx.usage))
 		return false
 	}
+	ctx.usage = translation.ExtractUsage(ctx.route.Upstream, aggregatedBody)
 	s.logStreamAggregation(aggregatedBody, ctx)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(resp.StatusCode)
@@ -335,6 +342,7 @@ func (s *ProxyService) handleSameProtocolJSON(w http.ResponseWriter, resp *http.
 		return false
 	}
 	s.logJSONUpstreamResponse(resp, upstreamBody, ctx)
+	ctx.usage = translation.ExtractUsage(ctx.route.Upstream, upstreamBody)
 	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(upstreamBody), ctx)
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(upstreamBody)
@@ -352,7 +360,7 @@ func (s *ProxyService) handleCrossProtocolEventStream(w http.ResponseWriter, res
 	case !ctx.downstreamWantsStream && ctx.route.Upstream == consts.ProtocolOpenAIResponses:
 		s.aggregateAndTranslateResponsesStream(w, resp, ctx)
 	default:
-		s.fail(w, ctx.downstream, ctx.view(http.StatusNotImplemented, "streaming cross protocol translation is not implemented yet"))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusNotImplemented, "streaming cross protocol translation is not implemented yet", ctx.usage))
 	}
 }
 
@@ -362,9 +370,10 @@ func (s *ProxyService) translateStreamingResponsesToAnthropic(w http.ResponseWri
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Del("Content-Length")
 	w.WriteHeader(resp.StatusCode)
-	err := translation.TranslateResponsesStreamToAnthropic(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
+	usage, err := translation.TranslateResponsesStreamToAnthropic(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
+	ctx.usage = usage
 	s.logDownstreamResponse(w, resp.StatusCode, "<translated event-stream body not captured>", ctx)
-	item := ctx.view(resp.StatusCode, "")
+	item := ctx.view(resp.StatusCode, "", ctx.usage)
 	if err != nil {
 		item.Error = err.Error()
 		s.logChain("conversion.stream.error",
@@ -383,9 +392,10 @@ func (s *ProxyService) translateStreamingResponsesToChat(w http.ResponseWriter, 
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Del("Content-Length")
 	w.WriteHeader(resp.StatusCode)
-	err := translation.TranslateResponsesStreamToChat(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
+	usage, err := translation.TranslateResponsesStreamToChat(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
+	ctx.usage = usage
 	s.logDownstreamResponse(w, resp.StatusCode, "<translated event-stream body not captured>", ctx)
-	item := ctx.view(resp.StatusCode, "")
+	item := ctx.view(resp.StatusCode, "", ctx.usage)
 	if err != nil {
 		item.Error = err.Error()
 		s.logChain("conversion.stream.error",
@@ -402,13 +412,14 @@ func (s *ProxyService) translateStreamingResponsesToChat(w http.ResponseWriter, 
 func (s *ProxyService) aggregateAndTranslateResponsesStream(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
 	aggregatedBody, err := translation.AggregateResponsesStreamToJSON(resp.Body)
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error(), ctx.usage))
 		return
 	}
+	ctx.usage = translation.ExtractUsage(ctx.route.Upstream, aggregatedBody)
 	s.logStreamAggregation(aggregatedBody, ctx)
 	translated, err := translation.ConvertResponse(ctx.downstream, ctx.route.Upstream, ctx.route.Model, aggregatedBody)
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error(), ctx.usage))
 		return
 	}
 	s.logResponseConversion(aggregatedBody, translated, ctx)
@@ -431,9 +442,10 @@ func (s *ProxyService) handleCrossProtocolJSON(w http.ResponseWriter, resp *http
 		return
 	}
 
+	ctx.usage = translation.ExtractUsage(ctx.route.Upstream, upstreamBody)
 	translated, err := translation.ConvertResponse(ctx.downstream, ctx.route.Upstream, ctx.route.Model, upstreamBody)
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error(), ctx.usage))
 		return
 	}
 	s.logResponseConversion(upstreamBody, translated, ctx)
@@ -448,7 +460,7 @@ func (s *ProxyService) handleCrossProtocolJSON(w http.ResponseWriter, resp *http
 func (s *ProxyService) readUpstreamResponse(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) ([]byte, bool) {
 	upstreamBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, "failed to read upstream response body"))
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, "failed to read upstream response body", ctx.usage))
 		return nil, false
 	}
 	return upstreamBody, true
@@ -460,7 +472,7 @@ func (s *ProxyService) writeUpstreamError(w http.ResponseWriter, resp *http.Resp
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
 	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(body), ctx)
-	s.logRequest(ctx.view(resp.StatusCode, "upstream returned error"))
+	s.logRequest(ctx.view(resp.StatusCode, "upstream returned error", ctx.usage))
 }
 
 // logEventStreamUpstreamResponse 记录上游事件流响应元信息，避免捕获大体积流式内容。
@@ -525,7 +537,7 @@ func (s *ProxyService) logResponseConversion(inputBody, outputBody []byte, ctx *
 
 // logSuccessfulRequest 记录一次成功完成的代理请求。
 func (s *ProxyService) logSuccessfulRequest(statusCode int, ctx *proxyRequestContext) {
-	s.logRequest(ctx.view(statusCode, ""))
+	s.logRequest(ctx.view(statusCode, "", ctx.usage))
 }
 
 // shouldForceUpstreamStream 判断指定上游协议是否要求强制使用流式请求。
@@ -876,25 +888,117 @@ func isEventStream(header http.Header) bool {
 	return strings.Contains(strings.ToLower(header.Get("Content-Type")), "text/event-stream")
 }
 
-// copyStream 将上游流式响应持续转发给下游，并在支持时主动刷新。
-func copyStream(w http.ResponseWriter, body io.Reader) {
+// relayStreamWithUsage 将上游流式响应持续转发给下游，并在透传过程中采集 usage。
+func relayStreamWithUsage(w http.ResponseWriter, body io.Reader, protocol consts.Protocol) translation.TokenUsage {
 	flusher, _ := w.(http.Flusher)
-	buffer := make([]byte, 4096)
+	reader := bufio.NewReader(body)
+	collector := streamUsageCollector{protocol: protocol}
+	eventLines := make([]string, 0, 8)
+	flushEvent := func() {
+		if len(eventLines) == 0 {
+			return
+		}
+		collector.consume(eventLines)
+		eventLines = eventLines[:0]
+	}
+
 	for {
-		n, err := body.Read(buffer)
-		if n > 0 {
-			_, _ = w.Write(buffer[:n])
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			_, _ = io.WriteString(w, line)
 			if flusher != nil {
 				flusher.Flush()
+			}
+			eventLines = append(eventLines, line)
+			if strings.TrimRight(line, "\r\n") == "" {
+				flushEvent()
 			}
 		}
 		if err != nil {
 			if err != io.EOF {
 				log.Printf("icoo_proxy stream relay error: %v", err)
 			}
-			return
+			flushEvent()
+			return collector.usage.Normalize()
 		}
 	}
+}
+
+type streamUsageCollector struct {
+	protocol consts.Protocol
+	usage    translation.TokenUsage
+}
+
+func (c *streamUsageCollector) consume(lines []string) {
+	if len(lines) == 0 {
+		return
+	}
+
+	eventName := ""
+	dataLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimRight(line, "\r\n")
+		if trimmed == "" || strings.HasPrefix(trimmed, ":") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "event:") {
+			eventName = strings.TrimSpace(trimmed[len("event:"):])
+			continue
+		}
+		if strings.HasPrefix(trimmed, "data:") {
+			value := trimmed[len("data:"):]
+			if strings.HasPrefix(value, " ") {
+				value = value[1:]
+			}
+			dataLines = append(dataLines, value)
+		}
+	}
+
+	data := strings.TrimSpace(strings.Join(dataLines, "\n"))
+	if data == "" || data == "[DONE]" {
+		return
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(data), &payload); err != nil {
+		return
+	}
+
+	switch c.protocol {
+	case consts.ProtocolAnthropic:
+		c.merge(translation.ExtractUsageFromPayload(c.protocol, payload))
+		if message := streamObjectValue(payload["message"]); message != nil {
+			c.merge(translation.ExtractUsageFromPayload(c.protocol, message))
+		}
+	case consts.ProtocolOpenAIChat:
+		c.merge(translation.ExtractUsageFromPayload(c.protocol, payload))
+	case consts.ProtocolOpenAIResponses:
+		if response := streamObjectValue(payload["response"]); response != nil {
+			c.merge(translation.ExtractUsageFromPayload(c.protocol, response))
+		}
+		if strings.TrimSpace(eventName) == "response.completed" {
+			c.merge(translation.ExtractUsageFromPayload(c.protocol, payload))
+		}
+	}
+}
+
+func (c *streamUsageCollector) merge(next translation.TokenUsage) {
+	next = next.Normalize()
+	if next.InputTokens > c.usage.InputTokens {
+		c.usage.InputTokens = next.InputTokens
+	}
+	if next.OutputTokens > c.usage.OutputTokens {
+		c.usage.OutputTokens = next.OutputTokens
+	}
+	if next.TotalTokens > c.usage.TotalTokens {
+		c.usage.TotalTokens = next.TotalTokens
+	}
+	c.usage = c.usage.Normalize()
+}
+
+func streamObjectValue(raw interface{}) map[string]interface{} {
+	value, _ := raw.(map[string]interface{})
+	return value
 }
 
 // logChain 写入结构化链路日志；未配置日志器时直接忽略。

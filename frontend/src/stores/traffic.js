@@ -1,12 +1,21 @@
 import { defineStore } from "pinia";
 import { GetOverview } from "../lib/wailsApp";
 
+function defaultTokenStats() {
+  return {
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+  };
+}
+
 export const useTrafficStore = defineStore("traffic", {
   state: () => ({
     loading: false,
     refreshing: false,
     error: "",
     requests: [],
+    tokenStats: defaultTokenStats(),
     filter: "all",
     autoRefresh: false,
     lastUpdatedAt: "",
@@ -51,6 +60,7 @@ export const useTrafficStore = defineStore("traffic", {
       try {
         const overview = await GetOverview();
         this.requests = overview?.recent_requests || [];
+        this.tokenStats = overview?.token_stats || defaultTokenStats();
         this.lastUpdatedAt = new Date().toISOString();
       } catch (error) {
         this.error = error?.message || String(error);
@@ -64,6 +74,7 @@ export const useTrafficStore = defineStore("traffic", {
       try {
         const overview = await GetOverview();
         this.requests = overview?.recent_requests || [];
+        this.tokenStats = overview?.token_stats || defaultTokenStats();
         this.lastUpdatedAt = new Date().toISOString();
       } catch (error) {
         this.error = error?.message || String(error);

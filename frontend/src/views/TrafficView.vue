@@ -22,11 +22,14 @@
       {{ store.error }}
     </div>
 
-    <div class="section-grid grid-cols-2 lg:grid-cols-4">
+    <div class="section-grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
       <StatCard icon="activity" label="最近请求数" :value="String(store.requests.length)" tone="info" />
       <StatCard icon="check" label="成功请求" :value="String(store.successCount)" tone="success" />
       <StatCard icon="alert" label="错误请求" :value="String(store.errorCount)" tone="danger" />
       <StatCard icon="timer" label="平均耗时" :value="`${store.averageLatency} ms`" />
+      <StatCard icon="layers" label="总输入 Token" :value="formatTokenCount(store.tokenStats.input_tokens)" tone="primary" />
+      <StatCard icon="server" label="总输出 Token" :value="formatTokenCount(store.tokenStats.output_tokens)" tone="warning" />
+      <StatCard icon="key" label="总 Token" :value="formatTokenCount(store.tokenStats.total_tokens)" tone="info" />
     </div>
 
     <div class="section-grid lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -78,6 +81,22 @@
           <template #cell-model="{ row }">
             <UTag code size="xs">{{ row.model || "-" }}</UTag>
           </template>
+          <template #cell-tokens="{ row }">
+            <div class="token-cell">
+              <div class="token-cell__row">
+                <span class="token-cell__label">入</span>
+                <span class="token-cell__value">{{ formatTokenCount(row.input_tokens) }}</span>
+              </div>
+              <div class="token-cell__row">
+                <span class="token-cell__label">出</span>
+                <span class="token-cell__value">{{ formatTokenCount(row.output_tokens) }}</span>
+              </div>
+              <div class="token-cell__row token-cell__row--total">
+                <span class="token-cell__label">总</span>
+                <span class="token-cell__value">{{ formatTokenCount(row.total_tokens) }}</span>
+              </div>
+            </div>
+          </template>
           <template #cell-status="{ row }">
             <UTag :variant="row.status_code >= 400 ? 'error' : 'success'" size="xs">
               {{ row.status_code || "-" }}
@@ -112,13 +131,14 @@ import UTag from "../components/ued/UTag.vue";
 const store = useTrafficStore();
 let refreshTimer = null;
 const tableColumns = [
-  { key: "requestId", title: "请求 ID", width: "18%" },
-  { key: "route", title: "下游 / 上游", width: "16%" },
-  { key: "model", title: "模型", width: "15%" },
-  { key: "status", title: "状态码", width: "10%" },
-  { key: "duration", title: "耗时", width: "10%" },
-  { key: "createdAt", title: "创建时间", width: "16%" },
-  { key: "error", title: "错误信息", width: "15%" },
+  { key: "requestId", title: "请求 ID", width: "16%" },
+  { key: "route", title: "下游 / 上游", width: "14%" },
+  { key: "model", title: "模型", width: "14%" },
+  { key: "tokens", title: "Tokens", width: "15%" },
+  { key: "status", title: "状态码", width: "9%" },
+  { key: "duration", title: "耗时", width: "9%" },
+  { key: "createdAt", title: "创建时间", width: "13%" },
+  { key: "error", title: "错误信息", width: "10%" },
 ];
 
 function stopTimer() {
@@ -145,6 +165,11 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString();
 }
 
+function formatTokenCount(value) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat("zh-CN").format(amount);
+}
+
 watch(
   () => store.autoRefresh,
   () => {
@@ -161,3 +186,38 @@ onBeforeUnmount(() => {
   stopTimer();
 });
 </script>
+
+<style scoped>
+.token-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 92px;
+  padding: 6px 8px;
+  border: 1px solid #e6ecfb;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+}
+
+.token-cell__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.token-cell__row--total {
+  padding-top: 4px;
+  border-top: 1px dashed #d7e3ff;
+}
+
+.token-cell__label {
+  color: #8c8c8c;
+}
+
+.token-cell__value {
+  font-weight: 600;
+  color: #1f1f1f;
+}
+</style>

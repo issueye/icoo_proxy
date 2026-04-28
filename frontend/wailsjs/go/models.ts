@@ -33,6 +33,9 @@ export namespace api {
 	    model: string;
 	    status_code: number;
 	    duration_ms: number;
+	    input_tokens: number;
+	    output_tokens: number;
+	    total_tokens: number;
 	    error?: string;
 	    created_at: string;
 	
@@ -48,6 +51,9 @@ export namespace api {
 	        this.model = source["model"];
 	        this.status_code = source["status_code"];
 	        this.duration_ms = source["duration_ms"];
+	        this.input_tokens = source["input_tokens"];
+	        this.output_tokens = source["output_tokens"];
+	        this.total_tokens = source["total_tokens"];
 	        this.error = source["error"];
 	        this.created_at = source["created_at"];
 	    }
@@ -94,6 +100,22 @@ export namespace api {
 	        this.model = source["model"];
 	    }
 	}
+	export class TokenStatsView {
+	    input_tokens: number;
+	    output_tokens: number;
+	    total_tokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TokenStatsView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.input_tokens = source["input_tokens"];
+	        this.output_tokens = source["output_tokens"];
+	        this.total_tokens = source["total_tokens"];
+	    }
+	}
 	export class UpstreamView {
 	    protocol: string;
 	    base_url?: string;
@@ -127,6 +149,7 @@ export namespace api {
 	    endpoints: EndpointView[];
 	    route_policies: RoutePolicyView[];
 	    recent_requests: RequestView[];
+	    token_stats: TokenStatsView;
 	    notes: string[];
 	    checks: Record<string, any>;
 	
@@ -152,6 +175,7 @@ export namespace api {
 	        this.endpoints = this.convertValues(source["endpoints"], EndpointView);
 	        this.route_policies = this.convertValues(source["route_policies"], RoutePolicyView);
 	        this.recent_requests = this.convertValues(source["recent_requests"], RequestView);
+	        this.token_stats = this.convertValues(source["token_stats"], TokenStatsView);
 	        this.notes = source["notes"];
 	        this.checks = source["checks"];
 	    }
@@ -174,6 +198,7 @@ export namespace api {
 		    return a;
 		}
 	}
+	
 
 }
 

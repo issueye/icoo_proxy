@@ -361,6 +361,7 @@ func (a *App) State() api.State {
 	}
 	if a.traffic != nil {
 		state.RecentRequests = a.traffic.ListRecent(100)
+		state.TokenStats = a.traffic.TokenStats()
 	} else if a.service != nil {
 		state.RecentRequests = a.service.RecentRequests()
 	}
@@ -623,6 +624,7 @@ func stateToMap(state api.State) map[string]interface{} {
 		"endpoints":                   state.Endpoints,
 		"route_policies":              state.RoutePolicies,
 		"recent_requests":             state.RecentRequests,
+		"token_stats":                 state.TokenStats,
 		"notes":                       state.Notes,
 		"checks":                      state.Checks,
 	}
