@@ -338,12 +338,14 @@ func (s *ProxyService) handleSameProtocolJSON(w http.ResponseWriter, resp *http.
 	return true
 }
 
-// handleCrossProtocolEventStream 处理跨协议事件流响应，目前支持 OpenAI Responses 到 Anthropic 的流式转换或聚合转换。
+// handleCrossProtocolEventStream 处理跨协议事件流响应，目前支持 OpenAI Responses 到 Anthropic/OpenAI Chat 的流式转换或聚合转换。
 func (s *ProxyService) handleCrossProtocolEventStream(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
 	s.logEventStreamUpstreamResponse(resp, ctx)
 	switch {
 	case ctx.downstream == consts.ProtocolAnthropic && ctx.route.Upstream == consts.ProtocolOpenAIResponses && ctx.downstreamWantsStream:
 		s.translateStreamingResponsesToAnthropic(w, resp, ctx)
+	case ctx.downstream == consts.ProtocolOpenAIChat && ctx.route.Upstream == consts.ProtocolOpenAIResponses && ctx.downstreamWantsStream:
+		s.translateStreamingResponsesToChat(w, resp, ctx)
 	case !ctx.downstreamWantsStream && ctx.route.Upstream == consts.ProtocolOpenAIResponses:
 		s.aggregateAndTranslateResponsesStream(w, resp, ctx)
 	default:
@@ -358,6 +360,27 @@ func (s *ProxyService) translateStreamingResponsesToAnthropic(w http.ResponseWri
 	w.Header().Del("Content-Length")
 	w.WriteHeader(resp.StatusCode)
 	err := translation.TranslateResponsesStreamToAnthropic(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
+	s.logDownstreamResponse(w, resp.StatusCode, "<translated event-stream body not captured>", ctx)
+	item := ctx.view(resp.StatusCode, "")
+	if err != nil {
+		item.Error = err.Error()
+		s.logChain("conversion.stream.error",
+			"request_id", ctx.requestID,
+			"downstream", ctx.downstream.ToString(),
+			"upstream", ctx.route.Upstream.ToString(),
+			"error", err.Error(),
+		)
+	}
+	s.logRequest(item)
+}
+
+// translateStreamingResponsesToChat 将 OpenAI Responses 事件流转换为 OpenAI Chat Completions 事件流。
+func (s *ProxyService) translateStreamingResponsesToChat(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Del("Content-Length")
+	w.WriteHeader(resp.StatusCode)
+	err := translation.TranslateResponsesStreamToChat(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
 	s.logDownstreamResponse(w, resp.StatusCode, "<translated event-stream body not captured>", ctx)
 	item := ctx.view(resp.StatusCode, "")
 	if err != nil {

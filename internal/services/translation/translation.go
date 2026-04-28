@@ -159,10 +159,8 @@ func translateChatToResponsesRequest(body []byte, model string) ([]byte, error) 
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("invalid json body")
 	}
-	if stream, _ := payload["stream"].(bool); stream {
-		return nil, fmt.Errorf("streaming cross protocol translation is not implemented yet")
-	}
 
+	stream, _ := payload["stream"].(bool)
 	messages, _ := payload["messages"].([]interface{})
 	instructions := collectSystemMessages(messages)
 	input := make([]map[string]interface{}, 0, len(messages))
@@ -181,6 +179,9 @@ func translateChatToResponsesRequest(body []byte, model string) ([]byte, error) 
 	request := map[string]interface{}{
 		"model": model,
 		"input": input,
+	}
+	if stream {
+		request["stream"] = true
 	}
 	if instructions != "" {
 		request["instructions"] = instructions
