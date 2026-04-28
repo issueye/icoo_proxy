@@ -655,7 +655,13 @@ function getColStyle(column) {
 
 function getStickyStyle(column) {
   if (!isStickyColumn(column)) return undefined;
-  return column.stickyStyle;
+  const style = { ...column.stickyStyle };
+  if (column.width) {
+    style.width = column.width;
+    style.minWidth = column.width;
+    style.maxWidth = column.width;
+  }
+  return style;
 }
 
 function getHeaderClasses(column) {
