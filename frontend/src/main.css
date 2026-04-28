@@ -549,7 +549,7 @@ button:disabled {
   }
 
   .table-shell {
-    @apply overflow-hidden rounded border border-slate-200 bg-white;
+    @apply overflow-hidden rounded border border-slate-200 bg-white flex flex-col;
   }
 
   .table-scroll {
@@ -558,6 +558,9 @@ button:disabled {
     overscroll-behavior-x: contain;
     scrollbar-color: #cbd5e1 transparent;
     scrollbar-width: thin;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   .table-scroll::-webkit-scrollbar {
@@ -1798,6 +1801,7 @@ button:disabled {
   color: var(--ued-color-text-muted);
   background: #f8fafc;
   border-color: #cfd8e6;
+  flex: 1;
 }
 
 .ued-message-enter-active,
