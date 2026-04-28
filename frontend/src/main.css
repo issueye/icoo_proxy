@@ -577,9 +577,9 @@ button:disabled {
     background-clip: content-box;
   }
 
-  .admin-table {
-    @apply min-w-full border-collapse bg-white text-slate-700;
-  }
+.admin-table {
+  @apply min-w-full border-separate border-spacing-0 bg-white text-slate-700;
+}
 
   .admin-table-fixed {
     table-layout: fixed;

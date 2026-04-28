@@ -113,7 +113,7 @@ const tableColumns = [
   { key: "tokens", title: "Tokens", width: 128 },
   { key: "createdAt", title: "创建时间", width: 172 },
   { key: "error", title: "错误信息", width: 216 },
-  { key: "duration", title: "耗时", width: 92, align: "center", freeze: "right" },
+  { key: "duration", title: "耗时", width: 90, align: "center", freeze: "right" },
   { key: "status", title: "状态码", width: 92, align: "center", freeze: "right" },
 ];
 

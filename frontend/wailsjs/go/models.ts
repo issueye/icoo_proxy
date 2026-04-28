@@ -28,6 +28,7 @@ export namespace api {
 	}
 	export class RequestView {
 	    request_id: string;
+	    endpoint?: string;
 	    downstream: string;
 	    upstream: string;
 	    model: string;
@@ -46,6 +47,7 @@ export namespace api {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.request_id = source["request_id"];
+	        this.endpoint = source["endpoint"];
 	        this.downstream = source["downstream"];
 	        this.upstream = source["upstream"];
 	        this.model = source["model"];
