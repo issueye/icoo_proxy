@@ -33,7 +33,7 @@
 
     <div class="traffic-layout">
       <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed fixed-field="freeze" stripe
-        size="small" table-class="traffic-table" max-height="100%" min-width="1240px" pagination
+        size="small" table-class="traffic-table" max-height="100%" min-width="1420px" pagination
         pagination-mode="server" :page="store.page" :page-size="store.pageSize" :total="store.total"
         :page-size-options="[8, 20, 50]" @page-change="store.changePage">
         <template #empty>
@@ -47,6 +47,9 @@
         </template>
         <template #cell-requestId="{ row }">
           <p class="font-medium text-[#262626] table-cell-wrap">{{ row.request_id }}</p>
+        </template>
+        <template #cell-endpoint="{ row }">
+          <UTag code size="xs">{{ row.endpoint || "-" }}</UTag>
         </template>
         <template #cell-route="{ row }">
           <p class="text-sm text-[#595959] table-cell-wrap">{{ row.downstream }}</p>
@@ -104,6 +107,7 @@ const store = useTrafficStore();
 let refreshTimer = null;
 const tableColumns = [
   { key: "requestId", title: "请求 ID", width: 180, freeze: "left" },
+  { key: "endpoint", title: "端点", width: 220 },
   { key: "route", title: "下游 / 上游", width: 220 },
   { key: "model", title: "模型", width: 140 },
   { key: "tokens", title: "Tokens", width: 128 },

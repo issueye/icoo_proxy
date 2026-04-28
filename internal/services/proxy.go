@@ -65,6 +65,7 @@ func (s *ProxyService) SetRequestRecorder(recorder RequestRecorder) {
 type proxyRequestContext struct {
 	requestID             string
 	start                 time.Time
+	endpointPath          string
 	downstream            consts.Protocol
 	requestedModel        string
 	body                  []byte
@@ -88,6 +89,7 @@ func (ctx *proxyRequestContext) view(statusCode int, message string, usage trans
 	usage = usage.Normalize()
 	item := api.RequestView{
 		RequestID:    ctx.requestID,
+		Endpoint:     ctx.endpointPath,
 		Downstream:   ctx.downstream.ToString(),
 		Model:        ctx.requestedModel,
 		StatusCode:   statusCode,
@@ -108,6 +110,7 @@ func (ctx *proxyRequestContext) view(statusCode int, message string, usage trans
 // Handle 是代理请求入口，按校验、读取、路由、转换、转发和响应处理顺序编排各阶段。
 func (s *ProxyService) Handle(w http.ResponseWriter, r *http.Request, downstream consts.Protocol) {
 	ctx := newProxyRequestContext(downstream)
+	ctx.endpointPath = normalizeEndpointPath(r.URL.Path)
 	w.Header().Set("X-ICOO-Request-ID", ctx.requestID)
 
 	if !s.validateDownstreamRequest(w, r, &ctx) {
@@ -219,7 +222,7 @@ func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *pr
 
 	ctx.downstreamWantsStream = requestUsesStreaming(ctx.body)
 	forcedUpstreamStream := false
-	if s.shouldForceUpstreamStream(ctx.route.Upstream) && !requestUsesStreaming(preparedBody) {
+	if s.shouldForceUpstreamStream(ctx.route) && !requestUsesStreaming(preparedBody) {
 		preparedBody, err = forceStreamRequest(preparedBody)
 		if err != nil {
 			s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error(), ctx.usage))
@@ -245,7 +248,7 @@ func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *pr
 
 // sendUpstreamRequest 构建上游 HTTP 请求、应用协议请求头并发送到目标供应商。
 func (s *ProxyService) sendUpstreamRequest(w http.ResponseWriter, r *http.Request, ctx *proxyRequestContext, preparedBody []byte) (*http.Response, bool) {
-	upstreamURL, err := s.upstreamURL(ctx.route.Upstream)
+	upstreamURL, err := s.upstreamURL(ctx.route)
 	if err != nil {
 		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error(), ctx.usage))
 		return nil, false
@@ -257,7 +260,7 @@ func (s *ProxyService) sendUpstreamRequest(w http.ResponseWriter, r *http.Reques
 		return nil, false
 	}
 
-	s.applyRequestHeaders(req, r, ctx.route.Upstream)
+	s.applyRequestHeaders(req, r, ctx.route)
 	s.logChain("upstream.request",
 		"request_id", ctx.requestID,
 		"downstream", ctx.downstream.ToString(),
@@ -541,13 +544,12 @@ func (s *ProxyService) logSuccessfulRequest(statusCode int, ctx *proxyRequestCon
 }
 
 // shouldForceUpstreamStream 判断指定上游协议是否要求强制使用流式请求。
-func (s *ProxyService) shouldForceUpstreamStream(protocol consts.Protocol) bool {
-	switch protocol {
-	case consts.ProtocolOpenAIResponses:
-		return s.cfg.OpenAIRResponsesConfig.OnlyStream
-	default:
+func (s *ProxyService) shouldForceUpstreamStream(route models.Route) bool {
+	target, err := s.resolveUpstreamTarget(route)
+	if err != nil {
 		return false
 	}
+	return target.OnlyStream
 }
 
 // authorize 校验代理访问密钥，支持 x-api-key 和 Authorization Bearer 两种方式。
@@ -583,63 +585,143 @@ func isLocalRequest(r *http.Request) bool {
 }
 
 // upstreamURL 获取指定协议的上游URL
-func (s *ProxyService) upstreamURL(protocol consts.Protocol) (string, error) {
-	switch protocol {
-	case consts.ProtocolAnthropic:
-		if strings.TrimSpace(s.cfg.AnthropicConfig.APIKey) == "" {
-			return "", fmt.Errorf("anthropic upstream is not configured")
-		}
-		return strings.TrimRight(s.cfg.AnthropicConfig.BaseURL, "/") + "/v1/messages", nil
-	case consts.ProtocolOpenAIChat:
-		if strings.TrimSpace(s.cfg.OpenAIChatConfig.APIKey) == "" {
-			return "", fmt.Errorf("openai chat upstream is not configured")
-		}
-		return strings.TrimRight(s.cfg.OpenAIChatConfig.BaseURL, "/") + "/v1/chat/completions", nil
-	case consts.ProtocolOpenAIResponses:
-		if strings.TrimSpace(s.cfg.OpenAIRResponsesConfig.APIKey) == "" {
-			return "", fmt.Errorf("openai responses upstream is not configured")
-		}
-		return strings.TrimRight(s.cfg.OpenAIRResponsesConfig.BaseURL, "/") + "/v1/responses", nil
-	default:
-		return "", fmt.Errorf("unsupported upstream protocol %q", protocol)
+func (s *ProxyService) upstreamURL(route models.Route) (string, error) {
+	target, err := s.resolveUpstreamTarget(route)
+	if err != nil {
+		return "", err
 	}
+	return joinUpstreamURL(target.BaseURL, route.Upstream), nil
 }
 
 // applyRequestHeaders 应用请求头到目标请求
-func (s *ProxyService) applyRequestHeaders(target *http.Request, source *http.Request, protocol consts.Protocol) {
+func (s *ProxyService) applyRequestHeaders(target *http.Request, source *http.Request, route models.Route) {
+	upstream, err := s.resolveUpstreamTarget(route)
+	if err != nil {
+		return
+	}
 	target.Header.Set("Content-Type", "application/json")
 	if accept := strings.TrimSpace(source.Header.Get("Accept")); accept != "" {
 		target.Header.Set("Accept", accept)
 	}
-	switch protocol {
+	switch route.Upstream {
 	case consts.ProtocolAnthropic:
-		target.Header.Set("x-api-key", s.cfg.AnthropicConfig.APIKey)
-		target.Header.Set("anthropic-version", s.cfg.AnthropicConfig.Version)
-		if userAgent := strings.TrimSpace(s.cfg.AnthropicConfig.UserAgent); userAgent != "" {
+		target.Header.Set("x-api-key", upstream.APIKey)
+		target.Header.Set("anthropic-version", upstream.Version)
+		if userAgent := strings.TrimSpace(upstream.UserAgent); userAgent != "" {
 			target.Header.Set("User-Agent", userAgent)
 		}
 		if beta := strings.TrimSpace(source.Header.Get("anthropic-beta")); beta != "" {
-			beta = sanitizeAnthropicBetaForVendor(beta, s.cfg.AnthropicConfig.Vendor)
+			beta = sanitizeAnthropicBetaForVendor(beta, upstream.Vendor)
 			if beta != "" {
 				target.Header.Set("anthropic-beta", beta)
 			}
 		}
 	case consts.ProtocolOpenAIChat:
-		target.Header.Set("Authorization", "Bearer "+s.cfg.OpenAIChatConfig.APIKey)
-		if userAgent := strings.TrimSpace(s.cfg.OpenAIChatConfig.UserAgent); userAgent != "" {
+		target.Header.Set("Authorization", "Bearer "+upstream.APIKey)
+		if userAgent := strings.TrimSpace(upstream.UserAgent); userAgent != "" {
 			target.Header.Set("User-Agent", userAgent)
 		}
 		if value := strings.TrimSpace(source.Header.Get("OpenAI-Beta")); value != "" {
 			target.Header.Set("OpenAI-Beta", value)
 		}
 	case consts.ProtocolOpenAIResponses:
-		target.Header.Set("Authorization", "Bearer "+s.cfg.OpenAIRResponsesConfig.APIKey)
-		if userAgent := strings.TrimSpace(s.cfg.OpenAIRResponsesConfig.UserAgent); userAgent != "" {
+		target.Header.Set("Authorization", "Bearer "+upstream.APIKey)
+		if userAgent := strings.TrimSpace(upstream.UserAgent); userAgent != "" {
 			target.Header.Set("User-Agent", userAgent)
 		}
 		if value := strings.TrimSpace(source.Header.Get("OpenAI-Beta")); value != "" {
 			target.Header.Set("OpenAI-Beta", value)
 		}
+	}
+}
+
+type upstreamTarget struct {
+	Vendor     consts.Vendor
+	BaseURL    string
+	APIKey     string
+	OnlyStream bool
+	UserAgent  string
+	Version    string
+}
+
+func (s *ProxyService) resolveUpstreamTarget(route models.Route) (upstreamTarget, error) {
+	if route.Supplier.ID != "" {
+		if strings.TrimSpace(route.Supplier.APIKey) == "" {
+			return upstreamTarget{}, fmt.Errorf("%s upstream is not configured", route.Upstream)
+		}
+		return upstreamTarget{
+			Vendor:     route.Supplier.Vendor,
+			BaseURL:    strings.TrimSpace(route.Supplier.BaseURL),
+			APIKey:     strings.TrimSpace(route.Supplier.APIKey),
+			OnlyStream: route.Supplier.OnlyStream,
+			UserAgent:  strings.TrimSpace(route.Supplier.UserAgent),
+			Version:    "2023-06-01",
+		}, nil
+	}
+	switch route.Upstream {
+	case consts.ProtocolAnthropic:
+		if s.cfg.AnthropicConfig == nil || strings.TrimSpace(s.cfg.AnthropicConfig.APIKey) == "" {
+			return upstreamTarget{}, fmt.Errorf("anthropic upstream is not configured")
+		}
+		return upstreamTarget{
+			Vendor:     s.cfg.AnthropicConfig.Vendor,
+			BaseURL:    strings.TrimSpace(s.cfg.AnthropicConfig.BaseURL),
+			APIKey:     strings.TrimSpace(s.cfg.AnthropicConfig.APIKey),
+			OnlyStream: s.cfg.AnthropicConfig.OnlyStream,
+			UserAgent:  strings.TrimSpace(s.cfg.AnthropicConfig.UserAgent),
+			Version:    strings.TrimSpace(s.cfg.AnthropicConfig.Version),
+		}, nil
+	case consts.ProtocolOpenAIChat:
+		if s.cfg.OpenAIChatConfig == nil || strings.TrimSpace(s.cfg.OpenAIChatConfig.APIKey) == "" {
+			return upstreamTarget{}, fmt.Errorf("openai chat upstream is not configured")
+		}
+		return upstreamTarget{
+			Vendor:     s.cfg.OpenAIChatConfig.Vendor,
+			BaseURL:    strings.TrimSpace(s.cfg.OpenAIChatConfig.BaseURL),
+			APIKey:     strings.TrimSpace(s.cfg.OpenAIChatConfig.APIKey),
+			OnlyStream: s.cfg.OpenAIChatConfig.OnlyStream,
+			UserAgent:  strings.TrimSpace(s.cfg.OpenAIChatConfig.UserAgent),
+			Version:    strings.TrimSpace(s.cfg.OpenAIChatConfig.Version),
+		}, nil
+	case consts.ProtocolOpenAIResponses:
+		if s.cfg.OpenAIRResponsesConfig == nil || strings.TrimSpace(s.cfg.OpenAIRResponsesConfig.APIKey) == "" {
+			return upstreamTarget{}, fmt.Errorf("openai responses upstream is not configured")
+		}
+		return upstreamTarget{
+			Vendor:     s.cfg.OpenAIRResponsesConfig.Vendor,
+			BaseURL:    strings.TrimSpace(s.cfg.OpenAIRResponsesConfig.BaseURL),
+			APIKey:     strings.TrimSpace(s.cfg.OpenAIRResponsesConfig.APIKey),
+			OnlyStream: s.cfg.OpenAIRResponsesConfig.OnlyStream,
+			UserAgent:  strings.TrimSpace(s.cfg.OpenAIRResponsesConfig.UserAgent),
+			Version:    strings.TrimSpace(s.cfg.OpenAIRResponsesConfig.Version),
+		}, nil
+	default:
+		return upstreamTarget{}, fmt.Errorf("unsupported upstream protocol %q", route.Upstream)
+	}
+}
+
+func joinUpstreamURL(baseURL string, protocol consts.Protocol) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	endpoint := upstreamEndpoint(protocol)
+	if strings.HasSuffix(base, endpoint) {
+		return base
+	}
+	if strings.HasSuffix(base, "/v1") {
+		return base + strings.TrimPrefix(endpoint, "/v1")
+	}
+	return base + endpoint
+}
+
+func upstreamEndpoint(protocol consts.Protocol) string {
+	switch protocol {
+	case consts.ProtocolAnthropic:
+		return "/v1/messages"
+	case consts.ProtocolOpenAIChat:
+		return "/v1/chat/completions"
+	case consts.ProtocolOpenAIResponses:
+		return "/v1/responses"
+	default:
+		return ""
 	}
 }
 
@@ -1044,6 +1126,14 @@ func newRequestID() string {
 		return fmt.Sprintf("req-%d", time.Now().UnixNano())
 	}
 	return "req-" + hex.EncodeToString(data[:])
+}
+
+func normalizeEndpointPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "/"
+	}
+	return path
 }
 
 // RecentRequests 返回内存中最近的代理请求记录快照。

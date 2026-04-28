@@ -24,11 +24,14 @@ func TestCatalogResolveQualifiedSupplierModel(t *testing.T) {
 		t.Fatalf("new catalog: %v", err)
 	}
 	cache := NewSupplierModelCache()
-	if err := cache.Rebuild([]models.SupplierRecord{{
-		Name:     "VendorA",
-		Protocol: consts.ProtocolAnthropic,
-		Enabled:  true,
-		Models:   []string{"claude-3-7-sonnet"},
+	if err := cache.Rebuild([]models.Snapshot{{
+		Name:         "VendorA",
+		Protocol:     consts.ProtocolAnthropic,
+		IsEnabled:    true,
+		BaseURL:      "https://anthropic.example/v1",
+		APIKey:       "vendor-a-key",
+		Vendor:       consts.VendorAnthropic,
+		DefaultModel: "claude-3-7-sonnet",
 	}}); err != nil {
 		t.Fatalf("rebuild cache: %v", err)
 	}
@@ -57,11 +60,14 @@ func TestCatalogResolveRoutePolicyModel(t *testing.T) {
 		t.Fatalf("new catalog: %v", err)
 	}
 	cache := NewSupplierModelCache()
-	if err := cache.Rebuild([]models.SupplierRecord{{
-		Name:     "VendorB",
-		Protocol: consts.ProtocolOpenAIResponses,
-		Enabled:  true,
-		Models:   []string{"gpt-4.1-mini"},
+	if err := cache.Rebuild([]models.Snapshot{{
+		Name:         "VendorB",
+		Protocol:     consts.ProtocolOpenAIResponses,
+		IsEnabled:    true,
+		BaseURL:      "https://vendor-b.example",
+		APIKey:       "vendor-b-key",
+		Vendor:       consts.VendorOpenAI,
+		DefaultModel: "gpt-4.1-mini",
 	}}); err != nil {
 		t.Fatalf("rebuild cache: %v", err)
 	}
@@ -90,12 +96,39 @@ func TestCatalogResolveRoutePolicyModel(t *testing.T) {
 }
 
 func TestCatalogResolveFallsBackToAliasAndDefault(t *testing.T) {
-	catalog, err := NewCatalogFromEntries(map[consts.Protocol]string{
-		consts.ProtocolOpenAIChat: "openai-responses:gpt-4.1",
-	}, "alias-a=anthropic:claude-3-7-sonnet")
+	catalog, err := NewCatalogFromRoutes(map[consts.Protocol]models.Route{
+		consts.ProtocolOpenAIChat: {
+			Upstream: consts.ProtocolOpenAIResponses,
+			Model:    "gpt-4.1",
+			Supplier: models.Snapshot{
+				ID:           "supplier-default",
+				Name:         "DefaultVendor",
+				Protocol:     consts.ProtocolOpenAIResponses,
+				Vendor:       consts.VendorOpenAI,
+				BaseURL:      "https://default.example/v1",
+				APIKey:       "default-key",
+				IsEnabled:    true,
+				DefaultModel: "gpt-4.1",
+			},
+		},
+	}, "alias-a=anthropic:VendorA/claude-3-7-sonnet")
 	if err != nil {
 		t.Fatalf("new catalog: %v", err)
 	}
+	cache := NewSupplierModelCache()
+	if err := cache.Rebuild([]models.Snapshot{{
+		ID:           "supplier-a",
+		Name:         "VendorA",
+		Protocol:     consts.ProtocolAnthropic,
+		Vendor:       consts.VendorAnthropic,
+		BaseURL:      "https://vendor-a.example/v1",
+		APIKey:       "vendor-a-key",
+		IsEnabled:    true,
+		DefaultModel: "claude-3-7-sonnet",
+	}}); err != nil {
+		t.Fatalf("rebuild cache: %v", err)
+	}
+	catalog.SetSupplierModelCache(cache)
 
 	aliasRoute, err := catalog.Resolve(consts.ProtocolOpenAIChat, "alias-a")
 	if err != nil {
@@ -106,6 +139,9 @@ func TestCatalogResolveFallsBackToAliasAndDefault(t *testing.T) {
 	}
 	if aliasRoute.Source != "alias" {
 		t.Fatalf("alias source = %q, want %q", aliasRoute.Source, "alias")
+	}
+	if aliasRoute.Supplier.Name != "VendorA" {
+		t.Fatalf("alias supplier = %q, want %q", aliasRoute.Supplier.Name, "VendorA")
 	}
 
 	defaultRoute, err := catalog.Resolve(consts.ProtocolOpenAIChat, "custom-model")
@@ -120,5 +156,8 @@ func TestCatalogResolveFallsBackToAliasAndDefault(t *testing.T) {
 	}
 	if defaultRoute.Source != "default-fallback" {
 		t.Fatalf("default source = %q, want %q", defaultRoute.Source, "default-fallback")
+	}
+	if defaultRoute.Supplier.Name != "DefaultVendor" {
+		t.Fatalf("default supplier = %q, want %q", defaultRoute.Supplier.Name, "DefaultVendor")
 	}
 }

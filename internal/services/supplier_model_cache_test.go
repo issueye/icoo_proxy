@@ -10,12 +10,12 @@ import (
 
 func TestSupplierModelCacheResolveQualified(t *testing.T) {
 	cache := NewSupplierModelCache()
-	if err := cache.Rebuild([]models.SupplierRecord{{
-		ID:       "s1",
-		Name:     "OpenAI",
-		Protocol: consts.ProtocolOpenAIResponses,
-		Enabled:  true,
-		Models:   []string{"gpt-4.1", "gpt-4o-mini"},
+	if err := cache.Rebuild([]models.Snapshot{{
+		ID:           "s1",
+		Name:         "OpenAI",
+		Protocol:     consts.ProtocolOpenAIResponses,
+		IsEnabled:    true,
+		DefaultModel: "gpt-4.1",
 	}}); err != nil {
 		t.Fatalf("rebuild cache: %v", err)
 	}
@@ -50,12 +50,12 @@ func TestSupplierModelCacheRejectsInvalidQualifiedModel(t *testing.T) {
 
 func TestSupplierModelCacheResolveBySupplierAndModel(t *testing.T) {
 	cache := NewSupplierModelCache()
-	if err := cache.Rebuild([]models.SupplierRecord{{
-		ID:       "s1",
-		Name:     "Claude",
-		Protocol: consts.ProtocolAnthropic,
-		Enabled:  true,
-		Models:   []string{"claude-sonnet-4-5"},
+	if err := cache.Rebuild([]models.Snapshot{{
+		ID:           "s1",
+		Name:         "Claude",
+		Protocol:     consts.ProtocolAnthropic,
+		IsEnabled:    true,
+		DefaultModel: "claude-sonnet-4-5",
 	}}); err != nil {
 		t.Fatalf("rebuild cache: %v", err)
 	}
@@ -74,12 +74,12 @@ func TestSupplierModelCacheResolveBySupplierAndModel(t *testing.T) {
 
 func TestSupplierModelCacheConcurrentRead(t *testing.T) {
 	cache := NewSupplierModelCache()
-	if err := cache.Rebuild([]models.SupplierRecord{{
-		ID:       "s1",
-		Name:     "OpenAI",
-		Protocol: consts.ProtocolOpenAIChat,
-		Enabled:  true,
-		Models:   []string{"gpt-4.1"},
+	if err := cache.Rebuild([]models.Snapshot{{
+		ID:           "s1",
+		Name:         "OpenAI",
+		Protocol:     consts.ProtocolOpenAIChat,
+		IsEnabled:    true,
+		DefaultModel: "gpt-4.1",
 	}}); err != nil {
 		t.Fatalf("rebuild cache: %v", err)
 	}

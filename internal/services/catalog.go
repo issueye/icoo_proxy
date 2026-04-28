@@ -30,20 +30,20 @@ func NewCatalogService() (*CatalogService, error) {
 	}, nil
 }
 
-func NewCatalogFromEntries(defaults map[consts.Protocol]string, aliasEntries string) (*CatalogService, error) {
+func NewCatalogFromRoutes(defaults map[consts.Protocol]models.Route, aliasEntries string) (*CatalogService, error) {
 	catalog, err := NewCatalogService()
 	if err != nil {
 		return nil, err
 	}
-	for downstream, target := range defaults {
-		if strings.TrimSpace(target) == "" {
-			continue
+	for downstream, route := range defaults {
+		copyRoute := route
+		if strings.TrimSpace(copyRoute.Name) == "" {
+			copyRoute.Name = downstream.ToString()
 		}
-		route, err := catalogParseTarget(downstream.ToString(), target)
-		if err != nil {
-			return nil, err
+		if strings.TrimSpace(copyRoute.Source) == "" {
+			copyRoute.Source = "default"
 		}
-		catalog.defaults[downstream] = withRouteSource(route, "default")
+		catalog.defaults[downstream] = copyRoute
 	}
 	for _, entry := range catalogSplitEntries(aliasEntries) {
 		name, target, found := strings.Cut(entry, "=")
@@ -58,6 +58,21 @@ func NewCatalogFromEntries(defaults map[consts.Protocol]string, aliasEntries str
 		catalog.aliases[name] = withRouteSource(route, "alias")
 	}
 	return catalog, nil
+}
+
+func NewCatalogFromEntries(defaults map[consts.Protocol]string, aliasEntries string) (*CatalogService, error) {
+	routes := make(map[consts.Protocol]models.Route, len(defaults))
+	for downstream, target := range defaults {
+		if strings.TrimSpace(target) == "" {
+			continue
+		}
+		route, err := catalogParseTarget(downstream.ToString(), target)
+		if err != nil {
+			return nil, err
+		}
+		routes[downstream] = withRouteSource(route, "default")
+	}
+	return NewCatalogFromRoutes(routes, aliasEntries)
 }
 
 func (c *CatalogService) SetSupplierModelCache(cache *SupplierModelCache) {
@@ -77,7 +92,7 @@ func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel stri
 		if !hasDefault {
 			return models.Route{}, fmt.Errorf("missing model and no default route for %s", downstream)
 		}
-		return defaultRoute, nil
+		return c.hydrateRoute(defaultRoute), nil
 	}
 
 	if route, ok := c.resolveQualifiedSupplierModel(model); ok {
@@ -87,13 +102,13 @@ func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel stri
 		return withRouteSource(route, "route-policy-supplier-model"), nil
 	}
 	if route, ok := c.aliases[model]; ok {
-		return withRouteSource(route, "alias"), nil
+		return withRouteSource(c.hydrateRoute(route), "alias"), nil
 	}
 	if !hasDefault {
 		return models.Route{}, fmt.Errorf("requested model %q has no default route for %s", model, downstream)
 	}
 
-	copyRoute := defaultRoute
+	copyRoute := c.hydrateRoute(defaultRoute)
 	copyRoute.Name = model
 	copyRoute.Model = model
 	copyRoute.Source = "default-fallback"
@@ -123,7 +138,7 @@ func (c *CatalogService) resolveRoutePolicyModel(downstream consts.Protocol, mod
 func (c *CatalogService) Defaults() []models.Route {
 	items := make([]models.Route, 0, len(c.defaults))
 	for protocol, route := range c.defaults {
-		copyRoute := route
+		copyRoute := c.hydrateRoute(route)
 		copyRoute.Name = string(protocol)
 		items = append(items, copyRoute)
 	}
@@ -136,12 +151,25 @@ func (c *CatalogService) Defaults() []models.Route {
 func (c *CatalogService) Aliases() []models.Route {
 	items := make([]models.Route, 0, len(c.aliases))
 	for _, route := range c.aliases {
-		items = append(items, route)
+		items = append(items, c.hydrateRoute(route))
 	}
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].Name < items[j].Name
 	})
 	return items
+}
+
+func (c *CatalogService) hydrateRoute(route models.Route) models.Route {
+	if route.Supplier.ID != "" {
+		return route
+	}
+	resolved, ok := c.resolveQualifiedSupplierModel(route.Model)
+	if !ok {
+		return route
+	}
+	resolved.Name = route.Name
+	resolved.Source = route.Source
+	return resolved
 }
 
 func withRouteSource(route models.Route, source string) models.Route {

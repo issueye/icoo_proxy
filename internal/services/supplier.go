@@ -33,6 +33,18 @@ func (s *SupplierService) List() []models.SupplierRecord {
 	return items
 }
 
+func (s *SupplierService) ListSnapshots() []models.Snapshot {
+	var rows []models.SupplierModel
+	if err := s.db.Order("lower(name) asc").Find(&rows).Error; err != nil {
+		return nil
+	}
+	items := make([]models.Snapshot, 0, len(rows))
+	for _, item := range rows {
+		items = append(items, toSupplierSnapshot(item))
+	}
+	return items
+}
+
 func (s *SupplierService) QueryPage(page int, pageSize int, keyword string, protocol string) SupplierPageResult {
 	page = normalizePage(page)
 	pageSize = normalizePageSize(pageSize)
@@ -103,19 +115,7 @@ func (s *SupplierService) Resolve(id string) (models.Snapshot, bool) {
 	if err := s.db.First(&item, "id = ?", id).Error; err != nil {
 		return models.Snapshot{}, false
 	}
-	vendor := normalizeVendor(item.Vendor.ToString(), item.Protocol)
-	return models.Snapshot{
-		ID:           item.ID,
-		Name:         item.Name,
-		Protocol:     item.Protocol,
-		Vendor:       vendor,
-		BaseURL:      item.BaseURL,
-		APIKey:       item.APIKey,
-		OnlyStream:   item.OnlyStream,
-		UserAgent:    item.UserAgent,
-		IsEnabled:    item.Enabled,
-		DefaultModel: strings.TrimSpace(item.DefaultModel),
-	}, true
+	return toSupplierSnapshot(item), true
 }
 
 func (s *SupplierService) Upsert(input models.SupplierUpsertInput) (models.SupplierRecord, error) {
@@ -212,6 +212,23 @@ func toSupplierRecord(item models.SupplierModel) models.SupplierRecord {
 		DefaultModel: strings.TrimSpace(item.DefaultModel),
 		UpdatedAt:    item.UpdatedAt.Format(time.RFC3339),
 		CreatedAt:    item.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+func toSupplierSnapshot(item models.SupplierModel) models.Snapshot {
+	vendor := normalizeVendor(item.Vendor.ToString(), item.Protocol)
+	return models.Snapshot{
+		ID:           item.ID,
+		Name:         item.Name,
+		Protocol:     item.Protocol,
+		Vendor:       vendor,
+		BaseURL:      item.BaseURL,
+		APIKey:       item.APIKey,
+		OnlyStream:   item.OnlyStream,
+		UserAgent:    item.UserAgent,
+		IsEnabled:    item.Enabled,
+		Models:       slices.Clone(splitSupplierCSVLike(item.Models)),
+		DefaultModel: strings.TrimSpace(item.DefaultModel),
 	}
 }
 

@@ -45,7 +45,7 @@ func (s *ModelAliasService) EnabledEntries() []string {
 		items = append(items, fmt.Sprintf("%s=%s:%s",
 			item.Name,
 			supplier.Protocol.ToString(),
-			strings.TrimSpace(item.Model),
+			supplier.Name+"/"+strings.TrimSpace(item.Model),
 		))
 	}
 	return items

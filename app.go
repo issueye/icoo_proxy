@@ -536,12 +536,12 @@ func (a *App) startProxy() error {
 		return err
 	}
 	aliasEntries := services.MergeEntries("", svc.ModelAlias().EnabledEntries())
-	catalog, err := services.NewCatalogFromEntries(defaults, aliasEntries)
+	catalog, err := services.NewCatalogFromRoutes(defaults, aliasEntries)
 	if err != nil {
 		return err
 	}
 	supplierCache := services.NewSupplierModelCache()
-	if err := supplierCache.Rebuild(svc.Supplier().List()); err != nil {
+	if err := supplierCache.Rebuild(svc.Supplier().ListSnapshots()); err != nil {
 		return err
 	}
 	catalog.SetSupplierModelCache(supplierCache)
@@ -585,8 +585,8 @@ func (a *App) startProxy() error {
 	return nil
 }
 
-func applyRoutePolicies(cfg *config.Config, svc *services.Services) (map[consts.Protocol]string, error) {
-	defaults := make(map[consts.Protocol]string)
+func applyRoutePolicies(cfg *config.Config, svc *services.Services) (map[consts.Protocol]models.Route, error) {
+	defaults := make(map[consts.Protocol]models.Route)
 	for _, policy := range svc.RoutePolicy().Enabled() {
 		supplier, ok := svc.Supplier().Resolve(policy.SupplierID)
 		if !ok {
@@ -599,7 +599,13 @@ func applyRoutePolicies(cfg *config.Config, svc *services.Services) (map[consts.
 			return nil, fmt.Errorf("supplier %q default model is required for route policy %q", supplier.Name, policy.DownstreamProtocol)
 		}
 		configureUpstream(cfg, supplier)
-		defaults[policy.DownstreamProtocol] = supplier.Protocol.ToString() + ":" + supplier.DefaultModel
+		defaults[policy.DownstreamProtocol] = models.Route{
+			Name:     policy.DownstreamProtocol.ToString(),
+			Upstream: supplier.Protocol,
+			Model:    supplier.DefaultModel,
+			Source:   "default",
+			Supplier: supplier,
+		}
 	}
 	return defaults, nil
 }

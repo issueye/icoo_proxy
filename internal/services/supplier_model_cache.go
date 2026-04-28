@@ -20,6 +20,7 @@ type cachedSupplier struct {
 	protocol consts.Protocol
 	enabled  bool
 	models   map[string]string
+	snapshot models.Snapshot
 }
 
 // NewSupplierModelCache 创建供应商模型缓存。
@@ -31,7 +32,7 @@ func NewSupplierModelCache() *SupplierModelCache {
 }
 
 // Rebuild 根据供应商列表重建缓存快照。
-func (c *SupplierModelCache) Rebuild(suppliers []models.SupplierRecord) error {
+func (c *SupplierModelCache) Rebuild(suppliers []models.Snapshot) error {
 	if c == nil {
 		return nil
 	}
@@ -46,17 +47,18 @@ func (c *SupplierModelCache) Rebuild(suppliers []models.SupplierRecord) error {
 		entry := cachedSupplier{
 			name:     strings.TrimSpace(supplier.Name),
 			protocol: supplier.Protocol,
-			enabled:  supplier.Enabled,
-			models:   make(map[string]string, len(supplier.Models)),
+			enabled:  supplier.IsEnabled,
+			models:   make(map[string]string, len(splitSupplierModels(supplier))),
+			snapshot: supplier,
 		}
-		for _, rawModel := range supplier.Models {
+		for _, rawModel := range splitSupplierModels(supplier) {
 			modelKey := normalizeCacheSegment(rawModel)
 			modelName := strings.TrimSpace(rawModel)
 			if modelKey == "" || modelName == "" {
 				continue
 			}
 			entry.models[modelKey] = modelName
-			if !supplier.Enabled {
+			if !supplier.IsEnabled {
 				continue
 			}
 			qualifiedKey := buildQualifiedCacheKey(supplier.Name, rawModel)
@@ -68,6 +70,7 @@ func (c *SupplierModelCache) Rebuild(suppliers []models.SupplierRecord) error {
 				Upstream: supplier.Protocol,
 				Model:    modelName,
 				Source:   "qualified-supplier-model",
+				Supplier: supplier,
 			}
 		}
 		byName[supplierName] = entry
@@ -121,7 +124,29 @@ func (c *SupplierModelCache) ResolveBySupplierAndModel(supplierName, model strin
 		Upstream: entry.protocol,
 		Model:    modelName,
 		Source:   "route-policy-supplier-model",
+		Supplier: entry.snapshot,
 	}, true
+}
+
+func splitSupplierModels(supplier models.Snapshot) []string {
+	models := make([]string, 0, len(supplier.Models)+1)
+	seen := make(map[string]struct{}, len(supplier.Models)+1)
+	appendModel := func(raw string) {
+		model := strings.TrimSpace(raw)
+		if model == "" {
+			return
+		}
+		if _, ok := seen[model]; ok {
+			return
+		}
+		seen[model] = struct{}{}
+		models = append(models, model)
+	}
+	for _, model := range supplier.Models {
+		appendModel(model)
+	}
+	appendModel(supplier.DefaultModel)
+	return models
 }
 
 func normalizeQualifiedModel(raw string) string {

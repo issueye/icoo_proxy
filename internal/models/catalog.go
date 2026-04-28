@@ -7,4 +7,5 @@ type Route struct {
 	Upstream consts.Protocol `json:"upstream"`
 	Model    string          `json:"model"`
 	Source   string          `json:"source,omitempty"`
+	Supplier Snapshot        `json:"-"`
 }

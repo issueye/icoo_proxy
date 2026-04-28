@@ -17,6 +17,7 @@ func TestServiceRecordsAndListsRecentRequestsNewestFirst(t *testing.T) {
 
 	first := api.RequestView{
 		RequestID:  "req-first",
+		Endpoint:   "/v1/chat/completions",
 		Downstream: "openai-chat",
 		Upstream:   "openai-responses",
 		Model:      "gpt-4.1-mini",
@@ -26,6 +27,7 @@ func TestServiceRecordsAndListsRecentRequestsNewestFirst(t *testing.T) {
 	}
 	second := api.RequestView{
 		RequestID:  "req-second",
+		Endpoint:   "/v1/messages",
 		Downstream: "anthropic",
 		Upstream:   "openai-responses",
 		Model:      "claude-sonnet",
@@ -49,6 +51,9 @@ func TestServiceRecordsAndListsRecentRequestsNewestFirst(t *testing.T) {
 	if got[0].RequestID != "req-second" || got[1].RequestID != "req-first" {
 		t.Fatalf("expected newest first, got %#v", got)
 	}
+	if got[0].Endpoint != "/v1/messages" || got[1].Endpoint != "/v1/chat/completions" {
+		t.Fatalf("expected endpoint field preserved, got %#v", got)
+	}
 	if got[0].Error != "upstream failed" {
 		t.Fatalf("expected error field preserved, got %#v", got[0])
 	}
@@ -68,6 +73,9 @@ func TestServiceRecordsAndListsRecentRequestsNewestFirst(t *testing.T) {
 	}
 	if got[0].RequestID != "req-second" || got[1].RequestID != "req-first" {
 		t.Fatalf("expected persisted records newest first, got %#v", got)
+	}
+	if got[0].Endpoint != "/v1/messages" || got[1].Endpoint != "/v1/chat/completions" {
+		t.Fatalf("expected persisted endpoints, got %#v", got)
 	}
 }
 

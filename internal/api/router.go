@@ -42,6 +42,7 @@ type UpstreamView struct {
 
 type RequestView struct {
 	RequestID    string `json:"request_id"`
+	Endpoint     string `json:"endpoint,omitempty"`
 	Downstream   string `json:"downstream"`
 	Upstream     string `json:"upstream"`
 	Model        string `json:"model"`

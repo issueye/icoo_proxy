@@ -16,5 +16,6 @@ type Snapshot struct {
 	OnlyStream   bool
 	UserAgent    string
 	IsEnabled    bool
+	Models       []string
 	DefaultModel string
 }

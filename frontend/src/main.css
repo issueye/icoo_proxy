@@ -648,25 +648,13 @@ button:disabled {
     z-index: 30;
   }
 
-  .admin-table .is-sticky-left-last::after,
-  .admin-table .is-sticky-right-first::before {
-    position: absolute;
-    top: 0;
-    bottom: -1px;
-    width: 16px;
-    pointer-events: none;
-    content: "";
-  }
+.admin-table .is-sticky-left-last {
+  box-shadow: 10px 0 12px -12px rgba(15, 23, 42, 0.2);
+}
 
-  .admin-table .is-sticky-left-last::after {
-    right: -16px;
-    background: linear-gradient(90deg, rgba(15, 23, 42, 0.1), rgba(15, 23, 42, 0));
-  }
-
-  .admin-table .is-sticky-right-first::before {
-    left: -16px;
-    background: linear-gradient(90deg, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.1));
-  }
+.admin-table .is-sticky-right-first {
+  box-shadow: -10px 0 12px -12px rgba(15, 23, 42, 0.2);
+}
 
   .admin-table th.actions-header,
   .admin-table td.actions-header {
