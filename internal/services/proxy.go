@@ -20,6 +20,7 @@ import (
 	"icoo_proxy/internal/consts"
 )
 
+// ProxyService 负责代理入口的鉴权、路由解析、协议转换、上游转发和请求记录。
 type ProxyService struct {
 	cfg      config.Config
 	client   *http.Client
@@ -30,10 +31,12 @@ type ProxyService struct {
 	catalog  *CatalogService
 }
 
+// RequestRecorder 定义代理请求记录器，用于将请求概览写入持久化存储。
 type RequestRecorder interface {
 	RecordRequest(api.RequestView) error
 }
 
+// New 创建代理服务实例，并注入运行配置和模型路由目录。
 func New(cfg config.Config, catalog *CatalogService) *ProxyService {
 	return &ProxyService{
 		cfg:     cfg,
@@ -42,567 +45,458 @@ func New(cfg config.Config, catalog *CatalogService) *ProxyService {
 	}
 }
 
+// SetChainLogger 设置链路日志记录器，用于记录请求和响应的关键阶段。
 func (s *ProxyService) SetChainLogger(logger *slog.Logger) {
 	s.logger = logger
 }
 
+// SetRequestRecorder 设置请求记录器，用于保存最近请求和流量历史。
 func (s *ProxyService) SetRequestRecorder(recorder RequestRecorder) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recorder = recorder
 }
 
-func (s *ProxyService) Handle(w http.ResponseWriter, r *http.Request, downstream consts.Protocol) {
-	requestID := newRequestID()
-	start := time.Now()
-	w.Header().Set("X-ICOO-Request-ID", requestID)
+// proxyRequestContext 保存单次代理请求在各处理阶段共享的上下文数据。
+type proxyRequestContext struct {
+	requestID             string
+	start                 time.Time
+	downstream            consts.Protocol
+	requestedModel        string
+	body                  []byte
+	downstreamWantsStream bool
+	route                 Route
+}
 
-	if r.Method != http.MethodPost {
-		s.logChain("downstream.request.rejected",
-			"request_id", requestID,
-			"downstream", downstream.ToString(),
-			"method", r.Method,
-			"path", r.URL.Path,
-			"headers", sanitizedHeaders(r.Header),
-			"error", "method not allowed",
-		)
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			StatusCode: http.StatusMethodNotAllowed,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      "method not allowed",
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
+// newProxyRequestContext 初始化请求上下文，并生成本次请求的追踪 ID。
+func newProxyRequestContext(downstream consts.Protocol) proxyRequestContext {
+	return proxyRequestContext{
+		requestID:  newRequestID(),
+		start:      time.Now(),
+		downstream: downstream,
+	}
+}
+
+// view 将当前请求上下文转换为前端和流量记录使用的请求视图。
+func (ctx *proxyRequestContext) view(statusCode int, message string) api.RequestView {
+	item := api.RequestView{
+		RequestID:  ctx.requestID,
+		Downstream: ctx.downstream.ToString(),
+		Model:      ctx.requestedModel,
+		StatusCode: statusCode,
+		DurationMS: time.Since(ctx.start).Milliseconds(),
+		Error:      message,
+		CreatedAt:  time.Now().Format(time.RFC3339),
+	}
+	if ctx.route.Upstream != "" {
+		item.Upstream = ctx.route.Upstream.ToString()
+		item.Model = ctx.route.Model
+	}
+	return item
+}
+
+// Handle 是代理请求入口，按校验、读取、路由、转换、转发和响应处理顺序编排各阶段。
+func (s *ProxyService) Handle(w http.ResponseWriter, r *http.Request, downstream consts.Protocol) {
+	ctx := newProxyRequestContext(downstream)
+	w.Header().Set("X-ICOO-Request-ID", ctx.requestID)
+
+	if !s.validateDownstreamRequest(w, r, &ctx) {
 		return
+	}
+	if !s.readDownstreamRequest(w, r, &ctx) {
+		return
+	}
+	if !s.resolveRequestRoute(w, &ctx) {
+		return
+	}
+	preparedBody, ok := s.prepareUpstreamRequestBody(w, &ctx)
+	if !ok {
+		return
+	}
+	resp, ok := s.sendUpstreamRequest(w, r, &ctx, preparedBody)
+	if !ok {
+		return
+	}
+	defer resp.Body.Close()
+
+	s.handleUpstreamResponse(w, resp, &ctx)
+}
+
+// validateDownstreamRequest 校验下游请求方法和代理鉴权信息。
+func (s *ProxyService) validateDownstreamRequest(w http.ResponseWriter, r *http.Request, ctx *proxyRequestContext) bool {
+	if r.Method != http.MethodPost {
+		s.logRejectedDownstreamRequest(r, ctx, "method not allowed")
+		s.fail(w, ctx.downstream, ctx.view(http.StatusMethodNotAllowed, "method not allowed"))
+		return false
 	}
 	if err := s.authorize(r); err != nil {
-		s.logChain("downstream.request.rejected",
-			"request_id", requestID,
-			"downstream", downstream.ToString(),
-			"method", r.Method,
-			"path", r.URL.Path,
-			"headers", sanitizedHeaders(r.Header),
-			"error", err.Error(),
-		)
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			StatusCode: http.StatusUnauthorized,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      err.Error(),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		s.logRejectedDownstreamRequest(r, ctx, err.Error())
+		s.fail(w, ctx.downstream, ctx.view(http.StatusUnauthorized, err.Error()))
+		return false
 	}
+	return true
+}
 
+// logRejectedDownstreamRequest 记录被拒绝的下游请求，便于排查鉴权或方法错误。
+func (s *ProxyService) logRejectedDownstreamRequest(r *http.Request, ctx *proxyRequestContext, message string) {
+	s.logChain("downstream.request.rejected",
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"method", r.Method,
+		"path", r.URL.Path,
+		"headers", sanitizedHeaders(r.Header),
+		"error", message,
+	)
+}
+
+// readDownstreamRequest 读取下游请求体，并记录原始请求链路日志。
+func (s *ProxyService) readDownstreamRequest(w http.ResponseWriter, r *http.Request, ctx *proxyRequestContext) bool {
 	body, err := io.ReadAll(r.Body)
+	_ = r.Body.Close()
 	if err != nil {
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			StatusCode: http.StatusBadRequest,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      "failed to read request body",
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, "failed to read request body"))
+		return false
 	}
-	defer r.Body.Close()
+	ctx.body = body
 	s.logChain("downstream.request",
-		"request_id", requestID,
-		"downstream", downstream.ToString(),
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
 		"method", r.Method,
 		"path", r.URL.Path,
 		"remote_addr", r.RemoteAddr,
 		"headers", sanitizedHeaders(r.Header),
 		"body", s.logBody(body),
 	)
+	return true
+}
 
-	requestModel, err := extractModel(body)
+// resolveRequestRoute 提取请求模型，并根据下游协议和模型目录解析目标上游路由。
+func (s *ProxyService) resolveRequestRoute(w http.ResponseWriter, ctx *proxyRequestContext) bool {
+	requestModel, err := extractModel(ctx.body)
 	if err != nil {
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			StatusCode: http.StatusBadRequest,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      err.Error(),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error()))
+		return false
 	}
+	ctx.requestedModel = requestModel
 
-	// 路由解析
-	route, err := s.catalog.Resolve(downstream, requestModel)
+	route, err := s.catalog.Resolve(ctx.downstream, requestModel)
 	if err != nil {
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Model:      requestModel,
-			StatusCode: http.StatusBadRequest,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      err.Error(),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error()))
+		return false
 	}
+	ctx.route = route
 	s.logChain("route.resolved",
-		"request_id", requestID,
-		"downstream", downstream.ToString(),
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
 		"requested_model", requestModel,
 		"upstream", route.Upstream.ToString(),
 		"target_model", route.Model,
 		"route_name", route.Name,
 	)
+	return true
+}
 
-	// 请求体准备
-	preparedBody, err := s.prepareRequestBody(downstream, route, body)
+// prepareUpstreamRequestBody 按路由结果改写或转换请求体，并按上游配置强制开启流式请求。
+func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *proxyRequestContext) ([]byte, bool) {
+	preparedBody, err := s.prepareRequestBody(ctx.downstream, ctx.route, ctx.body)
 	if err != nil {
 		status := mapPrepareErrorStatus(err)
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Upstream:   route.Upstream.ToString(),
-			Model:      route.Model,
-			StatusCode: status,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      err.Error(),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		s.fail(w, ctx.downstream, ctx.view(status, err.Error()))
+		return nil, false
 	}
 
-	// 流式响应处理
-	downstreamWantsStream := requestUsesStreaming(body)
+	ctx.downstreamWantsStream = requestUsesStreaming(ctx.body)
 	forcedUpstreamStream := false
-	if s.shouldForceUpstreamStream(route.Upstream) && !requestUsesStreaming(preparedBody) {
+	if s.shouldForceUpstreamStream(ctx.route.Upstream) && !requestUsesStreaming(preparedBody) {
 		preparedBody, err = forceStreamRequest(preparedBody)
 		if err != nil {
-			s.fail(w, downstream, api.RequestView{
-				RequestID:  requestID,
-				Downstream: downstream.ToString(),
-				Upstream:   route.Upstream.ToString(),
-				Model:      route.Model,
-				StatusCode: http.StatusBadRequest,
-				DurationMS: time.Since(start).Milliseconds(),
-				Error:      err.Error(),
-				CreatedAt:  time.Now().Format(time.RFC3339),
-			})
-			return
+			s.fail(w, ctx.downstream, ctx.view(http.StatusBadRequest, err.Error()))
+			return nil, false
 		}
 		forcedUpstreamStream = true
 	}
 	s.logChain("conversion.request",
-		"request_id", requestID,
-		"downstream", downstream.ToString(),
-		"upstream", route.Upstream.ToString(),
-		"target_model", route.Model,
-		"translated", route.Upstream != downstream,
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"upstream", ctx.route.Upstream.ToString(),
+		"target_model", ctx.route.Model,
+		"translated", ctx.route.Upstream != ctx.downstream,
 		"forced_stream", forcedUpstreamStream,
-		"input_body", s.logBody(body),
+		"input_body", s.logBody(ctx.body),
 		"output_body", s.logBody(preparedBody),
 	)
+	return preparedBody, true
+}
 
-	// 上游请求准备
-	upstreamURL, err := s.upstreamURL(route.Upstream)
+// sendUpstreamRequest 构建上游 HTTP 请求、应用协议请求头并发送到目标供应商。
+func (s *ProxyService) sendUpstreamRequest(w http.ResponseWriter, r *http.Request, ctx *proxyRequestContext, preparedBody []byte) (*http.Response, bool) {
+	upstreamURL, err := s.upstreamURL(ctx.route.Upstream)
 	if err != nil {
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Upstream:   route.Upstream.ToString(),
-			Model:      route.Model,
-			StatusCode: http.StatusBadGateway,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      err.Error(),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		return nil, false
 	}
 
-	// 上游请求发送
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, strings.NewReader(string(preparedBody)))
 	if err != nil {
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Upstream:   route.Upstream.ToString(),
-			Model:      route.Model,
-			StatusCode: http.StatusBadGateway,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      "failed to build upstream request",
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, "failed to build upstream request"))
+		return nil, false
 	}
 
-	// 上游请求头应用
-	s.applyRequestHeaders(req, r, route.Upstream)
+	s.applyRequestHeaders(req, r, ctx.route.Upstream)
 	s.logChain("upstream.request",
-		"request_id", requestID,
-		"downstream", downstream.ToString(),
-		"upstream", route.Upstream.ToString(),
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"upstream", ctx.route.Upstream.ToString(),
 		"method", req.Method,
 		"url", upstreamURL,
 		"headers", sanitizedHeaders(req.Header),
 		"body", s.logBody(preparedBody),
 	)
 
-	// 上游响应接收
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Upstream:   route.Upstream.ToString(),
-			Model:      route.Model,
-			StatusCode: http.StatusBadGateway,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      fmt.Sprintf("upstream request failed: %v", err),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		message := fmt.Sprintf("upstream request failed: %v", err)
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, message))
+		return nil, false
 	}
-	defer resp.Body.Close()
+	return resp, true
+}
 
-	// 上游响应头应用
+// handleUpstreamResponse 分发上游响应处理流程，区分同协议、跨协议和事件流响应。
+func (s *ProxyService) handleUpstreamResponse(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
 	copyResponseHeaders(w.Header(), resp.Header)
-	w.Header().Set("X-ICOO-Request-ID", requestID)
-	w.Header().Set("X-ICOO-Upstream-Protocol", route.Upstream.ToString())
+	w.Header().Set("X-ICOO-Request-ID", ctx.requestID)
+	w.Header().Set("X-ICOO-Upstream-Protocol", ctx.route.Upstream.ToString())
 
-	// 上游响应处理
-	if route.Upstream == downstream {
-		if isEventStream(resp.Header) {
-			s.logChain("upstream.response",
-				"request_id", requestID,
-				"downstream", downstream.ToString(),
-				"upstream", route.Upstream.ToString(),
-				"status_code", resp.StatusCode,
-				"headers", sanitizedHeaders(resp.Header),
-				"body", "<event-stream body not captured>",
-			)
-			if downstreamWantsStream {
-				w.WriteHeader(resp.StatusCode)
-				s.logChain("downstream.response",
-					"request_id", requestID,
-					"downstream", downstream.ToString(),
-					"upstream", route.Upstream.ToString(),
-					"status_code", resp.StatusCode,
-					"headers", sanitizedHeaders(w.Header()),
-					"body", "<event-stream body not captured>",
-				)
-				copyStream(w, resp.Body)
-			} else if route.Upstream == consts.ProtocolOpenAIResponses {
-				aggregatedBody, aggregateErr := aggregateResponsesStreamToJSON(resp.Body)
-				if aggregateErr != nil {
-					s.fail(w, downstream, api.RequestView{
-						RequestID:  requestID,
-						Downstream: downstream.ToString(),
-						Upstream:   route.Upstream.ToString(),
-						Model:      route.Model,
-						StatusCode: http.StatusBadGateway,
-						DurationMS: time.Since(start).Milliseconds(),
-						Error:      aggregateErr.Error(),
-						CreatedAt:  time.Now().Format(time.RFC3339),
-					})
-					return
-				}
-				s.logChain("conversion.stream.aggregate",
-					"request_id", requestID,
-					"downstream", downstream.ToString(),
-					"upstream", route.Upstream.ToString(),
-					"target_model", route.Model,
-					"output_body", s.logBody(aggregatedBody),
-				)
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				w.WriteHeader(resp.StatusCode)
-				_, _ = w.Write(aggregatedBody)
-				s.logChain("downstream.response",
-					"request_id", requestID,
-					"downstream", downstream.ToString(),
-					"upstream", route.Upstream.ToString(),
-					"status_code", resp.StatusCode,
-					"headers", sanitizedHeaders(w.Header()),
-					"body", s.logBody(aggregatedBody),
-				)
-			} else {
-				s.fail(w, downstream, api.RequestView{
-					RequestID:  requestID,
-					Downstream: downstream.ToString(),
-					Upstream:   route.Upstream.ToString(),
-					Model:      route.Model,
-					StatusCode: http.StatusNotImplemented,
-					DurationMS: time.Since(start).Milliseconds(),
-					Error:      "stream-only upstream aggregation is not implemented for this protocol",
-					CreatedAt:  time.Now().Format(time.RFC3339),
-				})
-				return
-			}
-		} else {
-			upstreamBody, readErr := io.ReadAll(resp.Body)
-			if readErr != nil {
-				s.fail(w, downstream, api.RequestView{
-					RequestID:  requestID,
-					Downstream: downstream.ToString(),
-					Upstream:   route.Upstream.ToString(),
-					Model:      route.Model,
-					StatusCode: http.StatusBadGateway,
-					DurationMS: time.Since(start).Milliseconds(),
-					Error:      "failed to read upstream response body",
-					CreatedAt:  time.Now().Format(time.RFC3339),
-				})
-				return
-			}
-			s.logChain("upstream.response",
-				"request_id", requestID,
-				"downstream", downstream.ToString(),
-				"upstream", route.Upstream.ToString(),
-				"status_code", resp.StatusCode,
-				"headers", sanitizedHeaders(resp.Header),
-				"body", s.logBody(upstreamBody),
-			)
-			s.logChain("downstream.response",
-				"request_id", requestID,
-				"downstream", downstream.ToString(),
-				"upstream", route.Upstream.ToString(),
-				"status_code", resp.StatusCode,
-				"headers", sanitizedHeaders(w.Header()),
-				"body", s.logBody(upstreamBody),
-			)
-			w.WriteHeader(resp.StatusCode)
-			_, _ = w.Write(upstreamBody)
-		}
-		s.logRequest(api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Upstream:   route.Upstream.ToString(),
-			Model:      route.Model,
-			StatusCode: resp.StatusCode,
-			DurationMS: time.Since(start).Milliseconds(),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
+	if ctx.route.Upstream == ctx.downstream {
+		s.handleSameProtocolResponse(w, resp, ctx)
 		return
 	}
-	// 流式响应处理
 	if isEventStream(resp.Header) {
-		s.logChain("upstream.response",
-			"request_id", requestID,
-			"downstream", downstream.ToString(),
-			"upstream", route.Upstream.ToString(),
-			"status_code", resp.StatusCode,
-			"headers", sanitizedHeaders(resp.Header),
-			"body", "<event-stream body not captured>",
-		)
-		switch {
-		case downstream == consts.ProtocolAnthropic && route.Upstream == consts.ProtocolOpenAIResponses && downstreamWantsStream:
-			w.Header().Set("Content-Type", "text/event-stream")
-			w.Header().Set("Cache-Control", "no-cache")
-			w.Header().Del("Content-Length")
-			w.WriteHeader(resp.StatusCode)
-			err = s.translateResponsesStreamToAnthropic(w, resp.Body, route.Model, requestID)
-			s.logChain("downstream.response",
-				"request_id", requestID,
-				"downstream", downstream.ToString(),
-				"upstream", route.Upstream.ToString(),
-				"status_code", resp.StatusCode,
-				"headers", sanitizedHeaders(w.Header()),
-				"body", "<translated event-stream body not captured>",
-			)
-			item := api.RequestView{
-				RequestID:  requestID,
-				Downstream: downstream.ToString(),
-				Upstream:   route.Upstream.ToString(),
-				Model:      route.Model,
-				StatusCode: resp.StatusCode,
-				DurationMS: time.Since(start).Milliseconds(),
-				CreatedAt:  time.Now().Format(time.RFC3339),
-			}
-			if err != nil {
-				item.Error = err.Error()
-				s.logChain("conversion.stream.error",
-					"request_id", requestID,
-					"downstream", downstream.ToString(),
-					"upstream", route.Upstream.ToString(),
-					"error", err.Error(),
-				)
-			}
-			s.logRequest(item)
-			return
-		case !downstreamWantsStream && route.Upstream == consts.ProtocolOpenAIResponses:
-			aggregatedBody, aggregateErr := aggregateResponsesStreamToJSON(resp.Body)
-			if aggregateErr != nil {
-				s.fail(w, downstream, api.RequestView{
-					RequestID:  requestID,
-					Downstream: downstream.ToString(),
-					Upstream:   route.Upstream.ToString(),
-					Model:      route.Model,
-					StatusCode: http.StatusBadGateway,
-					DurationMS: time.Since(start).Milliseconds(),
-					Error:      aggregateErr.Error(),
-					CreatedAt:  time.Now().Format(time.RFC3339),
-				})
-				return
-			}
-			s.logChain("conversion.stream.aggregate",
-				"request_id", requestID,
-				"downstream", downstream.ToString(),
-				"upstream", route.Upstream.ToString(),
-				"target_model", route.Model,
-				"output_body", s.logBody(aggregatedBody),
-			)
-			translated, translateErr := translateResponseBody(downstream, route.Upstream, route.Model, aggregatedBody)
-			if translateErr != nil {
-				s.fail(w, downstream, api.RequestView{
-					RequestID:  requestID,
-					Downstream: downstream.ToString(),
-					Upstream:   route.Upstream.ToString(),
-					Model:      route.Model,
-					StatusCode: http.StatusBadGateway,
-					DurationMS: time.Since(start).Milliseconds(),
-					Error:      translateErr.Error(),
-					CreatedAt:  time.Now().Format(time.RFC3339),
-				})
-				return
-			}
-			s.logChain("conversion.response",
-				"request_id", requestID,
-				"downstream", downstream.ToString(),
-				"upstream", route.Upstream.ToString(),
-				"target_model", route.Model,
-				"translated", route.Upstream != downstream,
-				"input_body", s.logBody(aggregatedBody),
-				"output_body", s.logBody(translated),
-			)
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(resp.StatusCode)
-			_, _ = w.Write(translated)
-			s.logChain("downstream.response",
-				"request_id", requestID,
-				"downstream", downstream.ToString(),
-				"upstream", route.Upstream.ToString(),
-				"status_code", resp.StatusCode,
-				"headers", sanitizedHeaders(w.Header()),
-				"body", s.logBody(translated),
-			)
-			s.logRequest(api.RequestView{
-				RequestID:  requestID,
-				Downstream: downstream.ToString(),
-				Upstream:   route.Upstream.ToString(),
-				Model:      route.Model,
-				StatusCode: resp.StatusCode,
-				DurationMS: time.Since(start).Milliseconds(),
-				CreatedAt:  time.Now().Format(time.RFC3339),
-			})
-			return
-		default:
-			s.fail(w, downstream, api.RequestView{
-				RequestID:  requestID,
-				Downstream: downstream.ToString(),
-				Upstream:   route.Upstream.ToString(),
-				Model:      route.Model,
-				StatusCode: http.StatusNotImplemented,
-				DurationMS: time.Since(start).Milliseconds(),
-				Error:      "streaming cross protocol translation is not implemented yet",
-				CreatedAt:  time.Now().Format(time.RFC3339),
-			})
-			return
-		}
-	}
-
-	upstreamBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Upstream:   route.Upstream.ToString(),
-			Model:      route.Model,
-			StatusCode: http.StatusBadGateway,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      "failed to read upstream response body",
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
+		s.handleCrossProtocolEventStream(w, resp, ctx)
 		return
 	}
-	s.logChain("upstream.response",
-		"request_id", requestID,
-		"downstream", downstream.ToString(),
-		"upstream", route.Upstream.ToString(),
-		"status_code", resp.StatusCode,
-		"headers", sanitizedHeaders(resp.Header),
-		"body", s.logBody(upstreamBody),
-	)
+	s.handleCrossProtocolJSON(w, resp, ctx)
+}
 
-	// 上游响应处理
-	if resp.StatusCode >= 400 {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+// handleSameProtocolResponse 处理上下游协议相同的响应，直接透传或按需聚合流式结果。
+func (s *ProxyService) handleSameProtocolResponse(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
+	var ok bool
+	if isEventStream(resp.Header) {
+		ok = s.handleSameProtocolEventStream(w, resp, ctx)
+	} else {
+		ok = s.handleSameProtocolJSON(w, resp, ctx)
+	}
+	if ok {
+		s.logSuccessfulRequest(resp.StatusCode, ctx)
+	}
+}
+
+// handleSameProtocolEventStream 处理同协议事件流响应；下游非流式时支持聚合 OpenAI Responses 流。
+func (s *ProxyService) handleSameProtocolEventStream(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) bool {
+	s.logEventStreamUpstreamResponse(resp, ctx)
+	if ctx.downstreamWantsStream {
 		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write(upstreamBody)
-		s.logChain("downstream.response",
-			"request_id", requestID,
-			"downstream", downstream.ToString(),
-			"upstream", route.Upstream.ToString(),
-			"status_code", resp.StatusCode,
-			"headers", sanitizedHeaders(w.Header()),
-			"body", s.logBody(upstreamBody),
-		)
-		s.logRequest(api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Upstream:   route.Upstream.ToString(),
-			Model:      route.Model,
-			StatusCode: resp.StatusCode,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      "upstream returned error",
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
-		return
+		s.logDownstreamResponse(w, resp.StatusCode, "<event-stream body not captured>", ctx)
+		copyStream(w, resp.Body)
+		return true
+	}
+	if ctx.route.Upstream != consts.ProtocolOpenAIResponses {
+		s.fail(w, ctx.downstream, ctx.view(http.StatusNotImplemented, "stream-only upstream aggregation is not implemented for this protocol"))
+		return false
 	}
 
-	translated, err := translateResponseBody(downstream, route.Upstream, route.Model, upstreamBody)
+	aggregatedBody, err := aggregateResponsesStreamToJSON(resp.Body)
 	if err != nil {
-		s.fail(w, downstream, api.RequestView{
-			RequestID:  requestID,
-			Downstream: downstream.ToString(),
-			Upstream:   route.Upstream.ToString(),
-			Model:      route.Model,
-			StatusCode: http.StatusBadGateway,
-			DurationMS: time.Since(start).Milliseconds(),
-			Error:      err.Error(),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-		})
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		return false
+	}
+	s.logStreamAggregation(aggregatedBody, ctx)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(aggregatedBody)
+	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(aggregatedBody), ctx)
+	return true
+}
+
+// handleSameProtocolJSON 处理同协议 JSON 响应，读取上游响应体后原样返回给下游。
+func (s *ProxyService) handleSameProtocolJSON(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) bool {
+	upstreamBody, ok := s.readUpstreamResponse(w, resp, ctx)
+	if !ok {
+		return false
+	}
+	s.logJSONUpstreamResponse(resp, upstreamBody, ctx)
+	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(upstreamBody), ctx)
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(upstreamBody)
+	return true
+}
+
+// handleCrossProtocolEventStream 处理跨协议事件流响应，目前支持 OpenAI Responses 到 Anthropic 的流式转换或聚合转换。
+func (s *ProxyService) handleCrossProtocolEventStream(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
+	s.logEventStreamUpstreamResponse(resp, ctx)
+	switch {
+	case ctx.downstream == consts.ProtocolAnthropic && ctx.route.Upstream == consts.ProtocolOpenAIResponses && ctx.downstreamWantsStream:
+		s.translateStreamingResponsesToAnthropic(w, resp, ctx)
+	case !ctx.downstreamWantsStream && ctx.route.Upstream == consts.ProtocolOpenAIResponses:
+		s.aggregateAndTranslateResponsesStream(w, resp, ctx)
+	default:
+		s.fail(w, ctx.downstream, ctx.view(http.StatusNotImplemented, "streaming cross protocol translation is not implemented yet"))
+	}
+}
+
+// translateStreamingResponsesToAnthropic 将 OpenAI Responses 事件流转换为 Anthropic 事件流。
+func (s *ProxyService) translateStreamingResponsesToAnthropic(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Del("Content-Length")
+	w.WriteHeader(resp.StatusCode)
+	err := s.translateResponsesStreamToAnthropic(w, resp.Body, ctx.route.Model, ctx.requestID)
+	s.logDownstreamResponse(w, resp.StatusCode, "<translated event-stream body not captured>", ctx)
+	item := ctx.view(resp.StatusCode, "")
+	if err != nil {
+		item.Error = err.Error()
+		s.logChain("conversion.stream.error",
+			"request_id", ctx.requestID,
+			"downstream", ctx.downstream.ToString(),
+			"upstream", ctx.route.Upstream.ToString(),
+			"error", err.Error(),
+		)
+	}
+	s.logRequest(item)
+}
+
+// aggregateAndTranslateResponsesStream 将 OpenAI Responses 流式响应聚合为 JSON，再转换为下游协议响应。
+func (s *ProxyService) aggregateAndTranslateResponsesStream(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
+	aggregatedBody, err := aggregateResponsesStreamToJSON(resp.Body)
+	if err != nil {
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
 		return
 	}
-	s.logChain("conversion.response",
-		"request_id", requestID,
-		"downstream", downstream.ToString(),
-		"upstream", route.Upstream.ToString(),
-		"target_model", route.Model,
-		"translated", route.Upstream != downstream,
-		"input_body", s.logBody(upstreamBody),
-		"output_body", s.logBody(translated),
-	)
-
+	s.logStreamAggregation(aggregatedBody, ctx)
+	translated, err := translateResponseBody(ctx.downstream, ctx.route.Upstream, ctx.route.Model, aggregatedBody)
+	if err != nil {
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		return
+	}
+	s.logResponseConversion(aggregatedBody, translated, ctx)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(translated)
-	s.logChain("downstream.response",
-		"request_id", requestID,
-		"downstream", downstream.ToString(),
-		"upstream", route.Upstream.ToString(),
-		"status_code", resp.StatusCode,
-		"headers", sanitizedHeaders(w.Header()),
-		"body", s.logBody(translated),
-	)
-	s.logRequest(api.RequestView{
-		RequestID:  requestID,
-		Downstream: downstream.ToString(),
-		Upstream:   route.Upstream.ToString(),
-		Model:      route.Model,
-		StatusCode: resp.StatusCode,
-		DurationMS: time.Since(start).Milliseconds(),
-		CreatedAt:  time.Now().Format(time.RFC3339),
-	})
+	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(translated), ctx)
+	s.logSuccessfulRequest(resp.StatusCode, ctx)
 }
 
+// handleCrossProtocolJSON 处理跨协议 JSON 响应；上游错误直接透传，成功响应执行协议转换。
+func (s *ProxyService) handleCrossProtocolJSON(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
+	upstreamBody, ok := s.readUpstreamResponse(w, resp, ctx)
+	if !ok {
+		return
+	}
+	s.logJSONUpstreamResponse(resp, upstreamBody, ctx)
+	if resp.StatusCode >= 400 {
+		s.writeUpstreamError(w, resp, upstreamBody, ctx)
+		return
+	}
+
+	translated, err := translateResponseBody(ctx.downstream, ctx.route.Upstream, ctx.route.Model, upstreamBody)
+	if err != nil {
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
+		return
+	}
+	s.logResponseConversion(upstreamBody, translated, ctx)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(translated)
+	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(translated), ctx)
+	s.logSuccessfulRequest(resp.StatusCode, ctx)
+}
+
+// readUpstreamResponse 读取上游响应体，读取失败时写入网关错误。
+func (s *ProxyService) readUpstreamResponse(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) ([]byte, bool) {
+	upstreamBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, "failed to read upstream response body"))
+		return nil, false
+	}
+	return upstreamBody, true
+}
+
+// writeUpstreamError 将上游错误响应体按原状态码透传给下游，并记录请求失败原因。
+func (s *ProxyService) writeUpstreamError(w http.ResponseWriter, resp *http.Response, body []byte, ctx *proxyRequestContext) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(body)
+	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(body), ctx)
+	s.logRequest(ctx.view(resp.StatusCode, "upstream returned error"))
+}
+
+// logEventStreamUpstreamResponse 记录上游事件流响应元信息，避免捕获大体积流式内容。
+func (s *ProxyService) logEventStreamUpstreamResponse(resp *http.Response, ctx *proxyRequestContext) {
+	s.logChain("upstream.response",
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"upstream", ctx.route.Upstream.ToString(),
+		"status_code", resp.StatusCode,
+		"headers", sanitizedHeaders(resp.Header),
+		"body", "<event-stream body not captured>",
+	)
+}
+
+// logJSONUpstreamResponse 记录上游 JSON 响应头、状态码和脱敏后的响应体。
+func (s *ProxyService) logJSONUpstreamResponse(resp *http.Response, body []byte, ctx *proxyRequestContext) {
+	s.logChain("upstream.response",
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"upstream", ctx.route.Upstream.ToString(),
+		"status_code", resp.StatusCode,
+		"headers", sanitizedHeaders(resp.Header),
+		"body", s.logBody(body),
+	)
+}
+
+// logDownstreamResponse 记录返回给下游客户端的响应信息。
+func (s *ProxyService) logDownstreamResponse(w http.ResponseWriter, statusCode int, body string, ctx *proxyRequestContext) {
+	s.logChain("downstream.response",
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"upstream", ctx.route.Upstream.ToString(),
+		"status_code", statusCode,
+		"headers", sanitizedHeaders(w.Header()),
+		"body", body,
+	)
+}
+
+// logStreamAggregation 记录流式响应聚合为 JSON 后的转换结果。
+func (s *ProxyService) logStreamAggregation(body []byte, ctx *proxyRequestContext) {
+	s.logChain("conversion.stream.aggregate",
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"upstream", ctx.route.Upstream.ToString(),
+		"target_model", ctx.route.Model,
+		"output_body", s.logBody(body),
+	)
+}
+
+// logResponseConversion 记录跨协议响应转换前后的内容，响应体会按配置脱敏和截断。
+func (s *ProxyService) logResponseConversion(inputBody, outputBody []byte, ctx *proxyRequestContext) {
+	s.logChain("conversion.response",
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"upstream", ctx.route.Upstream.ToString(),
+		"target_model", ctx.route.Model,
+		"translated", ctx.route.Upstream != ctx.downstream,
+		"input_body", s.logBody(inputBody),
+		"output_body", s.logBody(outputBody),
+	)
+}
+
+// logSuccessfulRequest 记录一次成功完成的代理请求。
+func (s *ProxyService) logSuccessfulRequest(statusCode int, ctx *proxyRequestContext) {
+	s.logRequest(ctx.view(statusCode, ""))
+}
+
+// shouldForceUpstreamStream 判断指定上游协议是否要求强制使用流式请求。
 func (s *ProxyService) shouldForceUpstreamStream(protocol consts.Protocol) bool {
 	switch protocol {
 	case consts.ProtocolOpenAIResponses:
@@ -612,6 +506,7 @@ func (s *ProxyService) shouldForceUpstreamStream(protocol consts.Protocol) bool 
 	}
 }
 
+// authorize 校验代理访问密钥，支持 x-api-key 和 Authorization Bearer 两种方式。
 func (s *ProxyService) authorize(r *http.Request) error {
 	expected := s.cfg.AuthKeys()
 	if len(expected) == 0 && s.cfg.AllowUnauthenticatedLocal {
@@ -633,6 +528,7 @@ func (s *ProxyService) authorize(r *http.Request) error {
 	return fmt.Errorf("invalid proxy api key")
 }
 
+// isLocalRequest 判断请求来源是否为本机回环地址。
 func isLocalRequest(r *http.Request) bool {
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
 	if err != nil {
@@ -700,6 +596,7 @@ func (s *ProxyService) applyRequestHeaders(target *http.Request, source *http.Re
 	}
 }
 
+// extractModel 从请求 JSON 中提取 model 字段。
 func extractModel(body []byte) (string, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -709,6 +606,7 @@ func extractModel(body []byte) (string, error) {
 	return strings.TrimSpace(model), nil
 }
 
+// rewriteModel 将请求体中的 model 改写为路由解析后的目标模型。
 func rewriteModel(body []byte, model string) ([]byte, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -722,6 +620,7 @@ func rewriteModel(body []byte, model string) ([]byte, error) {
 	return rewritten, nil
 }
 
+// rewriteResponsesRequest 改写 OpenAI Responses 请求模型，并补齐默认 reasoning 配置。
 func rewriteResponsesRequest(body []byte, model string) ([]byte, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -736,6 +635,7 @@ func rewriteResponsesRequest(body []byte, model string) ([]byte, error) {
 	return rewritten, nil
 }
 
+// requestUsesStreaming 判断请求体是否显式声明需要流式响应。
 func requestUsesStreaming(body []byte) bool {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -745,6 +645,7 @@ func requestUsesStreaming(body []byte) bool {
 	return stream
 }
 
+// forceStreamRequest 将请求体改写为 stream=true，用于只支持流式的上游。
 func forceStreamRequest(body []byte) ([]byte, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -758,6 +659,7 @@ func forceStreamRequest(body []byte) ([]byte, error) {
 	return rewritten, nil
 }
 
+// prepareRequestBody 根据上下游协议关系准备上游请求体：同协议改写模型，跨协议执行请求转换。
 func (s *ProxyService) prepareRequestBody(downstream consts.Protocol, route Route, body []byte) ([]byte, error) {
 	if route.Upstream == downstream {
 		if downstream == consts.ProtocolOpenAIResponses {
@@ -783,6 +685,7 @@ func (s *ProxyService) prepareRequestBody(downstream consts.Protocol, route Rout
 	}
 }
 
+// translateResponseBody 根据上下游协议关系执行响应体转换。
 func translateResponseBody(downstream, upstream consts.Protocol, model string, body []byte) ([]byte, error) {
 	switch {
 	case downstream == consts.ProtocolOpenAIChat && upstream == consts.ProtocolOpenAIResponses:
@@ -802,6 +705,7 @@ func translateResponseBody(downstream, upstream consts.Protocol, model string, b
 	}
 }
 
+// writeProtocolError 按下游协议格式写出统一错误响应。
 func writeProtocolError(w http.ResponseWriter, protocol consts.Protocol, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
@@ -824,6 +728,7 @@ func writeProtocolError(w http.ResponseWriter, protocol consts.Protocol, statusC
 	}
 }
 
+// fail 统一处理代理失败场景：记录链路、保存请求记录并写出协议错误响应。
 func (s *ProxyService) fail(w http.ResponseWriter, protocol consts.Protocol, item api.RequestView) {
 	s.logChain("downstream.response.error",
 		"request_id", item.RequestID,
@@ -838,6 +743,7 @@ func (s *ProxyService) fail(w http.ResponseWriter, protocol consts.Protocol, ite
 	writeProtocolError(w, protocol, item.StatusCode, item.Error)
 }
 
+// mapPrepareErrorStatus 将请求准备阶段的错误映射为合适的 HTTP 状态码。
 func mapPrepareErrorStatus(err error) int {
 	if strings.Contains(strings.ToLower(err.Error()), "not implemented") {
 		return http.StatusNotImplemented
@@ -845,6 +751,7 @@ func mapPrepareErrorStatus(err error) int {
 	return http.StatusBadRequest
 }
 
+// copyResponseHeaders 复制上游响应头，同时过滤不应转发的逐跳头和 Content-Length。
 func copyResponseHeaders(dst, src http.Header) {
 	for key, values := range src {
 		switch strings.ToLower(key) {
@@ -858,10 +765,12 @@ func copyResponseHeaders(dst, src http.Header) {
 	}
 }
 
+// isEventStream 判断响应头是否表示 Server-Sent Events 流。
 func isEventStream(header http.Header) bool {
 	return strings.Contains(strings.ToLower(header.Get("Content-Type")), "text/event-stream")
 }
 
+// copyStream 将上游流式响应持续转发给下游，并在支持时主动刷新。
 func copyStream(w http.ResponseWriter, body io.Reader) {
 	flusher, _ := w.(http.Flusher)
 	buffer := make([]byte, 4096)
@@ -882,6 +791,7 @@ func copyStream(w http.ResponseWriter, body io.Reader) {
 	}
 }
 
+// logChain 写入结构化链路日志；未配置日志器时直接忽略。
 func (s *ProxyService) logChain(event string, attrs ...interface{}) {
 	if s == nil || s.logger == nil {
 		return
@@ -889,6 +799,7 @@ func (s *ProxyService) logChain(event string, attrs ...interface{}) {
 	s.logger.Info(event, attrs...)
 }
 
+// logBody 根据链路日志配置返回响应体日志内容，并执行敏感字段脱敏和长度截断。
 func (s *ProxyService) logBody(body []byte) string {
 	if s == nil || !s.cfg.ChainLogBodies {
 		return "<body logging disabled>"
@@ -903,6 +814,7 @@ func (s *ProxyService) logBody(body []byte) string {
 	return result
 }
 
+// redactJSONBody 对 JSON 字符串中的敏感字段进行递归脱敏。
 func redactJSONBody(body []byte) string {
 	var payload interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -916,6 +828,7 @@ func redactJSONBody(body []byte) string {
 	return string(data)
 }
 
+// redactJSONValue 递归遍历 JSON 值并替换敏感字段内容。
 func redactJSONValue(value interface{}) interface{} {
 	switch typed := value.(type) {
 	case map[string]interface{}:
@@ -939,6 +852,7 @@ func redactJSONValue(value interface{}) interface{} {
 	}
 }
 
+// sanitizedHeaders 复制请求或响应头，并对敏感头字段进行脱敏。
 func sanitizedHeaders(headers http.Header) map[string][]string {
 	result := make(map[string][]string, len(headers))
 	for key, values := range headers {
@@ -951,6 +865,7 @@ func sanitizedHeaders(headers http.Header) map[string][]string {
 	return result
 }
 
+// isSensitiveName 判断字段名是否可能包含密钥、令牌、密码等敏感信息。
 func isSensitiveName(name string) bool {
 	normalized := strings.ToLower(strings.NewReplacer("-", "", "_", "", ".", "").Replace(name))
 	for _, marker := range []string{"authorization", "apikey", "token", "secret", "password", "credential"} {
@@ -961,6 +876,7 @@ func isSensitiveName(name string) bool {
 	return normalized == "key"
 }
 
+// newRequestID 生成短请求 ID，用于链路日志、响应头和请求记录关联。
 func newRequestID() string {
 	var data [8]byte
 	if _, err := rand.Read(data[:]); err != nil {
@@ -969,12 +885,14 @@ func newRequestID() string {
 	return "req-" + hex.EncodeToString(data[:])
 }
 
+// RecentRequests 返回内存中最近的代理请求记录快照。
 func (s *ProxyService) RecentRequests() []api.RequestView {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return slices.Clone(s.recent)
 }
 
+// logRequest 写入请求完成日志，并保存到最近请求和可选的持久化记录器。
 func (s *ProxyService) logRequest(item api.RequestView) {
 	s.recordRequest(item)
 	log.Printf("icoo_proxy request_id=%s downstream=%s upstream=%s model=%s status=%d duration_ms=%d", item.RequestID, item.Downstream, item.Upstream, item.Model, item.StatusCode, item.DurationMS)
@@ -989,6 +907,7 @@ func (s *ProxyService) logRequest(item api.RequestView) {
 	)
 }
 
+// recordRequest 更新内存最近请求列表，并在配置了记录器时写入持久化流量记录。
 func (s *ProxyService) recordRequest(item api.RequestView) {
 	s.mu.Lock()
 	s.recent = append([]api.RequestView{item}, s.recent...)

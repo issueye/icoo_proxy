@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"icoo_proxy/internal/consts"
-	"log/slog"
 	"net/http"
 )
 
@@ -129,7 +128,6 @@ func NewMux(provider StateProvider, proxy ProxyHandler, endpoints []EndpointRout
 	})
 	for _, endpoint := range endpoints {
 		route := endpoint
-		slog.Info("add endpoint", "path", route.Path, "protocol", route.Protocol)
 		mux.HandleFunc(route.Path, func(w http.ResponseWriter, r *http.Request) {
 			proxy.Handle(w, r, route.Protocol)
 		})
