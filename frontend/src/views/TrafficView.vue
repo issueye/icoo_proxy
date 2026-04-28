@@ -179,7 +179,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .traffic-page {
   display: flex;
-  min-height: calc(100vh - 142px);
+  height: 100%;
   flex-direction: column;
 }
 

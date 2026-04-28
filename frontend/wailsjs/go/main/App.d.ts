@@ -16,17 +16,17 @@ export function DeleteSupplier(arg1:string):Promise<Array<models.SupplierRecord>
 
 export function GetAuthKeySecret(arg1:string):Promise<string>;
 
-export function GetAuthKeysPage(arg1:number,arg2:number,arg3:string,arg4:string):Promise<Record<string, any>>;
+export function GetAuthKeysPage(arg1:number,arg2:number,arg3:string,arg4:string):Promise<services.AuthKeyPageResult>;
 
-export function GetEndpointsPage(arg1:number,arg2:number,arg3:string,arg4:string):Promise<Record<string, any>>;
+export function GetEndpointsPage(arg1:number,arg2:number,arg3:string,arg4:string):Promise<services.EndpointPageResult>;
 
 export function GetOverview():Promise<Record<string, any>>;
 
-export function GetTrafficPage(arg1:number,arg2:number,arg3:string):Promise<Record<string, any>>;
-
 export function GetProjectSettings():Promise<services.Values>;
 
-export function GetSuppliersPage(arg1:number,arg2:number,arg3:string,arg4:string):Promise<Record<string, any>>;
+export function GetSuppliersPage(arg1:number,arg2:number,arg3:string,arg4:string):Promise<services.SupplierPageResult>;
+
+export function GetTrafficPage(arg1:number,arg2:number,arg3:string):Promise<Record<string, any>>;
 
 export function GetUiPrefs():Promise<models.Preferences>;
 

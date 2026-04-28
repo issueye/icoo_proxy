@@ -477,6 +477,88 @@ export namespace models {
 
 export namespace services {
 	
+	export class AuthKeyPageResult {
+	    items: models.AuthKeyRecord[];
+	    total: number;
+	    page: number;
+	    page_size: number;
+	    total_count: number;
+	    enabled_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuthKeyPageResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], models.AuthKeyRecord);
+	        this.total = source["total"];
+	        this.page = source["page"];
+	        this.page_size = source["page_size"];
+	        this.total_count = source["total_count"];
+	        this.enabled_count = source["enabled_count"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class EndpointPageResult {
+	    items: models.EndpointRecord[];
+	    total: number;
+	    page: number;
+	    page_size: number;
+	    total_count: number;
+	    enabled_count: number;
+	    custom_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new EndpointPageResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], models.EndpointRecord);
+	        this.total = source["total"];
+	        this.page = source["page"];
+	        this.page_size = source["page_size"];
+	        this.total_count = source["total_count"];
+	        this.enabled_count = source["enabled_count"];
+	        this.custom_count = source["custom_count"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class HealthRecord {
 	    supplier_id: string;
 	    status: string;
@@ -506,6 +588,46 @@ export namespace services {
 	        this.base_url = source["base_url"];
 	        this.supplier_name = source["supplier_name"];
 	    }
+	}
+	export class SupplierPageResult {
+	    items: models.SupplierRecord[];
+	    total: number;
+	    page: number;
+	    page_size: number;
+	    total_count: number;
+	    enabled_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SupplierPageResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], models.SupplierRecord);
+	        this.total = source["total"];
+	        this.page = source["page"];
+	        this.page_size = source["page_size"];
+	        this.total_count = source["total_count"];
+	        this.enabled_count = source["enabled_count"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class Values {
 	    proxy_host: string;

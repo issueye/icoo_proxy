@@ -65,9 +65,6 @@
           </section>
         </nav>
 
-        <div class="app-sidebar__status">
-          <span class="app-status-dot" :class="proxyStatusDotClass" aria-hidden="true"></span>
-        </div>
       </aside>
 
       <main class="app-main">
@@ -91,8 +88,11 @@
     <footer class="app-statusbar">
       <span>Ready</span>
       <span class="app-statusbar__item">Wails Desktop</span>
-      <span class="app-statusbar__item">{{ proxyStatusDetail }}</span>
-      <span class="app-statusbar__item app-statusbar__item--right">代理{{ proxyStatusText }}</span>
+      <span class="app-statusbar__item app-statusbar__item--state">
+        <span class="app-status-dot" :class="proxyStatusDotClass" aria-hidden="true"></span>
+        <span>代理{{ proxyStatusText }}</span>
+      </span>
+      <span class="app-statusbar__item app-statusbar__item--right">{{ proxyStatusDetail }}</span>
     </footer>
 
     <UMessage />

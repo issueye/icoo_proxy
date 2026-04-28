@@ -170,8 +170,7 @@ button:disabled {
 
   .app-shell--sidebar-collapsed .app-sidebar__heading,
   .app-shell--sidebar-collapsed .app-nav-group__label,
-  .app-shell--sidebar-collapsed .app-nav-copy,
-  .app-shell--sidebar-collapsed .app-sidebar__status div {
+  .app-shell--sidebar-collapsed .app-nav-copy {
     @apply hidden;
   }
 
@@ -218,10 +217,6 @@ button:disabled {
 
   .app-nav-desc {
     @apply mt-0.5 block truncate text-[11px] text-slate-400;
-  }
-
-  .app-sidebar__status {
-    @apply m-2 flex min-h-[54px] shrink-0 items-center gap-2 rounded px-3 py-2;
   }
 
   .app-status-dot {
@@ -308,6 +303,10 @@ button:disabled {
 
   .app-statusbar__item {
     @apply border-l border-slate-300 pl-3;
+  }
+
+  .app-statusbar__item--state {
+    @apply inline-flex items-center gap-2;
   }
 
   .app-statusbar__item--right {
