@@ -824,7 +824,8 @@ button:disabled {
   }
 
   .ued-modal__panel {
-    @apply relative z-10 flex max-h-[86vh] flex-col overflow-hidden rounded border border-slate-200 bg-white;
+    @apply relative z-10 flex max-h-[86vh] flex-col rounded border border-slate-200 bg-white;
+    overflow: visible;
     box-shadow: var(--ued-shadow-popup);
   }
 

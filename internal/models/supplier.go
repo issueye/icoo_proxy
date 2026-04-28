@@ -9,6 +9,7 @@ type SupplierRecord struct {
 	ID           string          `json:"id"`
 	Name         string          `json:"name"`
 	Protocol     consts.Protocol `json:"protocol"`
+	Vendor       consts.Vendor   `json:"vendor"`
 	BaseURL      string          `json:"base_url"`
 	APIKeyMasked string          `json:"api_key_masked"`
 	OnlyStream   bool            `json:"only_stream"`
@@ -25,6 +26,7 @@ type SupplierModel struct {
 	ID           string `gorm:"primaryKey"`
 	Name         string `gorm:"index"`
 	Protocol     consts.Protocol
+	Vendor       consts.Vendor
 	BaseURL      string
 	APIKey       string
 	OnlyStream   bool
@@ -45,6 +47,7 @@ type SupplierUpsertInput struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Protocol     string `json:"protocol"`
+	Vendor       string `json:"vendor"`
 	BaseURL      string `json:"base_url"`
 	APIKey       string `json:"api_key"`
 	OnlyStream   bool   `json:"only_stream"`

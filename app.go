@@ -484,6 +484,7 @@ func configureUpstream(cfg *config.Config, supplier models.Snapshot) {
 			version = cfg.AnthropicConfig.Version
 		}
 		cfg.AnthropicConfig = &config.AnthropicConfig{
+			Vendor:     supplier.Vendor,
 			BaseURL:    strings.TrimSpace(supplier.BaseURL),
 			APIKey:     strings.TrimSpace(supplier.APIKey),
 			OnlyStream: supplier.OnlyStream,
@@ -492,6 +493,7 @@ func configureUpstream(cfg *config.Config, supplier models.Snapshot) {
 		}
 	case consts.ProtocolOpenAIChat:
 		cfg.OpenAIChatConfig = &config.OpenAIChatConfig{
+			Vendor:     supplier.Vendor,
 			BaseURL:    strings.TrimSpace(supplier.BaseURL),
 			APIKey:     strings.TrimSpace(supplier.APIKey),
 			OnlyStream: supplier.OnlyStream,
@@ -499,6 +501,7 @@ func configureUpstream(cfg *config.Config, supplier models.Snapshot) {
 		}
 	case consts.ProtocolOpenAIResponses:
 		cfg.OpenAIRResponsesConfig = &config.OpenAIRResponsesConfig{
+			Vendor:     supplier.Vendor,
 			BaseURL:    strings.TrimSpace(supplier.BaseURL),
 			APIKey:     strings.TrimSpace(supplier.APIKey),
 			OnlyStream: supplier.OnlyStream,

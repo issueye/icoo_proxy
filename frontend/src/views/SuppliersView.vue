@@ -137,6 +137,10 @@
           <USelect v-model="store.form.protocol" label="协议" :options="protocolOptions" />
         </div>
 
+        <div class="grid gap-3 md:grid-cols-2">
+          <USelect v-model="store.form.vendor" label="类型" :options="vendorOptions" />
+        </div>
+
         <FieldLabel label="基础地址">
           <input v-model="store.form.base_url" class="field-input" placeholder="https://api.openai.com" />
         </FieldLabel>
@@ -281,6 +285,12 @@ const protocolOptions = [
   { label: "anthropic", value: "anthropic" },
   { label: "openai-chat", value: "openai-chat" },
   { label: "openai-responses", value: "openai-responses" },
+];
+
+const vendorOptions = [
+  { label: "openai", value: "openai" },
+  { label: "deepseek", value: "deepseek" },
+  { label: "anthropic", value: "anthropic" },
 ];
 
 const supplierOptions = computed(() =>

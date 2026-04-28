@@ -42,10 +42,12 @@ func (s *SupplierService) Resolve(id string) (models.Snapshot, bool) {
 	if err := s.db.First(&item, "id = ?", id).Error; err != nil {
 		return models.Snapshot{}, false
 	}
+	vendor := normalizeVendor(item.Vendor.ToString(), item.Protocol)
 	return models.Snapshot{
 		ID:           item.ID,
 		Name:         item.Name,
 		Protocol:     item.Protocol,
+		Vendor:       vendor,
 		BaseURL:      item.BaseURL,
 		APIKey:       item.APIKey,
 		OnlyStream:   item.OnlyStream,
@@ -63,6 +65,10 @@ func (s *SupplierService) Upsert(input models.SupplierUpsertInput) (models.Suppl
 	protocol := normalizeProtocol(input.Protocol)
 	if protocol == consts.Protocol("") {
 		return models.SupplierRecord{}, fmt.Errorf("supplier protocol is required")
+	}
+	vendor := normalizeVendor(input.Vendor, protocol)
+	if vendor == consts.Vendor("") {
+		return models.SupplierRecord{}, fmt.Errorf("supplier vendor is invalid")
 	}
 	baseURL := strings.TrimSpace(input.BaseURL)
 	if baseURL == "" {
@@ -86,6 +92,7 @@ func (s *SupplierService) Upsert(input models.SupplierUpsertInput) (models.Suppl
 		ID:           generateID(name),
 		Name:         name,
 		Protocol:     protocol,
+		Vendor:       vendor,
 		BaseURL:      baseURL,
 		APIKey:       strings.TrimSpace(input.APIKey),
 		OnlyStream:   input.OnlyStream,
@@ -128,10 +135,12 @@ func (s *SupplierService) Delete(id string) error {
 }
 
 func toSupplierRecord(item models.SupplierModel) models.SupplierRecord {
+	vendor := normalizeVendor(item.Vendor.ToString(), item.Protocol)
 	return models.SupplierRecord{
 		ID:           item.ID,
 		Name:         item.Name,
 		Protocol:     item.Protocol,
+		Vendor:       vendor,
 		BaseURL:      item.BaseURL,
 		APIKeyMasked: maskSecret(item.APIKey),
 		OnlyStream:   item.OnlyStream,
@@ -155,6 +164,25 @@ func normalizeSupplierProtocol(raw string) consts.Protocol {
 	}
 }
 
+func normalizeVendor(raw string, protocol consts.Protocol) consts.Vendor {
+	value := consts.Vendor(strings.TrimSpace(strings.ToLower(raw)))
+	switch value {
+	case consts.VendorOpenAI, consts.VendorDeepSeek, consts.VendorAnthropic:
+		return value
+	case consts.Vendor(""):
+		switch protocol {
+		case consts.ProtocolAnthropic:
+			return consts.VendorAnthropic
+		case consts.ProtocolOpenAIChat, consts.ProtocolOpenAIResponses:
+			return consts.VendorOpenAI
+		default:
+			return consts.Vendor("")
+		}
+	default:
+		return consts.Vendor("")
+	}
+}
+
 func splitSupplierCSVLike(raw string) []string {
 	fields := strings.FieldsFunc(raw, func(r rune) bool {
 		return r == ',' || r == '\n' || r == ';'
@@ -167,25 +195,4 @@ func splitSupplierCSVLike(raw string) []string {
 		}
 	}
 	return items
-}
-
-func maskSupplierSecret(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return ""
-	}
-	if len(value) <= 6 {
-		return strings.Repeat("*", len(value))
-	}
-	return value[:3] + strings.Repeat("*", len(value)-6) + value[len(value)-3:]
-}
-
-func generateSupplierID(name string) string {
-	base := strings.ToLower(strings.TrimSpace(name))
-	base = strings.ReplaceAll(base, " ", "-")
-	base = strings.ReplaceAll(base, "_", "-")
-	if base == "" {
-		base = "supplier"
-	}
-	return fmt.Sprintf("%s-%d", base, time.Now().UnixNano())
 }

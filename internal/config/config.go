@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"icoo_proxy/internal/consts"
 )
 
 type Config struct {
@@ -28,6 +30,7 @@ type Config struct {
 }
 
 type AnthropicConfig struct {
+	Vendor     consts.Vendor
 	BaseURL    string
 	APIKey     string
 	OnlyStream bool
@@ -36,6 +39,7 @@ type AnthropicConfig struct {
 }
 
 type OpenAIRResponsesConfig struct {
+	Vendor     consts.Vendor
 	BaseURL    string
 	APIKey     string
 	OnlyStream bool
@@ -44,6 +48,7 @@ type OpenAIRResponsesConfig struct {
 }
 
 type OpenAIChatConfig struct {
+	Vendor     consts.Vendor
 	BaseURL    string
 	APIKey     string
 	OnlyStream bool
@@ -67,12 +72,9 @@ func Load(workdir string) (Config, error) {
 		ChainLogBodies:            boolFromEnv("PROXY_CHAIN_LOG_BODIES", true),
 		ChainLogMaxBodyBytes:      nonNegativeIntFromEnv("PROXY_CHAIN_LOG_MAX_BODY_BYTES", 0),
 
-		// Anthropic 配置
-		AnthropicConfig: &AnthropicConfig{},
-		// OpenAI 配置
-		OpenAIRResponsesConfig: &OpenAIRResponsesConfig{},
-		// OpenAI Chat 配置
-		OpenAIChatConfig: &OpenAIChatConfig{},
+		AnthropicConfig:        &AnthropicConfig{Vendor: consts.VendorAnthropic},
+		OpenAIRResponsesConfig: &OpenAIRResponsesConfig{Vendor: consts.VendorOpenAI},
+		OpenAIChatConfig:       &OpenAIChatConfig{Vendor: consts.VendorOpenAI},
 	}
 	if cfg.Host == "" {
 		cfg.Host = "127.0.0.1"

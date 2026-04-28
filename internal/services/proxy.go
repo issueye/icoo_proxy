@@ -221,6 +221,9 @@ func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *pr
 		}
 		forcedUpstreamStream = true
 	}
+	if ctx.route.Upstream == consts.ProtocolAnthropic {
+		s.logAnthropicThinkingBlocks(ctx, preparedBody)
+	}
 	s.logChain("conversion.request",
 		"request_id", ctx.requestID,
 		"downstream", ctx.downstream.ToString(),
@@ -604,7 +607,10 @@ func (s *ProxyService) applyRequestHeaders(target *http.Request, source *http.Re
 			target.Header.Set("User-Agent", userAgent)
 		}
 		if beta := strings.TrimSpace(source.Header.Get("anthropic-beta")); beta != "" {
-			target.Header.Set("anthropic-beta", beta)
+			beta = sanitizeAnthropicBetaForVendor(beta, s.cfg.AnthropicConfig.Vendor)
+			if beta != "" {
+				target.Header.Set("anthropic-beta", beta)
+			}
 		}
 	case consts.ProtocolOpenAIChat:
 		target.Header.Set("Authorization", "Bearer "+s.cfg.OpenAIChatConfig.APIKey)
@@ -625,6 +631,30 @@ func (s *ProxyService) applyRequestHeaders(target *http.Request, source *http.Re
 	}
 }
 
+func sanitizeAnthropicBetaForVendor(raw string, vendor consts.Vendor) string {
+	if vendor != consts.VendorDeepSeek {
+		return strings.TrimSpace(raw)
+	}
+	blocked := map[string]struct{}{
+		"claude-code-20250219":            {},
+		"interleaved-thinking-2025-05-14": {},
+		"prompt-caching-scope-2026-01-05": {},
+	}
+	parts := strings.Split(raw, ",")
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		if _, found := blocked[strings.ToLower(value)]; found {
+			continue
+		}
+		kept = append(kept, value)
+	}
+	return strings.Join(kept, ",")
+}
+
 // extractModel 从请求 JSON 中提取 model 字段。
 func extractModel(body []byte) (string, error) {
 	var payload map[string]interface{}
@@ -643,6 +673,123 @@ func requestUsesStreaming(body []byte) bool {
 	}
 	stream, _ := payload["stream"].(bool)
 	return stream
+}
+
+type anthropicThinkingLogSummary struct {
+	TotalMessages             int      `json:"total_messages"`
+	AssistantMessages         int      `json:"assistant_messages"`
+	ThinkingBlocks            int      `json:"thinking_blocks"`
+	IncompleteThinkingBlocks  int      `json:"incomplete_thinking_blocks"`
+	ThinkingEnabled           bool     `json:"thinking_enabled"`
+	HasPotentialThinkingIssue bool     `json:"has_potential_thinking_issue"`
+	Issues                    []string `json:"issues,omitempty"`
+}
+
+// logAnthropicThinkingBlocks 检查发送到 Anthropic 上游的消息体中是否存在结构异常的 thinking block。
+func (s *ProxyService) logAnthropicThinkingBlocks(ctx *proxyRequestContext, body []byte) {
+	if s == nil || ctx == nil {
+		return
+	}
+	summary, ok := inspectAnthropicThinkingBlocks(body)
+	if !ok {
+		s.logChain("anthropic.request.thinking.inspect_failed",
+			"request_id", ctx.requestID,
+			"downstream", ctx.downstream.ToString(),
+			"upstream", ctx.route.Upstream.ToString(),
+		)
+		return
+	}
+	attrs := []interface{}{
+		"request_id", ctx.requestID,
+		"downstream", ctx.downstream.ToString(),
+		"upstream", ctx.route.Upstream.ToString(),
+		"thinking_enabled", summary.ThinkingEnabled,
+		"total_messages", summary.TotalMessages,
+		"assistant_messages", summary.AssistantMessages,
+		"thinking_blocks", summary.ThinkingBlocks,
+		"incomplete_thinking_blocks", summary.IncompleteThinkingBlocks,
+		"has_potential_thinking_issue", summary.HasPotentialThinkingIssue,
+	}
+	if len(summary.Issues) > 0 {
+		attrs = append(attrs, "issues", summary.Issues)
+	}
+	event := "anthropic.request.thinking.summary"
+	if summary.HasPotentialThinkingIssue {
+		event = "anthropic.request.thinking.warning"
+	}
+	s.logChain(event, attrs...)
+}
+
+func inspectAnthropicThinkingBlocks(body []byte) (anthropicThinkingLogSummary, bool) {
+	summary := anthropicThinkingLogSummary{}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return summary, false
+	}
+	summary.ThinkingEnabled = anthropicThinkingEnabled(payload)
+	messages, _ := payload["messages"].([]interface{})
+	summary.TotalMessages = len(messages)
+	for msgIndex, rawMessage := range messages {
+		message, ok := rawMessage.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := message["role"].(string)
+		if role != "assistant" {
+			continue
+		}
+		summary.AssistantMessages++
+		content, ok := message["content"].([]interface{})
+		if !ok {
+			continue
+		}
+		for blockIndex, rawBlock := range content {
+			block, ok := rawBlock.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if strings.TrimSpace(translation.StringValue(block["type"], "")) != "thinking" {
+				continue
+			}
+			summary.ThinkingBlocks++
+			if !anthropicThinkingBlockComplete(block) {
+				summary.IncompleteThinkingBlocks++
+				summary.HasPotentialThinkingIssue = true
+				summary.Issues = append(summary.Issues, fmt.Sprintf("messages[%d].content[%d] has incomplete thinking block", msgIndex, blockIndex))
+			}
+		}
+	}
+	return summary, true
+}
+
+func anthropicThinkingEnabled(payload map[string]interface{}) bool {
+	if payload == nil {
+		return false
+	}
+	raw, ok := payload["thinking"]
+	if !ok || raw == nil {
+		return false
+	}
+	thinking, ok := raw.(map[string]interface{})
+	if !ok {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(translation.StringValue(thinking["type"], "")), "disabled") {
+		return false
+	}
+	return true
+}
+
+func anthropicThinkingBlockComplete(block map[string]interface{}) bool {
+	if block == nil {
+		return false
+	}
+	_, exists := block["thinking"]
+	if !exists {
+		return false
+	}
+	_, ok := block["thinking"].(string)
+	return ok
 }
 
 // forceStreamRequest 将请求体改写为 stream=true，用于只支持流式的上游。

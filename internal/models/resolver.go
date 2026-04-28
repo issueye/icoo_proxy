@@ -10,6 +10,7 @@ type Snapshot struct {
 	ID           string
 	Name         string
 	Protocol     consts.Protocol
+	Vendor       consts.Vendor
 	BaseURL      string
 	APIKey       string
 	OnlyStream   bool

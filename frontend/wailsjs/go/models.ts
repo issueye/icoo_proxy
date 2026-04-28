@@ -361,6 +361,7 @@ export namespace models {
 	    id: string;
 	    name: string;
 	    protocol: string;
+	    vendor: string;
 	    base_url: string;
 	    api_key_masked: string;
 	    only_stream: boolean;
@@ -381,6 +382,7 @@ export namespace models {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.protocol = source["protocol"];
+	        this.vendor = source["vendor"];
 	        this.base_url = source["base_url"];
 	        this.api_key_masked = source["api_key_masked"];
 	        this.only_stream = source["only_stream"];
@@ -397,6 +399,7 @@ export namespace models {
 	    id: string;
 	    name: string;
 	    protocol: string;
+	    vendor: string;
 	    base_url: string;
 	    api_key: string;
 	    only_stream: boolean;
@@ -415,6 +418,7 @@ export namespace models {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.protocol = source["protocol"];
+	        this.vendor = source["vendor"];
 	        this.base_url = source["base_url"];
 	        this.api_key = source["api_key"];
 	        this.only_stream = source["only_stream"];
