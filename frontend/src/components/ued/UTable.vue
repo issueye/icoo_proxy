@@ -217,6 +217,7 @@ const scrollStyle = computed(() => {
   const maxHeight = normalizeCssSize(props.maxHeight);
   if (maxHeight) {
     style.maxHeight = maxHeight;
+    style.overflowY = "auto";
   }
   return style;
 });

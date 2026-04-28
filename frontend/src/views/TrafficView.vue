@@ -66,6 +66,7 @@
           row-key="request_id"
           fixed
           table-class="traffic-table"
+          max-height="calc(100vh - 310px)"
         >
           <template #cell-requestId="{ row }">
             <p class="font-medium text-[#262626] table-cell-wrap">{{ row.request_id }}</p>
