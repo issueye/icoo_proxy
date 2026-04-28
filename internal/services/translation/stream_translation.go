@@ -1,10 +1,12 @@
-package services
+package translation
 
 import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"icoo_proxy/internal/pkg/utils"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -30,9 +32,9 @@ type anthropicStreamBlock struct {
 }
 
 type anthropicStreamState struct {
+	logger         *slog.Logger
 	w              http.ResponseWriter
 	flusher        http.Flusher
-	service        *ProxyService
 	requestID      string
 	model          string
 	messageID      string
@@ -46,10 +48,10 @@ type anthropicStreamState struct {
 	toolBlocks     map[string]*anthropicStreamBlock
 }
 
-func (s *ProxyService) translateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, model, requestID string) error {
+func TranslateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, model, requestID string, logger *slog.Logger) error {
 	state := &anthropicStreamState{
 		w:          w,
-		service:    s,
+		logger:     logger,
 		requestID:  requestID,
 		model:      model,
 		textBlocks: make(map[string]*anthropicStreamBlock),
@@ -80,7 +82,7 @@ func (s *ProxyService) translateResponsesStreamToAnthropic(w http.ResponseWriter
 			return nil
 		}
 
-		var payload map[string]interface{}
+		var payload map[string]any
 		if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
 			_ = state.emitErrorEvent("failed to decode upstream stream event")
 			return fmt.Errorf("decode upstream stream event: %w", err)
@@ -553,24 +555,26 @@ func (s *anthropicStreamState) emitEvent(eventName string, payload map[string]in
 }
 
 func (s *anthropicStreamState) logUpstreamEvent(event sseEvent) {
-	if s.service == nil {
-		return
-	}
-	s.service.logChain("conversion.stream.upstream_event",
+	s.logChain("conversion.stream.upstream_event",
 		"request_id", s.requestID,
 		"event", firstNonEmpty(event.Name, "<data-only>"),
-		"data", s.service.logBody([]byte(event.Data)),
+		"data", utils.RedactJSONBody([]byte(event.Data)),
 	)
 }
 
-func (s *anthropicStreamState) logDownstreamEvent(eventName string, payload []byte) {
-	if s.service == nil {
+// logChain 写入结构化链路日志；未配置日志器时直接忽略。
+func (s *anthropicStreamState) logChain(event string, attrs ...interface{}) {
+	if s == nil || s.logger == nil {
 		return
 	}
-	s.service.logChain("conversion.stream.downstream_event",
+	s.logger.Info(event, attrs...)
+}
+
+func (s *anthropicStreamState) logDownstreamEvent(eventName string, payload []byte) {
+	s.logChain("conversion.stream.downstream_event",
 		"request_id", s.requestID,
 		"event", eventName,
-		"data", s.service.logBody(payload),
+		"data", utils.RedactJSONBody(payload),
 	)
 }
 

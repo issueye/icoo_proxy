@@ -11,16 +11,16 @@ import (
 )
 
 type Config struct {
-	Host                      string
-	Port                      int
-	ReadTimeout               time.Duration
-	WriteTimeout              time.Duration
-	ShutdownTimeout           time.Duration
-	ProxyAPIKeys              []string
-	AllowUnauthenticatedLocal bool
-	ChainLogPath              string
-	ChainLogBodies            bool
-	ChainLogMaxBodyBytes      int
+	Host                      string        // 代理服务主机地址
+	Port                      int           // 代理服务端口号
+	ReadTimeout               time.Duration // 代理服务读取超时时间
+	WriteTimeout              time.Duration // 代理服务写入超时时间
+	ShutdownTimeout           time.Duration // 代理服务关闭超时时间
+	ProxyAPIKeys              []string      // 代理 API 密钥列表
+	AllowUnauthenticatedLocal bool          // 是否允许未认证本地请求
+	ChainLogPath              string        // 链路日志路径
+	ChainLogBodies            bool          // 是否记录请求和响应体
+	ChainLogMaxBodyBytes      int           // 最大记录请求和响应体字节数
 
 	AnthropicConfig        *AnthropicConfig
 	OpenAIRResponsesConfig *OpenAIRResponsesConfig

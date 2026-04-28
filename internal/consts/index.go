@@ -11,3 +11,5 @@ const (
 func (p Protocol) ToString() string {
 	return string(p)
 }
+
+const DefaultResponsesReasoningEffort = "medium" // 默认 reasoning 配置

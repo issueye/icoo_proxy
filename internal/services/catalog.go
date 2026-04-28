@@ -7,22 +7,17 @@ import (
 	"strings"
 
 	"icoo_proxy/internal/consts"
+	"icoo_proxy/internal/models"
 )
 
-type Route struct {
-	Name     string          `json:"name"`
-	Upstream consts.Protocol `json:"upstream"`
-	Model    string          `json:"model"`
-}
-
 type CatalogService struct {
-	defaults map[consts.Protocol]Route
-	aliases  map[string]Route
+	defaults map[consts.Protocol]models.Route
+	aliases  map[string]models.Route
 }
 
 func NewCatalogService() (*CatalogService, error) {
-	defaults := make(map[consts.Protocol]Route)
-	aliases := make(map[string]Route)
+	defaults := make(map[consts.Protocol]models.Route)
+	aliases := make(map[string]models.Route)
 	return &CatalogService{
 		defaults: defaults,
 		aliases:  aliases,
@@ -59,14 +54,14 @@ func NewCatalogFromEntries(defaults map[consts.Protocol]string, aliasEntries str
 	return catalog, nil
 }
 
-func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel string) (Route, error) {
+func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel string) (models.Route, error) {
 	model := strings.TrimSpace(requestedModel)
 	slog.Info("下游请求模型和协议", "model", model, "downstream", downstream)
 
 	route, ok := c.defaults[downstream]
 	if model == "" {
 		if !ok {
-			return Route{}, fmt.Errorf("missing model and no default route for %s", downstream)
+			return models.Route{}, fmt.Errorf("missing model and no default route for %s", downstream)
 		}
 		return route, nil
 	}
@@ -74,7 +69,7 @@ func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel stri
 		return route, nil
 	}
 	if !ok {
-		return Route{}, fmt.Errorf("requested model %q has no default route for %s", model, downstream)
+		return models.Route{}, fmt.Errorf("requested model %q has no default route for %s", model, downstream)
 	}
 
 	copyRoute := route
@@ -85,8 +80,8 @@ func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel stri
 	return copyRoute, nil
 }
 
-func (c *CatalogService) Defaults() []Route {
-	items := make([]Route, 0, len(c.defaults))
+func (c *CatalogService) Defaults() []models.Route {
+	items := make([]models.Route, 0, len(c.defaults))
 	for protocol, route := range c.defaults {
 		copyRoute := route
 		copyRoute.Name = string(protocol)
@@ -98,8 +93,8 @@ func (c *CatalogService) Defaults() []Route {
 	return items
 }
 
-func (c *CatalogService) Aliases() []Route {
-	items := make([]Route, 0, len(c.aliases))
+func (c *CatalogService) Aliases() []models.Route {
+	items := make([]models.Route, 0, len(c.aliases))
 	for _, route := range c.aliases {
 		items = append(items, route)
 	}
@@ -123,23 +118,23 @@ func catalogSplitEntries(raw string) []string {
 	return items
 }
 
-func catalogParseTarget(name, raw string) (Route, error) {
+func catalogParseTarget(name, raw string) (models.Route, error) {
 	value := strings.TrimSpace(raw)
 	protocolRaw, model, found := strings.Cut(value, ":")
 	if !found {
-		return Route{}, fmt.Errorf("invalid route %q for %s", raw, name)
+		return models.Route{}, fmt.Errorf("invalid route %q for %s", raw, name)
 	}
 	protocol := consts.Protocol(strings.TrimSpace(protocolRaw))
 	switch protocol {
 	case consts.ProtocolAnthropic, consts.ProtocolOpenAIChat, consts.ProtocolOpenAIResponses:
 	default:
-		return Route{}, fmt.Errorf("unsupported upstream protocol %q for %s", protocol, name)
+		return models.Route{}, fmt.Errorf("unsupported upstream protocol %q for %s", protocol, name)
 	}
 	model = strings.TrimSpace(model)
 	if model == "" {
-		return Route{}, fmt.Errorf("missing model for %s", name)
+		return models.Route{}, fmt.Errorf("missing model for %s", name)
 	}
-	return Route{
+	return models.Route{
 		Name:     name,
 		Upstream: protocol,
 		Model:    model,

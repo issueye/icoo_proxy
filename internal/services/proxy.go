@@ -18,6 +18,9 @@ import (
 	"icoo_proxy/internal/api"
 	"icoo_proxy/internal/config"
 	"icoo_proxy/internal/consts"
+	"icoo_proxy/internal/models"
+	"icoo_proxy/internal/pkg/utils"
+	"icoo_proxy/internal/services/translation"
 )
 
 // ProxyService 负责代理入口的鉴权、路由解析、协议转换、上游转发和请求记录。
@@ -65,7 +68,7 @@ type proxyRequestContext struct {
 	requestedModel        string
 	body                  []byte
 	downstreamWantsStream bool
-	route                 Route
+	route                 models.Route
 }
 
 // newProxyRequestContext 初始化请求上下文，并生成本次请求的追踪 ID。
@@ -306,7 +309,7 @@ func (s *ProxyService) handleSameProtocolEventStream(w http.ResponseWriter, resp
 		return false
 	}
 
-	aggregatedBody, err := aggregateResponsesStreamToJSON(resp.Body)
+	aggregatedBody, err := translation.AggregateResponsesStreamToJSON(resp.Body)
 	if err != nil {
 		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
 		return false
@@ -351,7 +354,7 @@ func (s *ProxyService) translateStreamingResponsesToAnthropic(w http.ResponseWri
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Del("Content-Length")
 	w.WriteHeader(resp.StatusCode)
-	err := s.translateResponsesStreamToAnthropic(w, resp.Body, ctx.route.Model, ctx.requestID)
+	err := translation.TranslateResponsesStreamToAnthropic(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
 	s.logDownstreamResponse(w, resp.StatusCode, "<translated event-stream body not captured>", ctx)
 	item := ctx.view(resp.StatusCode, "")
 	if err != nil {
@@ -368,13 +371,13 @@ func (s *ProxyService) translateStreamingResponsesToAnthropic(w http.ResponseWri
 
 // aggregateAndTranslateResponsesStream 将 OpenAI Responses 流式响应聚合为 JSON，再转换为下游协议响应。
 func (s *ProxyService) aggregateAndTranslateResponsesStream(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
-	aggregatedBody, err := aggregateResponsesStreamToJSON(resp.Body)
+	aggregatedBody, err := translation.AggregateResponsesStreamToJSON(resp.Body)
 	if err != nil {
 		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
 		return
 	}
 	s.logStreamAggregation(aggregatedBody, ctx)
-	translated, err := translateResponseBody(ctx.downstream, ctx.route.Upstream, ctx.route.Model, aggregatedBody)
+	translated, err := translation.ConvertResponse(ctx.downstream, ctx.route.Upstream, ctx.route.Model, aggregatedBody)
 	if err != nil {
 		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
 		return
@@ -399,7 +402,7 @@ func (s *ProxyService) handleCrossProtocolJSON(w http.ResponseWriter, resp *http
 		return
 	}
 
-	translated, err := translateResponseBody(ctx.downstream, ctx.route.Upstream, ctx.route.Model, upstreamBody)
+	translated, err := translation.ConvertResponse(ctx.downstream, ctx.route.Upstream, ctx.route.Model, upstreamBody)
 	if err != nil {
 		s.fail(w, ctx.downstream, ctx.view(http.StatusBadGateway, err.Error()))
 		return
@@ -606,35 +609,6 @@ func extractModel(body []byte) (string, error) {
 	return strings.TrimSpace(model), nil
 }
 
-// rewriteModel 将请求体中的 model 改写为路由解析后的目标模型。
-func rewriteModel(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid json body")
-	}
-	payload["model"] = model
-	rewritten, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to rewrite request body")
-	}
-	return rewritten, nil
-}
-
-// rewriteResponsesRequest 改写 OpenAI Responses 请求模型，并补齐默认 reasoning 配置。
-func rewriteResponsesRequest(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid json body")
-	}
-	payload["model"] = model
-	applyDefaultResponsesReasoning(payload)
-	rewritten, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to rewrite request body")
-	}
-	return rewritten, nil
-}
-
 // requestUsesStreaming 判断请求体是否显式声明需要流式响应。
 func requestUsesStreaming(body []byte) bool {
 	var payload map[string]interface{}
@@ -660,49 +634,8 @@ func forceStreamRequest(body []byte) ([]byte, error) {
 }
 
 // prepareRequestBody 根据上下游协议关系准备上游请求体：同协议改写模型，跨协议执行请求转换。
-func (s *ProxyService) prepareRequestBody(downstream consts.Protocol, route Route, body []byte) ([]byte, error) {
-	if route.Upstream == downstream {
-		if downstream == consts.ProtocolOpenAIResponses {
-			return rewriteResponsesRequest(body, route.Model)
-		}
-		return rewriteModel(body, route.Model)
-	}
-	switch {
-	case downstream == consts.ProtocolOpenAIChat && route.Upstream == consts.ProtocolOpenAIResponses:
-		return translateChatToResponsesRequest(body, route.Model)
-	case downstream == consts.ProtocolOpenAIResponses && route.Upstream == consts.ProtocolOpenAIChat:
-		return translateResponsesToChatRequest(body, route.Model)
-	case downstream == consts.ProtocolAnthropic && route.Upstream == consts.ProtocolOpenAIResponses:
-		return translateAnthropicToResponsesRequest(body, route.Model)
-	case downstream == consts.ProtocolOpenAIResponses && route.Upstream == consts.ProtocolAnthropic:
-		return translateResponsesToAnthropicRequest(body, route.Model)
-	case downstream == consts.ProtocolAnthropic && route.Upstream == consts.ProtocolOpenAIChat:
-		return translateAnthropicToChatRequest(body, route.Model)
-	case downstream == consts.ProtocolOpenAIChat && route.Upstream == consts.ProtocolAnthropic:
-		return translateChatToAnthropicRequest(body, route.Model)
-	default:
-		return nil, fmt.Errorf("cross protocol translation from %s to %s is not implemented yet", downstream, route.Upstream)
-	}
-}
-
-// translateResponseBody 根据上下游协议关系执行响应体转换。
-func translateResponseBody(downstream, upstream consts.Protocol, model string, body []byte) ([]byte, error) {
-	switch {
-	case downstream == consts.ProtocolOpenAIChat && upstream == consts.ProtocolOpenAIResponses:
-		return translateResponsesToChatResponse(body, model)
-	case downstream == consts.ProtocolOpenAIResponses && upstream == consts.ProtocolOpenAIChat:
-		return translateChatToResponsesResponse(body, model)
-	case downstream == consts.ProtocolAnthropic && upstream == consts.ProtocolOpenAIResponses:
-		return translateResponsesToAnthropicResponse(body, model)
-	case downstream == consts.ProtocolOpenAIResponses && upstream == consts.ProtocolAnthropic:
-		return translateAnthropicToResponsesResponse(body, model)
-	case downstream == consts.ProtocolAnthropic && upstream == consts.ProtocolOpenAIChat:
-		return translateChatToAnthropicResponse(body, model)
-	case downstream == consts.ProtocolOpenAIChat && upstream == consts.ProtocolAnthropic:
-		return translateAnthropicToChatResponse(body, model)
-	default:
-		return nil, fmt.Errorf("cross protocol response translation from %s to %s is not implemented yet", upstream, downstream)
-	}
+func (s *ProxyService) prepareRequestBody(downstream consts.Protocol, route models.Route, body []byte) ([]byte, error) {
+	return translation.ConvertRequest(downstream, route, body)
 }
 
 // writeProtocolError 按下游协议格式写出统一错误响应。
@@ -807,73 +740,24 @@ func (s *ProxyService) logBody(body []byte) string {
 	if body == nil {
 		return ""
 	}
-	result := redactJSONBody(body)
+	result := utils.RedactJSONBody(body)
 	if max := s.cfg.ChainLogMaxBodyBytes; max > 0 && len([]byte(result)) > max {
 		return string([]byte(result)[:max]) + "...<truncated>"
 	}
 	return result
 }
 
-// redactJSONBody 对 JSON 字符串中的敏感字段进行递归脱敏。
-func redactJSONBody(body []byte) string {
-	var payload interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return string(body)
-	}
-	redacted := redactJSONValue(payload)
-	data, err := json.Marshal(redacted)
-	if err != nil {
-		return string(body)
-	}
-	return string(data)
-}
-
-// redactJSONValue 递归遍历 JSON 值并替换敏感字段内容。
-func redactJSONValue(value interface{}) interface{} {
-	switch typed := value.(type) {
-	case map[string]interface{}:
-		result := make(map[string]interface{}, len(typed))
-		for key, item := range typed {
-			if isSensitiveName(key) {
-				result[key] = "<redacted>"
-				continue
-			}
-			result[key] = redactJSONValue(item)
-		}
-		return result
-	case []interface{}:
-		result := make([]interface{}, 0, len(typed))
-		for _, item := range typed {
-			result = append(result, redactJSONValue(item))
-		}
-		return result
-	default:
-		return value
-	}
-}
-
 // sanitizedHeaders 复制请求或响应头，并对敏感头字段进行脱敏。
 func sanitizedHeaders(headers http.Header) map[string][]string {
 	result := make(map[string][]string, len(headers))
 	for key, values := range headers {
-		if isSensitiveName(key) {
+		if utils.IsSensitiveName(key) {
 			result[key] = []string{"<redacted>"}
 			continue
 		}
 		result[key] = slices.Clone(values)
 	}
 	return result
-}
-
-// isSensitiveName 判断字段名是否可能包含密钥、令牌、密码等敏感信息。
-func isSensitiveName(name string) bool {
-	normalized := strings.ToLower(strings.NewReplacer("-", "", "_", "", ".", "").Replace(name))
-	for _, marker := range []string{"authorization", "apikey", "token", "secret", "password", "credential"} {
-		if strings.Contains(normalized, marker) {
-			return true
-		}
-	}
-	return normalized == "key"
 }
 
 // newRequestID 生成短请求 ID，用于链路日志、响应头和请求记录关联。

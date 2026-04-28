@@ -1,11 +1,88 @@
-package services
+package translation
 
 import (
 	"encoding/json"
 	"fmt"
+	"icoo_proxy/internal/consts"
+	"icoo_proxy/internal/models"
 	"strings"
 	"time"
 )
+
+// ConvertRequest 根据下游协议和路由目标协议转换请求体。
+// 同协议请求会保留原协议格式，仅将 model 改写为路由解析后的目标模型。
+func ConvertRequest(downstream consts.Protocol, route models.Route, body []byte) ([]byte, error) {
+	upstream := route.Upstream
+	model := route.Model
+
+	switch {
+	// anthropic -> anthropic
+	case downstream == consts.ProtocolAnthropic && upstream == consts.ProtocolAnthropic:
+		return RewriteModel(body, model)
+	// anthropic -> openai chat
+	case downstream == consts.ProtocolAnthropic && upstream == consts.ProtocolOpenAIChat:
+		return translateAnthropicToChatRequest(body, model)
+	// anthropic -> openai responses
+	case downstream == consts.ProtocolAnthropic && upstream == consts.ProtocolOpenAIResponses:
+		return translateAnthropicToResponsesRequest(body, model)
+	// openai chat -> anthropic
+	case downstream == consts.ProtocolOpenAIChat && upstream == consts.ProtocolAnthropic:
+		return translateChatToAnthropicRequest(body, model)
+	// openai chat -> openai chat
+	case downstream == consts.ProtocolOpenAIChat && upstream == consts.ProtocolOpenAIChat:
+		return RewriteModel(body, model)
+	// openai chat -> openai responses
+	case downstream == consts.ProtocolOpenAIChat && upstream == consts.ProtocolOpenAIResponses:
+		return translateChatToResponsesRequest(body, model)
+	// openai responses -> anthropic
+	case downstream == consts.ProtocolOpenAIResponses && upstream == consts.ProtocolAnthropic:
+		return translateResponsesToAnthropicRequest(body, model)
+	// openai responses -> openai chat
+	case downstream == consts.ProtocolOpenAIResponses && upstream == consts.ProtocolOpenAIChat:
+		return translateResponsesToChatRequest(body, model)
+	// openai responses -> openai responses
+	case downstream == consts.ProtocolOpenAIResponses && upstream == consts.ProtocolOpenAIResponses:
+		return RewriteResponsesRequest(body, model)
+	default:
+		return nil, fmt.Errorf("request protocol conversion from %s to %s is not implemented", downstream, upstream)
+	}
+}
+
+// ConvertResponse 根据上游协议和下游协议转换响应体。
+// 同协议响应不改写协议格式，直接原样返回响应体。
+func ConvertResponse(downstream, upstream consts.Protocol, model string, body []byte) ([]byte, error) {
+	switch {
+	// anthropic -> anthropic
+	case upstream == consts.ProtocolAnthropic && downstream == consts.ProtocolAnthropic:
+		return body, nil
+	// anthropic -> openai chat
+	case upstream == consts.ProtocolAnthropic && downstream == consts.ProtocolOpenAIChat:
+		return translateAnthropicToChatResponse(body, model)
+	// anthropic -> openai responses
+	case upstream == consts.ProtocolAnthropic && downstream == consts.ProtocolOpenAIResponses:
+		return translateAnthropicToResponsesResponse(body, model)
+	// openai chat -> anthropic
+	case upstream == consts.ProtocolOpenAIChat && downstream == consts.ProtocolAnthropic:
+		return translateChatToAnthropicResponse(body, model)
+	// openai chat -> openai chat
+	case upstream == consts.ProtocolOpenAIChat && downstream == consts.ProtocolOpenAIChat:
+		return body, nil
+	// openai chat -> openai responses
+	case upstream == consts.ProtocolOpenAIChat && downstream == consts.ProtocolOpenAIResponses:
+		return translateChatToResponsesResponse(body, model)
+	// openai responses -> anthropic
+	case upstream == consts.ProtocolOpenAIResponses && downstream == consts.ProtocolAnthropic:
+		return translateResponsesToAnthropicResponse(body, model)
+	// openai responses -> openai chat
+	case upstream == consts.ProtocolOpenAIResponses && downstream == consts.ProtocolOpenAIChat:
+		return translateResponsesToChatResponse(body, model)
+	// openai responses -> openai responses
+	case upstream == consts.ProtocolOpenAIResponses && downstream == consts.ProtocolOpenAIResponses:
+		return body, nil
+	default:
+		return nil, fmt.Errorf("response protocol conversion from %s to %s is not implemented", upstream, downstream)
+	}
+}
 
 const defaultResponsesReasoningEffort = "medium"
 
@@ -33,7 +110,7 @@ func translateAnthropicToResponsesRequest(body []byte, model string) ([]byte, er
 	if value, ok := payload["tools"]; ok {
 		request["tools"] = anthropicToolsToResponsesTools(value)
 	}
-	applyDefaultResponsesReasoning(request)
+	ApplyDefaultResponsesReasoning(defaultResponsesReasoningEffort, request)
 	return json.Marshal(request)
 }
 
@@ -115,7 +192,7 @@ func translateChatToResponsesRequest(body []byte, model string) ([]byte, error) 
 	if value, ok := payload["tools"]; ok {
 		request["tools"] = chatToolsToResponsesTools(value)
 	}
-	applyDefaultResponsesReasoning(request)
+	ApplyDefaultResponsesReasoning(defaultResponsesReasoningEffort, request)
 	return json.Marshal(request)
 }
 
@@ -667,25 +744,6 @@ func extractResponsesOutputText(raw interface{}) string {
 		}
 	}
 	return strings.Join(parts, "\n")
-}
-
-func applyDefaultResponsesReasoning(payload map[string]interface{}) {
-	if payload == nil {
-		return
-	}
-	raw, ok := payload["reasoning"]
-	if !ok || raw == nil {
-		payload["reasoning"] = map[string]interface{}{"effort": defaultResponsesReasoningEffort}
-		return
-	}
-	reasoning, ok := raw.(map[string]interface{})
-	if !ok {
-		return
-	}
-	if strings.TrimSpace(stringValue(reasoning["effort"], "")) == "" {
-		reasoning["effort"] = defaultResponsesReasoningEffort
-	}
-	payload["reasoning"] = reasoning
 }
 
 func extractResponsesText(payload map[string]interface{}) string {
