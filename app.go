@@ -12,41 +12,29 @@ import (
 	"sync"
 
 	"icoo_proxy/internal/api"
-	"icoo_proxy/internal/app"
-	"icoo_proxy/internal/authkey"
-	"icoo_proxy/internal/bootstrap"
-	"icoo_proxy/internal/catalog"
+	appcore "icoo_proxy/internal/app"
 	"icoo_proxy/internal/config"
 	"icoo_proxy/internal/consts"
-	"icoo_proxy/internal/endpoint"
-	"icoo_proxy/internal/modelalias"
-	"icoo_proxy/internal/projectsettings"
-	"icoo_proxy/internal/proxy"
-	"icoo_proxy/internal/routepolicy"
+	"icoo_proxy/internal/models"
 	"icoo_proxy/internal/server"
-	"icoo_proxy/internal/supplier"
-	"icoo_proxy/internal/uiprefs"
+	"icoo_proxy/internal/services"
+	"icoo_proxy/internal/traffic"
 )
 
 type App struct {
-	ctx  context.Context // 应用上下文
-	mu   sync.RWMutex    // 读写锁
-	root string          // 应用根目录
-	cfg  config.Config   // 应用配置
-	// catalog    *catalog.Catalog        // 路由目录
-	// service    *proxy.Service          // 代理服务
-	// authKeys   *authkey.Service        // 认证密钥服务
-	// suppliers  *supplier.Service       // 供应商服务
-	// health     *supplier.HealthService // 健康检查服务
-	// policies   *routepolicy.Service    // 路由策略服务
-	// aliases    *modelalias.Service     // 模型别名服务
-	// endpoints  *endpoint.Service       // 端点服务
-	// traffic    *traffic.Service        // 流量服务
-	// uiPrefs    *uiprefs.Service        // UI偏好服务
-	app        *app.App     // 应用实例
-	httpServer *http.Server // HTTP服务器
-	chainLog   *os.File     // 请求链日志文件
-	listenAddr string       // 监听地址
+	ctx  context.Context
+	mu   sync.RWMutex
+	root string
+	cfg  config.Config
+
+	catalog *services.CatalogService
+	service *services.ProxyService
+	traffic *traffic.Service
+	app     *appcore.App
+
+	httpServer *http.Server
+	chainLog   *os.File
+	listenAddr string
 	running    bool
 	lastError  string
 }
@@ -63,55 +51,64 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 	a.root = root
-	p, err := app.NewApp(root)
+	p, err := appcore.NewApp(root)
 	if err != nil {
 		a.setLastError(err.Error())
 		return
 	}
 	a.app = p
+	trafficService, err := traffic.NewService(root)
+	if err != nil {
+		a.setLastError(err.Error())
+		return
+	}
+	a.traffic = trafficService
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	_ = a.stopProxy(ctx)
+	if a.traffic != nil {
+		_ = a.traffic.Close()
+	}
 }
 
 func (a *App) GetOverview() map[string]interface{} {
 	return stateToMap(a.State())
 }
 
-func (a *App) GetProjectSettings() (projectsettings.Values, error) {
-	if strings.TrimSpace(a.root) == "" {
-		return projectsettings.Values{}, context.Canceled
+func (a *App) GetProjectSettings() (services.Values, error) {
+	if a.app == nil || strings.TrimSpace(a.root) == "" {
+		return services.Values{}, context.Canceled
 	}
-	return projectsettings.Load(a.root)
+	return a.app.Services().ProjectSettings().Load(a.root)
 }
 
-func (a *App) SaveProjectSettings(input projectsettings.Values) (projectsettings.Values, error) {
-	if strings.TrimSpace(a.root) == "" {
-		return projectsettings.Values{}, context.Canceled
+func (a *App) SaveProjectSettings(input services.Values) (services.Values, error) {
+	if a.app == nil || strings.TrimSpace(a.root) == "" {
+		return services.Values{}, context.Canceled
 	}
-	if err := projectsettings.Save(a.root, input); err != nil {
-		return projectsettings.Values{}, err
+	if err := a.app.Services().ProjectSettings().Save(a.root, input); err != nil {
+		return services.Values{}, err
 	}
 	if _, err := a.ReloadProxy(); err != nil {
-		return projectsettings.Values{}, err
+		return services.Values{}, err
 	}
-	return projectsettings.Load(a.root)
+	return a.app.Services().ProjectSettings().Load(a.root)
 }
 
-func (a *App) GetUiPrefs() (uiprefs.Preferences, error) {
+func (a *App) GetUiPrefs() (models.Preferences, error) {
 	if a.app == nil {
-		return uiprefs.Preferences{}, context.Canceled
+		return models.Preferences{}, context.Canceled
 	}
 	return a.app.Services().UiPref().Get()
 }
 
-func (a *App) SaveUiPrefs(input uiprefs.Preferences) (uiprefs.Preferences, error) {
+func (a *App) SaveUiPrefs(input models.Preferences) (models.Preferences, error) {
 	if a.app == nil {
-		return uiprefs.Preferences{}, context.Canceled
+		return models.Preferences{}, context.Canceled
 	}
 	if err := a.app.Services().UiPref().Save(input); err != nil {
-		return uiprefs.Preferences{}, err
+		return models.Preferences{}, err
 	}
 	return a.GetUiPrefs()
 }
@@ -128,14 +125,14 @@ func (a *App) ReloadProxy() (map[string]interface{}, error) {
 	return stateToMap(a.State()), nil
 }
 
-func (a *App) ListSuppliers() []supplier.Record {
+func (a *App) ListSuppliers() []models.SupplierRecord {
 	if a.app == nil {
 		return nil
 	}
 	return a.app.Services().Supplier().List()
 }
 
-func (a *App) SaveSupplier(input supplier.UpsertInput) ([]supplier.Record, error) {
+func (a *App) SaveSupplier(input models.SupplierUpsertInput) ([]models.SupplierRecord, error) {
 	if a.app == nil {
 		return nil, context.Canceled
 	}
@@ -148,14 +145,12 @@ func (a *App) SaveSupplier(input supplier.UpsertInput) ([]supplier.Record, error
 	return a.ListSuppliers(), nil
 }
 
-func (a *App) DeleteSupplier(id string) ([]supplier.Record, error) {
+func (a *App) DeleteSupplier(id string) ([]models.SupplierRecord, error) {
 	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if a.app.Services().Policies() != nil {
-		if policy, ok := a.app.Services().Policies().FindEnabledBySupplierID(id); ok {
-			return nil, fmt.Errorf("supplier is used by enabled route policy %q", policy.DownstreamProtocol)
-		}
+	if policy, ok := a.app.Services().RoutePolicy().FindEnabledBySupplierID(id); ok {
+		return nil, fmt.Errorf("supplier is used by enabled route policy %q", policy.DownstreamProtocol)
 	}
 	if err := a.app.Services().Supplier().Delete(id); err != nil {
 		return nil, err
@@ -163,138 +158,138 @@ func (a *App) DeleteSupplier(id string) ([]supplier.Record, error) {
 	if _, err := a.ReloadProxy(); err != nil {
 		return nil, err
 	}
-	return a.suppliers.List(), nil
+	return a.ListSuppliers(), nil
 }
 
-func (a *App) ListSupplierHealth() []supplier.HealthRecord {
-	if a.health == nil {
+func (a *App) ListSupplierHealth() []services.HealthRecord {
+	if a.app == nil {
 		return nil
 	}
-	return a.health.List()
+	return a.app.Services().Health().List()
 }
 
-func (a *App) CheckSupplier(id string) ([]supplier.HealthRecord, error) {
-	if a.health == nil {
+func (a *App) CheckSupplier(id string) ([]services.HealthRecord, error) {
+	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if _, err := a.health.Check(id); err != nil {
+	if _, err := a.app.Services().Health().Check(id); err != nil {
 		return nil, err
 	}
-	return a.health.List(), nil
+	return a.app.Services().Health().List(), nil
 }
 
-func (a *App) ListRoutePolicies() []routepolicy.Record {
-	if a.policies == nil {
+func (a *App) ListRoutePolicies() []models.RoutePolicyRecord {
+	if a.app == nil {
 		return nil
 	}
-	return a.policies.List()
+	return a.app.Services().RoutePolicy().List()
 }
 
-func (a *App) ListModelAliases() []modelalias.Record {
-	if a.aliases == nil {
+func (a *App) ListModelAliases() []models.ModelAliasRecord {
+	if a.app == nil {
 		return nil
 	}
-	return a.aliases.List()
+	return a.app.Services().ModelAlias().List()
 }
 
-func (a *App) SaveModelAlias(input modelalias.UpsertInput) ([]modelalias.Record, error) {
-	if a.aliases == nil {
+func (a *App) SaveModelAlias(input models.ModelAliasUpsertInput) ([]models.ModelAliasRecord, error) {
+	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if _, err := a.aliases.Upsert(input); err != nil {
+	if _, err := a.app.Services().ModelAlias().Upsert(input); err != nil {
 		return nil, err
 	}
 	if _, err := a.ReloadProxy(); err != nil {
 		return nil, err
 	}
-	return a.aliases.List(), nil
+	return a.app.Services().ModelAlias().List(), nil
 }
 
-func (a *App) DeleteModelAlias(id string) ([]modelalias.Record, error) {
-	if a.aliases == nil {
+func (a *App) DeleteModelAlias(id string) ([]models.ModelAliasRecord, error) {
+	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if err := a.aliases.Delete(id); err != nil {
+	if err := a.app.Services().ModelAlias().Delete(id); err != nil {
 		return nil, err
 	}
 	if _, err := a.ReloadProxy(); err != nil {
 		return nil, err
 	}
-	return a.aliases.List(), nil
+	return a.app.Services().ModelAlias().List(), nil
 }
 
-func (a *App) SaveRoutePolicy(input routepolicy.UpsertInput) ([]routepolicy.Record, error) {
-	if a.policies == nil {
+func (a *App) SaveRoutePolicy(input models.UpsertInput) ([]models.RoutePolicyRecord, error) {
+	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if _, err := a.policies.Upsert(input); err != nil {
+	if _, err := a.app.Services().RoutePolicy().Upsert(input); err != nil {
 		return nil, err
 	}
 	if _, err := a.ReloadProxy(); err != nil {
 		return nil, err
 	}
-	return a.policies.List(), nil
+	return a.app.Services().RoutePolicy().List(), nil
 }
 
-func (a *App) ListEndpoints() []endpoint.Record {
-	if a.endpoints == nil {
+func (a *App) ListEndpoints() []models.EndpointRecord {
+	if a.app == nil {
 		return nil
 	}
-	return a.endpoints.List()
+	return a.app.Services().Endpoint().List()
 }
 
-func (a *App) SaveEndpoint(input endpoint.UpsertInput) ([]endpoint.Record, error) {
-	if a.endpoints == nil {
+func (a *App) SaveEndpoint(input models.EndpointUpsertInput) ([]models.EndpointRecord, error) {
+	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if _, err := a.endpoints.Upsert(input); err != nil {
+	if _, err := a.app.Services().Endpoint().Upsert(input); err != nil {
 		return nil, err
 	}
-	return a.endpoints.List(), nil
+	return a.app.Services().Endpoint().List(), nil
 }
 
-func (a *App) DeleteEndpoint(id string) ([]endpoint.Record, error) {
-	if a.endpoints == nil {
+func (a *App) DeleteEndpoint(id string) ([]models.EndpointRecord, error) {
+	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if err := a.endpoints.Delete(id); err != nil {
+	if err := a.app.Services().Endpoint().Delete(id); err != nil {
 		return nil, err
 	}
-	return a.endpoints.List(), nil
+	return a.app.Services().Endpoint().List(), nil
 }
 
-func (a *App) ListAuthKeys() []authkey.Record {
-	if a.authKeys == nil {
+func (a *App) ListAuthKeys() []models.AuthKeyRecord {
+	if a.app == nil {
 		return nil
 	}
-	return a.authKeys.List()
+	return a.app.Services().AuthKey().List()
 }
 
-func (a *App) SaveAuthKey(input authkey.UpsertInput) ([]authkey.Record, error) {
-	if a.authKeys == nil {
+func (a *App) SaveAuthKey(input models.AuthKeyUpsertInput) ([]models.AuthKeyRecord, error) {
+	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if _, err := a.authKeys.Upsert(input); err != nil {
+	if _, err := a.app.Services().AuthKey().Upsert(input); err != nil {
 		return nil, err
 	}
-	return a.authKeys.List(), nil
+	return a.app.Services().AuthKey().List(), nil
 }
 
-func (a *App) DeleteAuthKey(id string) ([]authkey.Record, error) {
-	if a.authKeys == nil {
+func (a *App) DeleteAuthKey(id string) ([]models.AuthKeyRecord, error) {
+	if a.app == nil {
 		return nil, context.Canceled
 	}
-	if err := a.authKeys.Delete(id); err != nil {
+	if err := a.app.Services().AuthKey().Delete(id); err != nil {
 		return nil, err
 	}
-	return a.authKeys.List(), nil
+	return a.app.Services().AuthKey().List(), nil
 }
 
 func (a *App) GetAuthKeySecret(id string) (string, error) {
-	if a.authKeys == nil {
+	if a.app == nil {
 		return "", context.Canceled
 	}
-	return a.authKeys.GetSecret(id)
+	return a.app.Services().AuthKey().GetSecret(id)
 }
 
 func (a *App) State() api.State {
@@ -321,31 +316,31 @@ func (a *App) State() api.State {
 		Upstreams: []api.UpstreamView{
 			{
 				Protocol:   consts.ProtocolAnthropic,
-				BaseURL:    a.cfg.AnthropicBaseURL,
-				Configured: strings.TrimSpace(a.cfg.AnthropicAPIKey) != "",
+				BaseURL:    anthropicBaseURL(a.cfg),
+				Configured: strings.TrimSpace(anthropicAPIKey(a.cfg)) != "",
 			},
 			{
 				Protocol:   consts.ProtocolOpenAIChat,
-				BaseURL:    a.cfg.OpenAIChatBaseURLValue(),
-				Configured: strings.TrimSpace(a.cfg.OpenAIChatAPIKeyValue()) != "",
+				BaseURL:    openAIChatBaseURL(a.cfg),
+				Configured: strings.TrimSpace(openAIChatAPIKey(a.cfg)) != "",
 			},
 			{
 				Protocol:   consts.ProtocolOpenAIResponses,
-				BaseURL:    a.cfg.OpenAIResponsesBaseURLValue(),
-				Configured: strings.TrimSpace(a.cfg.OpenAIResponsesAPIKeyValue()) != "",
+				BaseURL:    openAIResponsesBaseURL(a.cfg),
+				Configured: strings.TrimSpace(openAIResponsesAPIKey(a.cfg)) != "",
 			},
 		},
 		Checks: map[string]interface{}{
 			"proxy_running":           a.running,
-			"anthropic_ready":         strings.TrimSpace(a.cfg.AnthropicAPIKey) != "",
-			"openai_chat_ready":       strings.TrimSpace(a.cfg.OpenAIChatAPIKeyValue()) != "",
-			"openai_responses_ready":  strings.TrimSpace(a.cfg.OpenAIResponsesAPIKeyValue()) != "",
-			"route_catalog_ready":     a.app.Services().RouteCatalog() != nil,
-			"supplier_store_ready":    a.suppliers != nil,
-			"route_policy_ready":      a.policies != nil,
-			"model_alias_store_ready": a.aliases != nil,
-			"endpoint_store_ready":    a.endpoints != nil,
-			"auth_key_store_ready":    a.authKeys != nil,
+			"anthropic_ready":         strings.TrimSpace(anthropicAPIKey(a.cfg)) != "",
+			"openai_chat_ready":       strings.TrimSpace(openAIChatAPIKey(a.cfg)) != "",
+			"openai_responses_ready":  strings.TrimSpace(openAIResponsesAPIKey(a.cfg)) != "",
+			"route_catalog_ready":     a.catalog != nil,
+			"supplier_store_ready":    a.app != nil,
+			"route_policy_ready":      a.app != nil,
+			"model_alias_store_ready": a.app != nil,
+			"endpoint_store_ready":    a.app != nil,
+			"auth_key_store_ready":    a.app != nil,
 		},
 	}
 	if a.catalog != nil {
@@ -369,8 +364,8 @@ func (a *App) State() api.State {
 	} else if a.service != nil {
 		state.RecentRequests = a.service.RecentRequests()
 	}
-	if a.endpoints != nil {
-		for _, item := range a.endpoints.List() {
+	if a.app != nil {
+		for _, item := range a.app.Services().Endpoint().List() {
 			state.Endpoints = append(state.Endpoints, api.EndpointView{
 				ID:          item.ID,
 				Path:        item.Path,
@@ -382,9 +377,7 @@ func (a *App) State() api.State {
 				CreatedAt:   item.CreatedAt,
 			})
 		}
-	}
-	if a.policies != nil {
-		for _, policy := range a.policies.List() {
+		for _, policy := range a.app.Services().RoutePolicy().List() {
 			state.RoutePolicies = append(state.RoutePolicies, api.RoutePolicyView{
 				ID:                 policy.ID,
 				DownstreamProtocol: policy.DownstreamProtocol,
@@ -401,34 +394,34 @@ func (a *App) State() api.State {
 }
 
 func (a *App) startProxy() error {
+	if a.app == nil {
+		return context.Canceled
+	}
 	cfg, err := config.Load(a.root)
 	if err != nil {
 		return err
 	}
-	cfg, err = bootstrap.ApplyRoutePolicies(cfg, a.suppliers, a.policies)
+	svc := a.app.Services()
+	cfg.ProxyAPIKeys = services.MergeSecrets(cfg.ProxyAPIKeys, svc.AuthKey().EnabledSecrets())
+	defaults, err := applyRoutePolicies(&cfg, svc)
 	if err != nil {
 		return err
 	}
-	if a.authKeys != nil {
-		cfg.ProxyAPIKeys = authkey.MergeSecrets(cfg.ProxyAPIKeys, a.authKeys.EnabledSecrets())
-	}
-	if a.aliases != nil {
-		cfg.ModelRoutes = modelalias.MergeEntries(cfg.ModelRoutes, a.aliases.EnabledEntries())
-	}
-	cat, err := catalog.New(cfg)
+	aliasEntries := services.MergeEntries("", svc.ModelAlias().EnabledEntries())
+	catalog, err := services.NewCatalogFromEntries(defaults, aliasEntries)
 	if err != nil {
 		return err
 	}
-	service := proxy.New(cfg, cat)
+	proxyService := services.New(cfg, catalog)
 	if a.traffic != nil {
-		service.SetRequestRecorder(a.traffic)
+		proxyService.SetRequestRecorder(a.traffic)
 	}
 	chainLogger, chainLog, err := openChainLog(cfg.ChainLogPath)
 	if err != nil {
 		return err
 	}
-	service.SetChainLogger(chainLogger)
-	handler := api.NewMux(a, service, a.endpointRoutes())
+	proxyService.SetChainLogger(chainLogger)
+	handler := api.NewMux(a, proxyService, a.endpointRoutes())
 	srv := server.New(cfg, handler)
 	listener, err := net.Listen("tcp", cfg.Addr())
 	if err != nil {
@@ -441,8 +434,8 @@ func (a *App) startProxy() error {
 
 	a.mu.Lock()
 	a.cfg = cfg
-	a.catalog = cat
-	a.service = service
+	a.catalog = catalog
+	a.service = proxyService
 	a.httpServer = srv
 	a.chainLog = chainLog
 	a.listenAddr = listenAddr
@@ -456,6 +449,56 @@ func (a *App) startProxy() error {
 		}
 	}()
 	return nil
+}
+
+func applyRoutePolicies(cfg *config.Config, svc *services.Services) (map[consts.Protocol]string, error) {
+	defaults := make(map[consts.Protocol]string)
+	for _, policy := range svc.RoutePolicy().Enabled() {
+		supplier, ok := svc.Supplier().Resolve(policy.SupplierID)
+		if !ok {
+			return nil, fmt.Errorf("supplier %q not found for route policy %q", policy.SupplierID, policy.DownstreamProtocol)
+		}
+		if !supplier.IsEnabled {
+			return nil, fmt.Errorf("supplier %q is disabled for route policy %q", supplier.Name, policy.DownstreamProtocol)
+		}
+		if strings.TrimSpace(supplier.DefaultModel) == "" {
+			return nil, fmt.Errorf("supplier %q default model is required for route policy %q", supplier.Name, policy.DownstreamProtocol)
+		}
+		configureUpstream(cfg, supplier)
+		defaults[policy.DownstreamProtocol] = supplier.Protocol.ToString() + ":" + supplier.DefaultModel
+	}
+	return defaults, nil
+}
+
+func configureUpstream(cfg *config.Config, supplier models.Snapshot) {
+	switch supplier.Protocol {
+	case consts.ProtocolAnthropic:
+		version := "2023-06-01"
+		if cfg.AnthropicConfig != nil && strings.TrimSpace(cfg.AnthropicConfig.Version) != "" {
+			version = cfg.AnthropicConfig.Version
+		}
+		cfg.AnthropicConfig = &config.AnthropicConfig{
+			BaseURL:    strings.TrimSpace(supplier.BaseURL),
+			APIKey:     strings.TrimSpace(supplier.APIKey),
+			OnlyStream: supplier.OnlyStream,
+			UserAgent:  strings.TrimSpace(supplier.UserAgent),
+			Version:    version,
+		}
+	case consts.ProtocolOpenAIChat:
+		cfg.OpenAIChatConfig = &config.OpenAIChatConfig{
+			BaseURL:    strings.TrimSpace(supplier.BaseURL),
+			APIKey:     strings.TrimSpace(supplier.APIKey),
+			OnlyStream: supplier.OnlyStream,
+			UserAgent:  strings.TrimSpace(supplier.UserAgent),
+		}
+	case consts.ProtocolOpenAIResponses:
+		cfg.OpenAIRResponsesConfig = &config.OpenAIRResponsesConfig{
+			BaseURL:    strings.TrimSpace(supplier.BaseURL),
+			APIKey:     strings.TrimSpace(supplier.APIKey),
+			OnlyStream: supplier.OnlyStream,
+			UserAgent:  strings.TrimSpace(supplier.UserAgent),
+		}
+	}
 }
 
 func openChainLog(path string) (*slog.Logger, *os.File, error) {
@@ -474,24 +517,17 @@ func openChainLog(path string) (*slog.Logger, *os.File, error) {
 
 func (a *App) endpointRoutes() []api.EndpointRoute {
 	if a.app == nil {
-		defaults := endpoint.DefaultDefinitions()
+		defaults := services.DefaultDefinitions()
 		routes := make([]api.EndpointRoute, 0, len(defaults))
 		for _, item := range defaults {
-			protocol := consts.Protocol(item.Protocol)
-			switch protocol {
-			case consts.ProtocolAnthropic, consts.ProtocolOpenAIChat, consts.ProtocolOpenAIResponses:
-				routes = append(routes, api.EndpointRoute{
-					Path:     item.Path,
-					Protocol: protocol,
-				})
-			}
+			routes = append(routes, api.EndpointRoute{Path: item.Path, Protocol: item.Protocol})
 		}
 		return routes
 	}
 	records := a.app.Services().Endpoint().Enabled()
 	routes := make([]api.EndpointRoute, 0, len(records))
 	for _, item := range records {
-		protocol := consts.Protocol(item.Protocol)
+		protocol := item.Protocol
 		switch protocol {
 		case consts.ProtocolAnthropic, consts.ProtocolOpenAIChat, consts.ProtocolOpenAIResponses:
 			routes = append(routes, api.EndpointRoute{
@@ -505,7 +541,7 @@ func (a *App) endpointRoutes() []api.EndpointRoute {
 
 func (a *App) enabledEndpointPathsLocked() []string {
 	if a.app == nil {
-		defaults := endpoint.DefaultDefinitions()
+		defaults := services.DefaultDefinitions()
 		paths := make([]string, 0, len(defaults))
 		for _, item := range defaults {
 			paths = append(paths, item.Path)
@@ -526,6 +562,8 @@ func (a *App) stopProxy(ctx context.Context) error {
 	chainLog := a.chainLog
 	a.httpServer = nil
 	a.chainLog = nil
+	a.catalog = nil
+	a.service = nil
 	a.running = false
 	a.listenAddr = ""
 	a.mu.Unlock()
@@ -581,18 +619,44 @@ func stateToMap(state api.State) map[string]interface{} {
 	}
 }
 
-type supplierResolverAdapter struct {
-	svc *supplier.Service
+func anthropicBaseURL(cfg config.Config) string {
+	if cfg.AnthropicConfig == nil {
+		return ""
+	}
+	return cfg.AnthropicConfig.BaseURL
 }
 
-func (a *supplierResolverAdapter) Resolve(id string) (modelalias.SupplierSnapshot, bool) {
-	snap, ok := a.svc.Resolve(id)
-	if !ok {
-		return modelalias.SupplierSnapshot{}, false
+func anthropicAPIKey(cfg config.Config) string {
+	if cfg.AnthropicConfig == nil {
+		return ""
 	}
-	return modelalias.SupplierSnapshot{
-		ID:       snap.ID,
-		Name:     snap.Name,
-		Protocol: snap.Protocol,
-	}, true
+	return cfg.AnthropicConfig.APIKey
+}
+
+func openAIChatBaseURL(cfg config.Config) string {
+	if cfg.OpenAIChatConfig == nil {
+		return ""
+	}
+	return cfg.OpenAIChatConfig.BaseURL
+}
+
+func openAIChatAPIKey(cfg config.Config) string {
+	if cfg.OpenAIChatConfig == nil {
+		return ""
+	}
+	return cfg.OpenAIChatConfig.APIKey
+}
+
+func openAIResponsesBaseURL(cfg config.Config) string {
+	if cfg.OpenAIRResponsesConfig == nil {
+		return ""
+	}
+	return cfg.OpenAIRResponsesConfig.BaseURL
+}
+
+func openAIResponsesAPIKey(cfg config.Config) string {
+	if cfg.OpenAIRResponsesConfig == nil {
+		return ""
+	}
+	return cfg.OpenAIRResponsesConfig.APIKey
 }

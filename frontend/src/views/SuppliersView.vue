@@ -156,10 +156,6 @@
         <div class="grid gap-3 md:grid-cols-2">
           <USelect v-model="store.form.default_model" label="默认模型" placeholder="请先在模型管理中配置候选模型"
             :options="supplierFormDefaultOptions" />
-          <div
-            class="rounded-md border border-dashed border-[#d9d9d9] bg-[#fafafa] px-3 py-2 text-[11px] leading-5 text-[#8c8c8c]">
-            模型列表已拆分到独立弹窗管理。新建供应商后，可在列表中点击"管理模型"补充候选模型与默认模型。
-          </div>
         </div>
 
         <div class="grid gap-3 md:grid-cols-2">

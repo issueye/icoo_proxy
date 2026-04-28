@@ -37,3 +37,14 @@ func NewApp(root string) (*App, error) {
 func (a *App) Services() *services.Services {
 	return a.services
 }
+
+func (a *App) Close() error {
+	if a == nil || a.db == nil {
+		return nil
+	}
+	sqlDB, err := a.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}

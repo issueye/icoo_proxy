@@ -13,17 +13,17 @@ const routeDefinitions = [
   {
     key: "anthropic",
     label: "Anthropic",
-    description: "兼容 /v1/messages 与 /anthropic/v1/messages 请求。",
+    description: "",
   },
   {
     key: "openai-chat",
     label: "OpenAI Chat",
-    description: "兼容 /v1/chat/completions 与 /openai/v1/chat/completions 请求。",
+    description: "",
   },
   {
     key: "openai-responses",
     label: "OpenAI Responses",
-    description: "兼容 /v1/responses 与 /openai/v1/responses 请求。",
+    description: "",
   },
 ];
 

@@ -10,7 +10,6 @@ import (
 
 	"icoo_proxy/internal/consts"
 	"icoo_proxy/internal/models"
-	"icoo_proxy/internal/routepolicy"
 )
 
 type SupplierService struct {
@@ -34,12 +33,16 @@ func (s *SupplierService) List() []models.SupplierRecord {
 	return items
 }
 
-func (s *SupplierService) Resolve(id string) (routepolicy.SupplierSnapshot, bool) {
-	var item models.SupplierModel
-	if err := s.db.First(&item, "id = ?", strings.TrimSpace(id)).Error; err != nil {
-		return routepolicy.SupplierSnapshot{}, false
+func (s *SupplierService) Resolve(id string) (models.Snapshot, bool) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return models.Snapshot{}, false
 	}
-	return routepolicy.SupplierSnapshot{
+	var item models.SupplierModel
+	if err := s.db.First(&item, "id = ?", id).Error; err != nil {
+		return models.Snapshot{}, false
+	}
+	return models.Snapshot{
 		ID:           item.ID,
 		Name:         item.Name,
 		Protocol:     item.Protocol,

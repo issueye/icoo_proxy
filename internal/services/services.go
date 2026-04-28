@@ -17,13 +17,25 @@ type Services struct {
 	supplier        *SupplierService
 	catalog         *CatalogService
 	routePolicy     *RoutePolicyService
+	health          *HealthService
 }
 
 func NewServices(db *gorm.DB, resolver models.Resolver) (*Services, error) {
 	svc := &Services{db: db}
 
+	supplier, err := NewSupplierService(db)
+	if err != nil {
+		return nil, err
+	}
+	if resolver == nil {
+		resolver = supplier
+	}
+
 	endpoint, err := NewEndpointService(db)
 	if err != nil {
+		return nil, err
+	}
+	if err := endpoint.seedDefaults(); err != nil {
 		return nil, err
 	}
 
@@ -42,11 +54,6 @@ func NewServices(db *gorm.DB, resolver models.Resolver) (*Services, error) {
 		return nil, err
 	}
 
-	supplier, err := NewSupplierService(db)
-	if err != nil {
-		return nil, err
-	}
-
 	catalog, err := NewCatalogService()
 	if err != nil {
 		return nil, err
@@ -56,7 +63,11 @@ func NewServices(db *gorm.DB, resolver models.Resolver) (*Services, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := routePolicy.seedDefaults(); err != nil {
+		return nil, err
+	}
 
+	health := NewHealthService(resolver)
 	projectSettings := NewProjectSettingsService()
 
 	svc.modelAlias = modelAlias
@@ -67,6 +78,7 @@ func NewServices(db *gorm.DB, resolver models.Resolver) (*Services, error) {
 	svc.supplier = supplier
 	svc.catalog = catalog
 	svc.routePolicy = routePolicy
+	svc.health = health
 	return svc, nil
 }
 
@@ -100,4 +112,8 @@ func (s *Services) Catalog() *CatalogService {
 
 func (s *Services) RoutePolicy() *RoutePolicyService {
 	return s.routePolicy
+}
+
+func (s *Services) Health() *HealthService {
+	return s.health
 }

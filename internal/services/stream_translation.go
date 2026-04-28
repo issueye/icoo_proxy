@@ -1,4 +1,4 @@
-package proxy
+package services
 
 import (
 	"bufio"
@@ -32,7 +32,7 @@ type anthropicStreamBlock struct {
 type anthropicStreamState struct {
 	w              http.ResponseWriter
 	flusher        http.Flusher
-	service        *Service
+	service        *ProxyService
 	requestID      string
 	model          string
 	messageID      string
@@ -46,7 +46,7 @@ type anthropicStreamState struct {
 	toolBlocks     map[string]*anthropicStreamBlock
 }
 
-func (s *Service) translateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, model, requestID string) error {
+func (s *ProxyService) translateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, model, requestID string) error {
 	state := &anthropicStreamState{
 		w:          w,
 		service:    s,

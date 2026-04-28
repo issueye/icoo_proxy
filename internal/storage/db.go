@@ -34,5 +34,9 @@ func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&models.EndpointModel{},
 		&models.AuthKeyModel{},
+		&models.SupplierModel{},
+		&models.RoutePolicyModel{},
+		&models.ModelAliasModel{},
+		&models.UiPrefModel{},
 	)
 }

@@ -29,6 +29,36 @@ func NewCatalogService() (*CatalogService, error) {
 	}, nil
 }
 
+func NewCatalogFromEntries(defaults map[consts.Protocol]string, aliasEntries string) (*CatalogService, error) {
+	catalog, err := NewCatalogService()
+	if err != nil {
+		return nil, err
+	}
+	for downstream, target := range defaults {
+		if strings.TrimSpace(target) == "" {
+			continue
+		}
+		route, err := catalogParseTarget(downstream.ToString(), target)
+		if err != nil {
+			return nil, err
+		}
+		catalog.defaults[downstream] = route
+	}
+	for _, entry := range catalogSplitEntries(aliasEntries) {
+		name, target, found := strings.Cut(entry, "=")
+		name = strings.TrimSpace(name)
+		if !found || name == "" {
+			return nil, fmt.Errorf("invalid model route %q", entry)
+		}
+		route, err := catalogParseTarget(name, target)
+		if err != nil {
+			return nil, err
+		}
+		catalog.aliases[name] = route
+	}
+	return catalog, nil
+}
+
 func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel string) (Route, error) {
 	model := strings.TrimSpace(requestedModel)
 	slog.Info("下游请求模型和协议", "model", model, "downstream", downstream)

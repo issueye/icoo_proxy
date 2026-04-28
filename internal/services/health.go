@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"icoo_proxy/internal/consts"
+	"icoo_proxy/internal/models"
 	"net/http"
 	"sort"
 	"strings"
@@ -26,10 +27,11 @@ type HealthRecord struct {
 type HealthService struct {
 	mu      sync.RWMutex
 	client  *http.Client
+	store   models.Resolver
 	results map[string]HealthRecord
 }
 
-func NewHealthService(store *Service) *HealthService {
+func NewHealthService(store models.Resolver) *HealthService {
 	return &HealthService{
 		client:  &http.Client{Timeout: 8 * time.Second},
 		store:   store,

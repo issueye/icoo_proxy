@@ -177,9 +177,9 @@ export namespace api {
 
 }
 
-export namespace authkey {
+export namespace models {
 	
-	export class Record {
+	export class AuthKeyRecord {
 	    id: string;
 	    name: string;
 	    secret_masked: string;
@@ -189,7 +189,7 @@ export namespace authkey {
 	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Record(source);
+	        return new AuthKeyRecord(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -203,7 +203,7 @@ export namespace authkey {
 	        this.created_at = source["created_at"];
 	    }
 	}
-	export class UpsertInput {
+	export class AuthKeyUpsertInput {
 	    id: string;
 	    name: string;
 	    secret: string;
@@ -211,7 +211,7 @@ export namespace authkey {
 	    description: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new UpsertInput(source);
+	        return new AuthKeyUpsertInput(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -223,12 +223,7 @@ export namespace authkey {
 	        this.description = source["description"];
 	    }
 	}
-
-}
-
-export namespace endpoint {
-	
-	export class Record {
+	export class EndpointRecord {
 	    id: string;
 	    path: string;
 	    protocol: string;
@@ -239,7 +234,7 @@ export namespace endpoint {
 	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Record(source);
+	        return new EndpointRecord(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -254,7 +249,7 @@ export namespace endpoint {
 	        this.created_at = source["created_at"];
 	    }
 	}
-	export class UpsertInput {
+	export class EndpointUpsertInput {
 	    id: string;
 	    path: string;
 	    protocol: string;
@@ -262,7 +257,7 @@ export namespace endpoint {
 	    enabled: boolean;
 	
 	    static createFrom(source: any = {}) {
-	        return new UpsertInput(source);
+	        return new EndpointUpsertInput(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -274,12 +269,7 @@ export namespace endpoint {
 	        this.enabled = source["enabled"];
 	    }
 	}
-
-}
-
-export namespace modelalias {
-	
-	export class Record {
+	export class ModelAliasRecord {
 	    id: string;
 	    name: string;
 	    supplier_id: string;
@@ -291,7 +281,7 @@ export namespace modelalias {
 	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Record(source);
+	        return new ModelAliasRecord(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -307,7 +297,7 @@ export namespace modelalias {
 	        this.created_at = source["created_at"];
 	    }
 	}
-	export class UpsertInput {
+	export class ModelAliasUpsertInput {
 	    id: string;
 	    name: string;
 	    supplier_id: string;
@@ -315,7 +305,7 @@ export namespace modelalias {
 	    enabled: boolean;
 	
 	    static createFrom(source: any = {}) {
-	        return new UpsertInput(source);
+	        return new ModelAliasUpsertInput(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -327,43 +317,21 @@ export namespace modelalias {
 	        this.enabled = source["enabled"];
 	    }
 	}
-
-}
-
-export namespace projectsettings {
-	
-	export class Values {
-	    proxy_host: string;
-	    proxy_port: number;
-	    proxy_read_timeout_seconds: number;
-	    proxy_write_timeout_seconds: number;
-	    proxy_shutdown_timeout_seconds: number;
-	    proxy_chain_log_path: string;
-	    proxy_chain_log_bodies: boolean;
-	    proxy_chain_log_max_body_bytes: number;
+	export class Preferences {
+	    theme: string;
+	    buttonSize: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Values(source);
+	        return new Preferences(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.proxy_host = source["proxy_host"];
-	        this.proxy_port = source["proxy_port"];
-	        this.proxy_read_timeout_seconds = source["proxy_read_timeout_seconds"];
-	        this.proxy_write_timeout_seconds = source["proxy_write_timeout_seconds"];
-	        this.proxy_shutdown_timeout_seconds = source["proxy_shutdown_timeout_seconds"];
-	        this.proxy_chain_log_path = source["proxy_chain_log_path"];
-	        this.proxy_chain_log_bodies = source["proxy_chain_log_bodies"];
-	        this.proxy_chain_log_max_body_bytes = source["proxy_chain_log_max_body_bytes"];
+	        this.theme = source["theme"];
+	        this.buttonSize = source["buttonSize"];
 	    }
 	}
-
-}
-
-export namespace routepolicy {
-	
-	export class Record {
+	export class RoutePolicyRecord {
 	    id: string;
 	    downstream_protocol: string;
 	    supplier_id: string;
@@ -374,7 +342,7 @@ export namespace routepolicy {
 	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Record(source);
+	        return new RoutePolicyRecord(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -389,6 +357,74 @@ export namespace routepolicy {
 	        this.created_at = source["created_at"];
 	    }
 	}
+	export class SupplierRecord {
+	    id: string;
+	    name: string;
+	    protocol: string;
+	    base_url: string;
+	    api_key_masked: string;
+	    only_stream: boolean;
+	    user_agent: string;
+	    enabled: boolean;
+	    description: string;
+	    models: string[];
+	    default_model: string;
+	    updated_at: string;
+	    created_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SupplierRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.protocol = source["protocol"];
+	        this.base_url = source["base_url"];
+	        this.api_key_masked = source["api_key_masked"];
+	        this.only_stream = source["only_stream"];
+	        this.user_agent = source["user_agent"];
+	        this.enabled = source["enabled"];
+	        this.description = source["description"];
+	        this.models = source["models"];
+	        this.default_model = source["default_model"];
+	        this.updated_at = source["updated_at"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	export class SupplierUpsertInput {
+	    id: string;
+	    name: string;
+	    protocol: string;
+	    base_url: string;
+	    api_key: string;
+	    only_stream: boolean;
+	    user_agent: string;
+	    enabled: boolean;
+	    description: string;
+	    models: string;
+	    default_model: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SupplierUpsertInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.protocol = source["protocol"];
+	        this.base_url = source["base_url"];
+	        this.api_key = source["api_key"];
+	        this.only_stream = source["only_stream"];
+	        this.user_agent = source["user_agent"];
+	        this.enabled = source["enabled"];
+	        this.description = source["description"];
+	        this.models = source["models"];
+	        this.default_model = source["default_model"];
+	    }
+	}
 	export class UpsertInput {
 	    id: string;
 	    downstream_protocol: string;
@@ -410,7 +446,7 @@ export namespace routepolicy {
 
 }
 
-export namespace supplier {
+export namespace services {
 	
 	export class HealthRecord {
 	    supplier_id: string;
@@ -442,91 +478,30 @@ export namespace supplier {
 	        this.supplier_name = source["supplier_name"];
 	    }
 	}
-	export class Record {
-	    id: string;
-	    name: string;
-	    protocol: string;
-	    base_url: string;
-	    api_key_masked: string;
-	    only_stream: boolean;
-	    user_agent: string;
-	    enabled: boolean;
-	    description: string;
-	    models: string[];
-	    default_model: string;
-	    updated_at: string;
-	    created_at: string;
+	export class Values {
+	    proxy_host: string;
+	    proxy_port: number;
+	    proxy_read_timeout_seconds: number;
+	    proxy_write_timeout_seconds: number;
+	    proxy_shutdown_timeout_seconds: number;
+	    proxy_chain_log_path: string;
+	    proxy_chain_log_bodies: boolean;
+	    proxy_chain_log_max_body_bytes: number;
 	
 	    static createFrom(source: any = {}) {
-	        return new Record(source);
+	        return new Values(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.protocol = source["protocol"];
-	        this.base_url = source["base_url"];
-	        this.api_key_masked = source["api_key_masked"];
-	        this.only_stream = source["only_stream"];
-	        this.user_agent = source["user_agent"];
-	        this.enabled = source["enabled"];
-	        this.description = source["description"];
-	        this.models = source["models"];
-	        this.default_model = source["default_model"];
-	        this.updated_at = source["updated_at"];
-	        this.created_at = source["created_at"];
-	    }
-	}
-	export class UpsertInput {
-	    id: string;
-	    name: string;
-	    protocol: string;
-	    base_url: string;
-	    api_key: string;
-	    only_stream: boolean;
-	    user_agent: string;
-	    enabled: boolean;
-	    description: string;
-	    models: string;
-	    default_model: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new UpsertInput(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.protocol = source["protocol"];
-	        this.base_url = source["base_url"];
-	        this.api_key = source["api_key"];
-	        this.only_stream = source["only_stream"];
-	        this.user_agent = source["user_agent"];
-	        this.enabled = source["enabled"];
-	        this.description = source["description"];
-	        this.models = source["models"];
-	        this.default_model = source["default_model"];
-	    }
-	}
-
-}
-
-export namespace uiprefs {
-	
-	export class Preferences {
-	    theme: string;
-	    buttonSize: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Preferences(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.theme = source["theme"];
-	        this.buttonSize = source["buttonSize"];
+	        this.proxy_host = source["proxy_host"];
+	        this.proxy_port = source["proxy_port"];
+	        this.proxy_read_timeout_seconds = source["proxy_read_timeout_seconds"];
+	        this.proxy_write_timeout_seconds = source["proxy_write_timeout_seconds"];
+	        this.proxy_shutdown_timeout_seconds = source["proxy_shutdown_timeout_seconds"];
+	        this.proxy_chain_log_path = source["proxy_chain_log_path"];
+	        this.proxy_chain_log_bodies = source["proxy_chain_log_bodies"];
+	        this.proxy_chain_log_max_body_bytes = source["proxy_chain_log_max_body_bytes"];
 	    }
 	}
 

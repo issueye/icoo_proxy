@@ -4,21 +4,22 @@ import (
 	"strings"
 	"testing"
 
-	"icoo_proxy/internal/routepolicy"
-	"icoo_proxy/internal/supplier"
+	appcore "icoo_proxy/internal/app"
+	"icoo_proxy/internal/consts"
+	"icoo_proxy/internal/models"
 )
 
 func TestDeleteSupplierRejectsEnabledPolicyReference(t *testing.T) {
 	root := t.TempDir()
-	suppliers, err := supplier.NewService(root)
+	core, err := appcore.NewApp(root)
 	if err != nil {
-		t.Fatalf("new suppliers: %v", err)
+		t.Fatalf("new app: %v", err)
 	}
-	t.Cleanup(func() { _ = suppliers.Close() })
+	t.Cleanup(func() { _ = core.Close() })
 
-	record, err := suppliers.Upsert(supplier.UpsertInput{
+	record, err := core.Services().Supplier().Upsert(models.SupplierUpsertInput{
 		Name:         "Policy Vendor",
-		Protocol:     "openai-responses",
+		Protocol:     consts.ProtocolOpenAIResponses.ToString(),
 		BaseURL:      "https://example.com",
 		Enabled:      true,
 		Models:       "gpt-4.1-mini",
@@ -29,14 +30,8 @@ func TestDeleteSupplierRejectsEnabledPolicyReference(t *testing.T) {
 		t.Fatalf("upsert supplier: %v", err)
 	}
 
-	policies, err := routepolicy.NewService(root, suppliers)
-	if err != nil {
-		t.Fatalf("new policies: %v", err)
-	}
-	t.Cleanup(func() { _ = policies.Close() })
-
-	if _, err := policies.Upsert(routepolicy.UpsertInput{
-		DownstreamProtocol: "openai-chat",
+	if _, err := core.Services().RoutePolicy().Upsert(models.UpsertInput{
+		DownstreamProtocol: consts.ProtocolOpenAIChat,
 		SupplierID:         record.ID,
 		Enabled:            true,
 	}); err != nil {
@@ -44,9 +39,8 @@ func TestDeleteSupplierRejectsEnabledPolicyReference(t *testing.T) {
 	}
 
 	app := &App{
-		root:      root,
-		suppliers: suppliers,
-		policies:  policies,
+		root: root,
+		app:  core,
 	}
 
 	_, err = app.DeleteSupplier(record.ID)
@@ -56,7 +50,7 @@ func TestDeleteSupplierRejectsEnabledPolicyReference(t *testing.T) {
 	if !strings.Contains(err.Error(), "supplier is used by enabled route policy \"openai-chat\"") {
 		t.Fatalf("unexpected delete error: %v", err)
 	}
-	if _, ok := suppliers.Resolve(record.ID); !ok {
+	if _, ok := core.Services().Supplier().Resolve(record.ID); !ok {
 		t.Fatalf("expected blocked supplier deletion to keep supplier record")
 	}
 }
