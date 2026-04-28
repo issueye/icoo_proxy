@@ -43,6 +43,10 @@ export function GetOverview() {
   return invoke("GetOverview");
 }
 
+export function GetTrafficPage(arg1, arg2, arg3) {
+  return invoke("GetTrafficPage", arg1, arg2, arg3);
+}
+
 export function GetProjectSettings() {
   return invoke("GetProjectSettings");
 }

@@ -1,5 +1,5 @@
 <template>
-  <UFormField :label="label" :hint="hint" :error="error" :required="required">
+  <UFormField :label="label" :hint="hint" :error="error" :required="required" :hide-label="hideLabel">
     <textarea
       v-if="textarea"
       class="ued-input ued-input--textarea"
@@ -50,6 +50,10 @@ defineProps({
     default: "",
   },
   required: {
+    type: Boolean,
+    default: false,
+  },
+  hideLabel: {
     type: Boolean,
     default: false,
   },

@@ -30,6 +30,10 @@ export function GetOverview() {
   return window['go']['main']['App']['GetOverview']();
 }
 
+export function GetTrafficPage(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetTrafficPage'](arg1, arg2, arg3);
+}
+
 export function GetProjectSettings() {
   return window['go']['main']['App']['GetProjectSettings']();
 }

@@ -163,3 +163,85 @@ func TestServiceTokenStatsIgnoresLegacyRecordsWithoutUsage(t *testing.T) {
 		t.Fatalf("expected zero-value token fields for legacy record, got %#v", got[0])
 	}
 }
+
+func TestServiceQueryPageSupportsFilterAndPagination(t *testing.T) {
+	root := t.TempDir()
+	service, err := NewService(root)
+	if err != nil {
+		t.Fatalf("new traffic service: %v", err)
+	}
+	defer func() { _ = service.Close() }()
+
+	items := []api.RequestView{
+		{
+			RequestID:    "req-1",
+			Downstream:   "openai-chat",
+			Upstream:     "openai-responses",
+			Model:        "gpt-4.1-mini",
+			StatusCode:   200,
+			DurationMS:   10,
+			InputTokens:  3,
+			OutputTokens: 7,
+			TotalTokens:  10,
+			CreatedAt:    time.Date(2026, 4, 27, 10, 0, 0, 0, time.UTC).Format(time.RFC3339),
+		},
+		{
+			RequestID:    "req-2",
+			Downstream:   "anthropic",
+			Upstream:     "openai-responses",
+			Model:        "claude-sonnet",
+			StatusCode:   500,
+			DurationMS:   20,
+			InputTokens:  5,
+			OutputTokens: 5,
+			TotalTokens:  10,
+			CreatedAt:    time.Date(2026, 4, 27, 10, 1, 0, 0, time.UTC).Format(time.RFC3339),
+		},
+		{
+			RequestID:    "req-3",
+			Downstream:   "openai-chat",
+			Upstream:     "openai-chat",
+			Model:        "gpt-4.1",
+			StatusCode:   200,
+			DurationMS:   30,
+			InputTokens:  2,
+			OutputTokens: 8,
+			TotalTokens:  10,
+			CreatedAt:    time.Date(2026, 4, 27, 10, 2, 0, 0, time.UTC).Format(time.RFC3339),
+		},
+	}
+
+	for _, item := range items {
+		if err := service.RecordRequest(item); err != nil {
+			t.Fatalf("record request %s: %v", item.RequestID, err)
+		}
+	}
+
+	result := service.QueryPage("openai-chat", 1, 1)
+	if result.Total != 2 {
+		t.Fatalf("expected 2 filtered records, got %d", result.Total)
+	}
+	if len(result.Items) != 1 || result.Items[0].RequestID != "req-3" {
+		t.Fatalf("expected first page to contain newest openai-chat record, got %#v", result.Items)
+	}
+	if result.TotalRequests != 3 {
+		t.Fatalf("expected total request summary 3, got %d", result.TotalRequests)
+	}
+	if result.SuccessCount != 2 || result.ErrorCount != 1 {
+		t.Fatalf("expected success/error 2/1, got %d/%d", result.SuccessCount, result.ErrorCount)
+	}
+	if result.AverageLatency != 20 {
+		t.Fatalf("expected average latency 20, got %d", result.AverageLatency)
+	}
+	if result.TokenStats.TotalTokens != 30 {
+		t.Fatalf("expected total tokens 30, got %#v", result.TokenStats)
+	}
+	if len(result.ProtocolOptions) < 3 {
+		t.Fatalf("expected protocol options collected, got %#v", result.ProtocolOptions)
+	}
+
+	pageTwo := service.QueryPage("openai-chat", 2, 1)
+	if len(pageTwo.Items) != 1 || pageTwo.Items[0].RequestID != "req-1" {
+		t.Fatalf("expected second page to contain older openai-chat record, got %#v", pageTwo.Items)
+	}
+}

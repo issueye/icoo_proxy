@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { GetOverview } from "../lib/wailsApp";
+import { GetTrafficPage } from "../lib/wailsApp";
 
 function defaultTokenStats() {
   return {
@@ -16,74 +16,74 @@ export const useTrafficStore = defineStore("traffic", {
     error: "",
     requests: [],
     tokenStats: defaultTokenStats(),
+    totalRequests: 0,
+    total: 0,
+    page: 1,
+    pageSize: 8,
+    successCount: 0,
+    errorCount: 0,
+    averageLatency: 0,
+    protocolOptions: ["all"],
     filter: "all",
     autoRefresh: false,
     lastUpdatedAt: "",
   }),
   getters: {
-    filteredRequests(state) {
-      if (state.filter === "all") {
-        return state.requests;
-      }
-      return state.requests.filter((item) => item.downstream === state.filter || item.upstream === state.filter);
-    },
-    successCount(state) {
-      return state.requests.filter((item) => item.status_code > 0 && item.status_code < 400).length;
-    },
-    errorCount(state) {
-      return state.requests.filter((item) => item.status_code >= 400).length;
-    },
-    averageLatency(state) {
-      if (state.requests.length === 0) {
-        return 0;
-      }
-      const total = state.requests.reduce((sum, item) => sum + (item.duration_ms || 0), 0);
-      return Math.round(total / state.requests.length);
-    },
-    protocolOptions(state) {
-      const values = new Set(["all"]);
-      state.requests.forEach((item) => {
-        if (item.downstream) {
-          values.add(item.downstream);
-        }
-        if (item.upstream) {
-          values.add(item.upstream);
-        }
-      });
-      return Array.from(values);
+    hasData(state) {
+      return state.total > 0;
     },
   },
   actions: {
-    async load() {
-      this.loading = true;
+    async fetchPage({ page = this.page, pageSize = this.pageSize, refreshing = false } = {}) {
+      this.loading = !refreshing;
+      this.refreshing = refreshing;
       this.error = "";
+
       try {
-        const overview = await GetOverview();
-        this.requests = overview?.recent_requests || [];
-        this.tokenStats = overview?.token_stats || defaultTokenStats();
-        this.lastUpdatedAt = new Date().toISOString();
+        const result = await GetTrafficPage(page, pageSize, this.filter);
+
+        this.requests = result?.items || [];
+        this.total = Number(result?.total || 0);
+        this.page = Number(result?.page || page || 1);
+        this.pageSize = Number(result?.page_size || pageSize || 8);
+        this.protocolOptions = result?.protocol_options || ["all"];
+        this.tokenStats = result?.token_stats || defaultTokenStats();
+        this.totalRequests = Number(result?.total_requests || 0);
+        this.successCount = Number(result?.success_count || 0);
+        this.errorCount = Number(result?.error_count || 0);
+        this.averageLatency = Number(result?.average_latency || 0);
+        this.lastUpdatedAt = result?.last_updated_at || new Date().toISOString();
+
+        if (this.total > 0 && this.requests.length === 0 && this.page > 1) {
+          const maxPage = Math.max(1, Math.ceil(this.total / this.pageSize));
+          if (maxPage !== this.page) {
+            this.page = maxPage;
+            return await this.fetchPage({ page: this.page, pageSize: this.pageSize, refreshing });
+          }
+        }
       } catch (error) {
         this.error = error?.message || String(error);
       } finally {
         this.loading = false;
-      }
-    },
-    async refresh() {
-      this.refreshing = true;
-      this.error = "";
-      try {
-        const overview = await GetOverview();
-        this.requests = overview?.recent_requests || [];
-        this.tokenStats = overview?.token_stats || defaultTokenStats();
-        this.lastUpdatedAt = new Date().toISOString();
-      } catch (error) {
-        this.error = error?.message || String(error);
-      } finally {
         this.refreshing = false;
       }
     },
-    setFilter(value) {
+    async load() {
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    async refresh() {
+      await this.fetchPage({ refreshing: true });
+    },
+    async setFilter(value) {
       this.filter = value;
+      this.page = 1;
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    async changePage({ page, pageSize }) {
+      await this.fetchPage({
+        page: page || this.page,
+        pageSize: pageSize || this.pageSize,
+      });
     },
     toggleAutoRefresh() {
       this.autoRefresh = !this.autoRefresh;

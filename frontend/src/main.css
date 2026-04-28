@@ -701,9 +701,7 @@ button:disabled {
     @apply align-top;
   }
 
-  .ued-field {
-    @apply block space-y-1.5;
-  }
+  .ued-field {}
 
   .ued-field__label {
     @apply block text-sm font-medium text-slate-700;
@@ -757,8 +755,16 @@ button:disabled {
   }
 
   .ued-select__menu {
-    @apply absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-auto rounded border border-slate-200 bg-white p-1;
+    @apply fixed z-[70] overflow-auto rounded border border-slate-200 bg-white p-1;
     box-shadow: var(--ued-shadow-popup);
+  }
+
+  .ued-select__menu.is-top {
+    transform-origin: bottom center;
+  }
+
+  .ued-select__menu.is-bottom {
+    transform-origin: top center;
   }
 
   .ued-select__option {
@@ -1135,9 +1141,7 @@ button:disabled {
   color: #64748b;
 }
 
-.page-section {
-  gap: 14px;
-}
+.page-section {}
 
 .page-header,
 .content-panel,

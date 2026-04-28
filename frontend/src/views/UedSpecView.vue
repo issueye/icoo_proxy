@@ -152,7 +152,43 @@
     </div>
 
     <PanelBlock title="基础表格">
-      <UTable :columns="columns" :rows="rows" row-key="id" empty-text="暂无组件示例数据。" action-width="72px">
+      <UTable
+        :columns="columns"
+        :rows="filteredRows"
+        row-key="id"
+        empty-text="暂无组件示例数据。"
+        action-width="72px"
+        pagination
+        :page-size="3"
+      >
+        <template #query>
+          <div class="table-query-form">
+            <UInput
+              v-model="basicTableQuery.keyword"
+              label="关键词"
+              hide-label
+              placeholder="搜索名称"
+              class="table-query-form__field table-query-form__field--keyword"
+            />
+            <USelect
+              v-model="basicTableQuery.type"
+              label="类型"
+              hide-label
+              :options="basicTypeOptions"
+              class="table-query-form__field table-query-form__field--select"
+            />
+            <USelect
+              v-model="basicTableQuery.status"
+              label="状态"
+              hide-label
+              :options="basicStatusOptions"
+              class="table-query-form__field table-query-form__field--select"
+            />
+            <div class="table-query-form__actions">
+              <UButton variant="secondary" @click="resetBasicTableQuery">重置</UButton>
+            </div>
+          </div>
+        </template>
         <template #cell-status="{ value }">
           <UTag :variant="value === '启用' ? 'success' : 'error'" dot>{{ value }}</UTag>
         </template>
@@ -226,7 +262,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import PanelBlock from "../components/PanelBlock.vue";
 import UAlert from "../components/ued/UAlert.vue";
 import UButton from "../components/ued/UButton.vue";
@@ -251,6 +287,12 @@ const form = reactive({
   name: "",
   protocol: "openai-responses",
   description: "",
+});
+
+const basicTableQuery = reactive({
+  keyword: "",
+  type: "all",
+  status: "all",
 });
 
 const protocolOptions = [
@@ -294,7 +336,44 @@ const columns = [
 const rows = [
   { id: "1", name: "供应商按钮", type: "操作组件", status: "启用" },
   { id: "2", name: "确认弹窗", type: "反馈组件", status: "启用" },
+  { id: "3", name: "状态标签", type: "展示组件", status: "启用" },
+  { id: "4", name: "分页表格", type: "数据组件", status: "启用" },
+  { id: "5", name: "消息提示", type: "反馈组件", status: "停用" },
+  { id: "6", name: "下拉筛选", type: "表单组件", status: "启用" },
 ];
+
+const basicTypeOptions = [
+  { label: "全部类型", value: "all" },
+  { label: "操作组件", value: "操作组件" },
+  { label: "反馈组件", value: "反馈组件" },
+  { label: "展示组件", value: "展示组件" },
+  { label: "数据组件", value: "数据组件" },
+  { label: "表单组件", value: "表单组件" },
+];
+
+const basicStatusOptions = [
+  { label: "全部状态", value: "all" },
+  { label: "启用", value: "启用" },
+  { label: "停用", value: "停用" },
+];
+
+const filteredRows = computed(() => {
+  const keyword = basicTableQuery.keyword.trim().toLowerCase();
+
+  return rows.filter((row) => {
+    const matchesKeyword = !keyword || row.name.toLowerCase().includes(keyword);
+    const matchesType = basicTableQuery.type === "all" || row.type === basicTableQuery.type;
+    const matchesStatus = basicTableQuery.status === "all" || row.status === basicTableQuery.status;
+
+    return matchesKeyword && matchesType && matchesStatus;
+  });
+});
+
+function resetBasicTableQuery() {
+  basicTableQuery.keyword = "";
+  basicTableQuery.type = "all";
+  basicTableQuery.status = "all";
+}
 
 const advancedColumns = [
   { key: "id", title: "ID", width: "80px", fixed: "left", align: "center" },
@@ -363,3 +442,42 @@ const advancedRows = [
   },
 ];
 </script>
+
+<style scoped>
+.table-query-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.table-query-form__field {
+  min-width: 0;
+}
+
+.table-query-form__field--keyword {
+  width: min(240px, 100%);
+}
+
+.table-query-form__field--select {
+  width: 160px;
+}
+
+.table-query-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .table-query-form {
+    align-items: stretch;
+  }
+
+  .table-query-form__field--keyword,
+  .table-query-form__field--select,
+  .table-query-form__actions {
+    width: 100%;
+  }
+}
+</style>

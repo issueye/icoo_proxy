@@ -18,12 +18,12 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:         "icoo Proxy",
-		Width:         900,
-		Height:        600,
+		Width:         1080,
+		Height:        860,
 		MinWidth:      900,
 		MinHeight:     600,
-		MaxWidth:      900,
-		MaxHeight:     600,
+		MaxWidth:      1080,
+		MaxHeight:     860,
 		DisableResize: false,
 		Frameless:     true,
 		Fullscreen:    false,

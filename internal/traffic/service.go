@@ -21,6 +21,19 @@ const (
 	keyPrefix    = "request:"
 )
 
+type PageResult struct {
+	Items           []api.RequestView
+	Total           int
+	Page            int
+	PageSize        int
+	ProtocolOptions []string
+	TokenStats      api.TokenStatsView
+	TotalRequests   int
+	SuccessCount    int
+	ErrorCount      int
+	AverageLatency  int
+}
+
 type Service struct {
 	db *leveldb.DB
 }
@@ -108,6 +121,78 @@ func (s *Service) TokenStats() api.TokenStatsView {
 	return stats
 }
 
+func (s *Service) QueryPage(filter string, page int, pageSize int) PageResult {
+	if s == nil || s.db == nil {
+		return PageResult{
+			Page:            normalizePage(page),
+			PageSize:        normalizePageSize(pageSize),
+			ProtocolOptions: []string{"all"},
+		}
+	}
+
+	page = normalizePage(page)
+	pageSize = normalizePageSize(pageSize)
+	offset := (page - 1) * pageSize
+	filter = normalizeFilter(filter)
+
+	iter := s.db.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
+	defer iter.Release()
+
+	result := PageResult{
+		Items:           make([]api.RequestView, 0, pageSize),
+		Page:            page,
+		PageSize:        pageSize,
+		ProtocolOptions: []string{"all"},
+	}
+
+	seenProtocols := map[string]struct{}{
+		"all": {},
+	}
+	var totalDuration int64
+
+	for iter.Next() {
+		var item api.RequestView
+		if err := json.Unmarshal(iter.Value(), &item); err != nil {
+			continue
+		}
+
+		result.TotalRequests++
+		totalDuration += item.DurationMS
+		result.TokenStats.InputTokens += item.InputTokens
+		result.TokenStats.OutputTokens += item.OutputTokens
+		result.TokenStats.TotalTokens += item.TotalTokens
+
+		if item.StatusCode > 0 && item.StatusCode < 400 {
+			result.SuccessCount++
+		}
+		if item.StatusCode >= 400 {
+			result.ErrorCount++
+		}
+
+		appendProtocolOption(&result.ProtocolOptions, seenProtocols, item.Downstream)
+		appendProtocolOption(&result.ProtocolOptions, seenProtocols, item.Upstream)
+
+		if !matchesFilter(item, filter) {
+			continue
+		}
+
+		result.Total++
+		if result.Total <= offset {
+			continue
+		}
+		if len(result.Items) >= pageSize {
+			continue
+		}
+		result.Items = append(result.Items, item)
+	}
+
+	if result.TotalRequests > 0 {
+		result.AverageLatency = int(totalDuration / int64(result.TotalRequests))
+	}
+
+	return result
+}
+
 func requestKey(item api.RequestView) string {
 	createdAt := parseCreatedAt(item.CreatedAt)
 	reversed := math.MaxInt64 - createdAt.UnixNano()
@@ -122,4 +207,45 @@ func parseCreatedAt(value string) time.Time {
 		return parsed
 	}
 	return time.Now()
+}
+
+func normalizePage(page int) int {
+	if page <= 0 {
+		return 1
+	}
+	return page
+}
+
+func normalizePageSize(pageSize int) int {
+	if pageSize <= 0 {
+		return 10
+	}
+	return pageSize
+}
+
+func normalizeFilter(filter string) string {
+	filter = strings.TrimSpace(filter)
+	if filter == "" {
+		return "all"
+	}
+	return filter
+}
+
+func matchesFilter(item api.RequestView, filter string) bool {
+	if filter == "all" {
+		return true
+	}
+	return item.Downstream == filter || item.Upstream == filter
+}
+
+func appendProtocolOption(options *[]string, seen map[string]struct{}, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	if _, ok := seen[value]; ok {
+		return
+	}
+	seen[value] = struct{}{}
+	*options = append(*options, value)
 }

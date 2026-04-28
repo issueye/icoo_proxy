@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"icoo_proxy/internal/api"
 	appcore "icoo_proxy/internal/app"
@@ -74,6 +75,99 @@ func (a *App) shutdown(ctx context.Context) {
 
 func (a *App) GetOverview() map[string]interface{} {
 	return stateToMap(a.State())
+}
+
+func (a *App) GetTrafficPage(page int, pageSize int, filter string) map[string]interface{} {
+	lastUpdatedAt := time.Now().Format(time.RFC3339)
+	filter = normalizeTrafficFilter(filter)
+
+	if a.traffic != nil {
+		result := a.traffic.QueryPage(filter, page, pageSize)
+		return map[string]interface{}{
+			"items":            result.Items,
+			"total":            result.Total,
+			"page":             result.Page,
+			"page_size":        result.PageSize,
+			"filter":           filter,
+			"protocol_options": result.ProtocolOptions,
+			"token_stats":      result.TokenStats,
+			"total_requests":   result.TotalRequests,
+			"success_count":    result.SuccessCount,
+			"error_count":      result.ErrorCount,
+			"average_latency":  result.AverageLatency,
+			"last_updated_at":  lastUpdatedAt,
+		}
+	}
+
+	items := []api.RequestView{}
+	if a.service != nil {
+		items = a.service.RecentRequests()
+	}
+
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	protocolOptions := []string{"all"}
+	seenProtocols := map[string]struct{}{"all": {}}
+	filtered := make([]api.RequestView, 0, len(items))
+	tokenStats := api.TokenStatsView{}
+	successCount := 0
+	errorCount := 0
+	totalDuration := int64(0)
+
+	for _, item := range items {
+		tokenStats.InputTokens += item.InputTokens
+		tokenStats.OutputTokens += item.OutputTokens
+		tokenStats.TotalTokens += item.TotalTokens
+		totalDuration += item.DurationMS
+
+		if item.StatusCode > 0 && item.StatusCode < 400 {
+			successCount++
+		}
+		if item.StatusCode >= 400 {
+			errorCount++
+		}
+
+		appendProtocolOption(&protocolOptions, seenProtocols, item.Downstream)
+		appendProtocolOption(&protocolOptions, seenProtocols, item.Upstream)
+
+		if filter != "all" && item.Downstream != filter && item.Upstream != filter {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+
+	start := (page - 1) * pageSize
+	if start > len(filtered) {
+		start = len(filtered)
+	}
+	end := start + pageSize
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	averageLatency := 0
+	if len(items) > 0 {
+		averageLatency = int(totalDuration / int64(len(items)))
+	}
+
+	return map[string]interface{}{
+		"items":            filtered[start:end],
+		"total":            len(filtered),
+		"page":             page,
+		"page_size":        pageSize,
+		"filter":           filter,
+		"protocol_options": protocolOptions,
+		"token_stats":      tokenStats,
+		"total_requests":   len(items),
+		"success_count":    successCount,
+		"error_count":      errorCount,
+		"average_latency":  averageLatency,
+		"last_updated_at":  lastUpdatedAt,
+	}
 }
 
 func (a *App) GetProjectSettings() (services.Values, error) {
@@ -670,4 +764,24 @@ func openAIResponsesAPIKey(cfg config.Config) string {
 		return ""
 	}
 	return cfg.OpenAIRResponsesConfig.APIKey
+}
+
+func normalizeTrafficFilter(filter string) string {
+	filter = strings.TrimSpace(filter)
+	if filter == "" {
+		return "all"
+	}
+	return filter
+}
+
+func appendProtocolOption(options *[]string, seen map[string]struct{}, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	if _, ok := seen[value]; ok {
+		return
+	}
+	seen[value] = struct{}{}
+	*options = append(*options, value)
 }

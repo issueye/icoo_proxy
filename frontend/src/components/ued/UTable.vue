@@ -1,5 +1,9 @@
 <template>
   <div class="table-shell" :class="shellClasses">
+    <div v-if="$slots.query" class="table-query">
+      <slot name="query" />
+    </div>
+
     <div class="table-scroll" :style="scrollStyle">
       <table :class="tableClasses" :style="tableStyle">
         <colgroup v-if="tableColumns.length">
@@ -33,7 +37,7 @@
 
         <tbody v-if="hasRows">
           <tr
-            v-for="(row, rowIndex) in rows"
+            v-for="(row, rowIndex) in visibleRows"
             :key="resolveRowKey(row, rowIndex)"
             :class="getRowClasses(row, rowIndex)"
           >
@@ -80,12 +84,68 @@
         <slot name="empty">{{ emptyText }}</slot>
       </div>
     </div>
+
+    <div v-if="showPagination" class="table-pagination">
+      <div v-if="paginationSummary" class="table-pagination__summary">
+        {{ paginationSummary }}
+      </div>
+
+      <div class="table-pagination__controls">
+        <div v-if="showSizeChanger" class="table-pagination__size">
+          <span>每页</span>
+          <USelect
+            class="table-pagination__ued-select"
+            label="每页条数"
+            hide-label
+            :model-value="currentPageSize"
+            :options="pageSizeSelectOptions"
+            @update:model-value="handlePageSizeChange"
+          />
+        </div>
+
+        <div class="table-pagination__pages">
+          <button
+            type="button"
+            class="btn btn-secondary table-pagination__button"
+            :disabled="currentPage <= 1"
+            @click="goToPage(currentPage - 1)"
+          >
+            上一页
+          </button>
+
+          <template v-for="item in pageItems" :key="item.key">
+            <span v-if="item.type === 'ellipsis'" class="table-pagination__ellipsis">...</span>
+            <button
+              v-else
+              type="button"
+              class="btn btn-secondary table-pagination__button"
+              :class="{ 'table-pagination__button--active': item.page === currentPage }"
+              @click="goToPage(item.page)"
+            >
+              {{ item.page }}
+            </button>
+          </template>
+
+          <button
+            type="button"
+            class="btn btn-secondary table-pagination__button"
+            :disabled="currentPage >= pageCount"
+            @click="goToPage(currentPage + 1)"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, useSlots } from "vue";
+import { computed, ref, useSlots, watch } from "vue";
+import USelect from "./USelect.vue";
 import UTooltip from "./UTooltip.vue";
+
+const emit = defineEmits(["update:page", "update:pageSize", "page-change"]);
 
 const props = defineProps({
   columns: {
@@ -152,9 +212,43 @@ const props = defineProps({
     type: [String, Function],
     default: "",
   },
+  pagination: {
+    type: Boolean,
+    default: false,
+  },
+  page: {
+    type: Number,
+    default: 1,
+  },
+  pageSize: {
+    type: Number,
+    default: 10,
+  },
+  total: {
+    type: Number,
+    default: 0,
+  },
+  pageSizeOptions: {
+    type: Array,
+    default: () => [10, 20, 50, 100],
+  },
+  showSizeChanger: {
+    type: Boolean,
+    default: true,
+  },
+  showTotal: {
+    type: Boolean,
+    default: true,
+  },
+  paginationMode: {
+    type: String,
+    default: "client",
+  },
 });
 
 const slots = useSlots();
+const currentPage = ref(normalizePositiveInteger(props.page, 1));
+const currentPageSize = ref(normalizePositiveInteger(props.pageSize, 10));
 
 const normalizedColumns = computed(() =>
   props.columns
@@ -191,7 +285,30 @@ const tableColumns = computed(() => {
   return withStickyOffsets(columns);
 });
 
-const hasRows = computed(() => props.rows.length > 0);
+const totalRows = computed(() => {
+  if (!props.pagination) {
+    return props.rows.length;
+  }
+  if (props.paginationMode === "server") {
+    return normalizePositiveInteger(props.total, props.rows.length);
+  }
+  return props.rows.length;
+});
+
+const pageCount = computed(() => Math.max(1, Math.ceil(totalRows.value / currentPageSize.value)));
+
+const visibleRows = computed(() => {
+  if (!props.pagination || props.paginationMode === "server") {
+    return props.rows;
+  }
+
+  const start = (currentPage.value - 1) * currentPageSize.value;
+  return props.rows.slice(start, start + currentPageSize.value);
+});
+
+const hasRows = computed(() => visibleRows.value.length > 0);
+
+const showPagination = computed(() => props.pagination && totalRows.value > 0);
 
 const hasColumnSizing = computed(() =>
   tableColumns.value.some((column) => Boolean(column.width || column.minWidth)),
@@ -201,6 +318,8 @@ const shellClasses = computed(() => ({
   "table-shell--empty": !hasRows.value,
   "table-shell--fixed": props.fixed,
   "table-shell--sticky-header": props.stickyHeader,
+  "table-shell--with-pagination": showPagination.value,
+  "table-shell--with-query": Boolean(slots.query),
 }));
 
 const tableClasses = computed(() => [
@@ -230,6 +349,66 @@ const tableStyle = computed(() => {
   }
   return style;
 });
+
+const normalizedPageSizeOptions = computed(() => {
+  const values = props.pageSizeOptions
+    .map((value) => normalizePositiveInteger(value, 0))
+    .filter((value) => value > 0);
+
+  if (!values.includes(currentPageSize.value)) {
+    values.push(currentPageSize.value);
+  }
+
+  return Array.from(new Set(values)).sort((a, b) => a - b);
+});
+
+const pageSizeSelectOptions = computed(() =>
+  normalizedPageSizeOptions.value.map((value) => ({
+    label: `${value} 条`,
+    value,
+  })),
+);
+
+const pageItems = computed(() => buildPageItems(currentPage.value, pageCount.value));
+
+const paginationSummary = computed(() => {
+  if (!props.showTotal || totalRows.value === 0) {
+    return "";
+  }
+
+  const start = props.paginationMode === "server"
+    ? (currentPage.value - 1) * currentPageSize.value + 1
+    : Math.min((currentPage.value - 1) * currentPageSize.value + 1, totalRows.value);
+  const end = Math.min(currentPage.value * currentPageSize.value, totalRows.value);
+
+  if (totalRows.value === 0) {
+    return "共 0 条";
+  }
+
+  return `第 ${start}-${end} 条，共 ${totalRows.value} 条`;
+});
+
+watch(
+  () => props.page,
+  (value) => {
+    currentPage.value = clampPage(normalizePositiveInteger(value, 1), pageCount.value);
+  },
+);
+
+watch(
+  () => props.pageSize,
+  (value) => {
+    currentPageSize.value = normalizePositiveInteger(value, 10);
+    currentPage.value = clampPage(currentPage.value, pageCount.value);
+  },
+);
+
+watch(
+  [totalRows, currentPageSize],
+  () => {
+    currentPage.value = clampPage(currentPage.value, pageCount.value);
+  },
+);
 
 function normalizeColumn(column, index) {
   const key = String(column.key ?? column.dataIndex ?? `column-${index}`);
@@ -301,6 +480,55 @@ function normalizeCssSize(value) {
   if (value === 0) return "0px";
   if (!value) return "";
   return typeof value === "number" ? `${value}px` : String(value);
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallback;
+  }
+  return Math.floor(numeric);
+}
+
+function clampPage(page, maxPage) {
+  return Math.min(Math.max(page, 1), Math.max(maxPage, 1));
+}
+
+function buildPageItems(current, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => ({
+      type: "page",
+      page: index + 1,
+      key: `page-${index + 1}`,
+    }));
+  }
+
+  const pages = new Set([1, totalPages, current, current - 1, current + 1]);
+  if (current <= 3) {
+    pages.add(2);
+    pages.add(3);
+    pages.add(4);
+  }
+  if (current >= totalPages - 2) {
+    pages.add(totalPages - 1);
+    pages.add(totalPages - 2);
+    pages.add(totalPages - 3);
+  }
+
+  const sortedPages = Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+
+  const items = [];
+  sortedPages.forEach((page, index) => {
+    items.push({ type: "page", page, key: `page-${page}` });
+    const nextPage = sortedPages[index + 1];
+    if (nextPage && nextPage - page > 1) {
+      items.push({ type: "ellipsis", key: `ellipsis-${page}-${nextPage}` });
+    }
+  });
+
+  return items;
 }
 
 function resolveTableMinWidth() {
@@ -462,4 +690,145 @@ function getAlignClass(align) {
   if (align === "right") return "is-align-right";
   return "is-align-left";
 }
+
+function goToPage(page) {
+  if (!props.pagination) {
+    return;
+  }
+
+  const nextPage = clampPage(normalizePositiveInteger(page, 1), pageCount.value);
+  if (nextPage === currentPage.value) {
+    return;
+  }
+
+  currentPage.value = nextPage;
+  emit("update:page", nextPage);
+  emit("page-change", { page: nextPage, pageSize: currentPageSize.value });
+}
+
+function handlePageSizeChange(value) {
+  const nextPageSize = normalizePositiveInteger(value, currentPageSize.value);
+  if (nextPageSize === currentPageSize.value) {
+    return;
+  }
+
+  currentPageSize.value = nextPageSize;
+  currentPage.value = clampPage(1, Math.ceil(totalRows.value / nextPageSize));
+  emit("update:pageSize", nextPageSize);
+  emit("update:page", currentPage.value);
+  emit("page-change", { page: currentPage.value, pageSize: nextPageSize });
+}
 </script>
+
+<style scoped>
+.table-query {
+  padding: 14px;
+  border-bottom: 1px solid var(--ued-color-divider, #e6ebf2);
+  background: #fbfcfe;
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--ued-color-divider, #e6ebf2);
+  background: #fbfcfe;
+}
+
+.table-pagination__summary {
+  min-width: 0;
+  color: #6b7a90;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.table-pagination__controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.table-pagination__size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7a90;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.table-pagination__ued-select {
+  min-width: 0;
+}
+
+.table-pagination__ued-select :deep(.ued-field) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.table-pagination__ued-select :deep(.ued-select__control) {
+  min-width: 92px;
+  min-height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 12px;
+}
+
+.table-pagination__ued-select :deep(.ued-select__menu) {
+  min-width: 92px;
+}
+
+.table-pagination__pages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.table-pagination__button {
+  min-width: 32px;
+  min-height: 28px;
+  padding: 0 10px;
+  box-shadow: none;
+}
+
+.table-pagination__button--active {
+  border-color: var(--ued-color-primary, #3157d5);
+  background: var(--ued-color-primary, #3157d5);
+  color: #ffffff;
+}
+
+.table-pagination__button--active:hover:not(:disabled) {
+  border-color: var(--ued-color-primary-hover, #2448bd);
+  background: var(--ued-color-primary-hover, #2448bd);
+  color: #ffffff;
+}
+
+.table-pagination__ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  color: #8b98ab;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (max-width: 760px) {
+  .table-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .table-pagination__controls {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+}
+</style>
