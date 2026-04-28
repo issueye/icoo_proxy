@@ -32,10 +32,10 @@
     </div>
 
     <div class="traffic-layout">
-      <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed stripe size="small"
-        table-class="traffic-table" max-height="100%" min-width="1240px" pagination pagination-mode="server"
-        :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
-        @page-change="store.changePage">
+      <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed fixed-field="freeze" stripe
+        size="small" table-class="traffic-table" max-height="100%" min-width="1240px" pagination
+        pagination-mode="server" :page="store.page" :page-size="store.pageSize" :total="store.total"
+        :page-size-options="[8, 20, 50]" @page-change="store.changePage">
         <template #empty>
           当前没有匹配的请求记录。
         </template>
@@ -103,14 +103,14 @@ import UTag from "../components/ued/UTag.vue";
 const store = useTrafficStore();
 let refreshTimer = null;
 const tableColumns = [
-  { key: "requestId", title: "请求 ID", width: 180 },
+  { key: "requestId", title: "请求 ID", width: 180, freeze: "left" },
   { key: "route", title: "下游 / 上游", width: 220 },
   { key: "model", title: "模型", width: 140 },
   { key: "tokens", title: "Tokens", width: 128 },
-  { key: "status", title: "状态码", width: 92, align: "center" },
-  { key: "duration", title: "耗时", width: 92, align: "center" },
   { key: "createdAt", title: "创建时间", width: 172 },
   { key: "error", title: "错误信息", width: 216 },
+  { key: "duration", title: "耗时", width: 92, align: "center", freeze: "right" },
+  { key: "status", title: "状态码", width: 92, align: "center", freeze: "right" },
 ];
 
 const normalizedProtocolOptions = computed(() =>

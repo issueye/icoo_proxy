@@ -180,6 +180,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  fixedField: {
+    type: String,
+    default: "fixed",
+  },
   tableClass: {
     type: [String, Array, Object],
     default: "",
@@ -412,6 +416,7 @@ watch(
 
 function normalizeColumn(column, index) {
   const key = String(column.key ?? column.dataIndex ?? `column-${index}`);
+  const fixedValue = resolveColumnOption(column, props.fixedField, "fixed");
   return {
     uid: `${key}-${index}`,
     key,
@@ -420,7 +425,7 @@ function normalizeColumn(column, index) {
     width: normalizeCssSize(column.width),
     minWidth: normalizeCssSize(column.minWidth),
     align: normalizeAlign(column.align),
-    fixed: normalizeFixed(column.fixed),
+    fixed: normalizeFixed(fixedValue),
     ellipsis: Boolean(column.ellipsis),
     tooltip: column.tooltip,
     className: column.className,
@@ -573,6 +578,13 @@ function normalizeFixed(value) {
   if (value === "left" || value === true) return "left";
   if (value === "right") return "right";
   return "";
+}
+
+function resolveColumnOption(column, customField, fallbackField) {
+  if (customField && Object.prototype.hasOwnProperty.call(column, customField)) {
+    return column[customField];
+  }
+  return column?.[fallbackField];
 }
 
 function normalizeSize(value) {

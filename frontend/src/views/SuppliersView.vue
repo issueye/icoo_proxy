@@ -49,7 +49,7 @@
       </UTable>
     </div>
 
-    <UTable :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed min-width="1480px"
+    <UTable :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed fixed-field="freeze" min-width="1480px"
       table-class="supplier-table" pagination pagination-mode="server" :page="store.page" :page-size="store.pageSize"
       :total="store.total" :page-size-options="[8, 20, 50]" @page-change="store.changePage">
       <template #empty>
@@ -324,12 +324,12 @@ const routeManagementColumns = [
 ];
 
 const supplierTableColumns = [
-  { key: "supplier", title: "供应商", width: "10%" },
+  { key: "supplier", title: "供应商", width: "10%", freeze: "left" },
   { key: "protocol", title: "协议 / 地址", width: "20%" },
   { key: "address", title: "地址", width: "20%" },
   { key: "user_agent", title: "User-Agent", width: "20%" },
   { key: "health", title: "健康状态", width: "15%" },
-  { key: "status", title: "状态", width: "5%" },
+  { key: "status", title: "状态", width: "5%", freeze: "right" },
 ];
 
 const supplierFormDefaultOptions = computed(() => [

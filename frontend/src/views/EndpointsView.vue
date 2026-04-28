@@ -21,7 +21,7 @@
       <StatCard icon="layers" label="自定义端点" :value="String(store.customCount)" />
     </div>
 
-    <UTable :columns="tableColumns" :rows="store.items" action-width="90px" fixed pagination pagination-mode="server"
+    <UTable :columns="tableColumns" :rows="store.items" action-width="90px" fixed fixed-field="freeze" pagination pagination-mode="server"
       :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
       @page-change="store.changePage">
       <template #empty>
@@ -127,11 +127,11 @@ const confirmState = reactive({
   message: "",
 });
 const tableColumns = [
-  { key: "path", title: "路径", width: "22%" },
+  { key: "path", title: "路径", width: "22%", freeze: "left" },
   { key: "protocol", title: "协议", width: "16%" },
   { key: "description", title: "说明", width: "65%" },
   { key: "builtIn", title: "类型", width: "10%" },
-  { key: "enabled", title: "状态", width: "10%" },
+  { key: "enabled", title: "状态", width: "10%", freeze: "right" },
 ];
 
 function openCreate() {

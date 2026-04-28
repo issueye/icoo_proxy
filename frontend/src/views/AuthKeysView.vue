@@ -21,7 +21,7 @@
       <StatCard icon="endpoint" label="使用方式" value="Bearer / x-api-key" />
     </div>
 
-    <UTable :columns="tableColumns" :rows="store.items" action-width="118px" fixed pagination pagination-mode="server"
+    <UTable :columns="tableColumns" :rows="store.items" action-width="118px" fixed fixed-field="freeze" pagination pagination-mode="server"
       :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
       @page-change="store.changePage">
       <template #empty>
@@ -136,10 +136,10 @@ const statusOptions = [
   { label: "停用", value: "disabled" },
 ];
 const tableColumns = [
-  { key: "name", title: "名称", width: "22%" },
+  { key: "name", title: "名称", width: "22%", freeze: "left" },
   { key: "secret", title: "Key", width: "22%" },
   { key: "description", title: "说明", width: "36%" },
-  { key: "enabled", title: "状态", width: "10%" },
+  { key: "enabled", title: "状态", width: "10%", freeze: "right" },
 ];
 
 function openCreate() {
