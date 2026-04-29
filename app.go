@@ -28,6 +28,8 @@ type App struct {
 	root string
 	cfg  config.Config
 
+	tray *trayController
+
 	catalog *services.CatalogService
 	service *services.ProxyService
 	traffic *traffic.Service
@@ -46,6 +48,7 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.startTray()
 	root, err := os.Getwd()
 	if err != nil {
 		a.setLastError(err.Error())

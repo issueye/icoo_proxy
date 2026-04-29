@@ -12,7 +12,7 @@
         <button class="app-window-control" type="button" aria-label="最小化" title="最小化" @click="minimizeWindow">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /></svg>
         </button>
-        <button class="app-window-control app-window-control--close" type="button" aria-label="关闭" title="关闭" @click="closeWindow">
+        <button class="app-window-control app-window-control--close" type="button" aria-label="隐藏到托盘" title="隐藏到托盘" @click="closeWindow">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
         </button>
       </div>
@@ -102,7 +102,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
-import { Quit, WindowMinimise } from "../wailsjs/runtime/runtime";
+import { WindowHide, WindowMinimise } from "../wailsjs/runtime/runtime";
 import { State } from "./lib/wailsApp";
 import UMessage from "./components/ued/UMessage.vue";
 
@@ -200,6 +200,6 @@ function minimizeWindow() {
 }
 
 function closeWindow() {
-  Quit();
+  WindowHide();
 }
 </script>

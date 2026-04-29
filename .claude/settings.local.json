@@ -8,7 +8,12 @@
       "Bash(node *)",
       "Bash(go test *)",
       "Bash(git diff *)",
-      "Bash(gofmt -w \"E:/codes/icoo_proxy/internal/services/proxy.go\" \"E:/codes/icoo_proxy/internal/services/proxy_test.go\")"
+      "Bash(gofmt -w \"E:/codes/icoo_proxy/internal/services/proxy.go\" \"E:/codes/icoo_proxy/internal/services/proxy_test.go\")",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "WebSearch",
+      "Bash(go list *)",
+      "Bash(go mod *)"
     ]
   }
 }
