@@ -23,7 +23,7 @@ func (a *App) startTray() {
 		return
 	}
 	a.tray.once.Do(func() {
-		systray.Register(a.onTrayReady, nil)
+		go systray.Run(a.onTrayReady, nil)
 	})
 }
 
@@ -37,7 +37,6 @@ func (a *App) onTrayReady() {
 	showItem := systray.AddMenuItem("显示主窗口", "恢复并显示主窗口")
 	systray.AddSeparator()
 	quitItem := systray.AddMenuItem("退出", "退出应用")
-
 	go func() {
 		for {
 			select {
