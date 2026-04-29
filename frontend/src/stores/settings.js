@@ -7,6 +7,7 @@ const emptyForm = () => ({
   proxy_read_timeout_seconds: 15,
   proxy_write_timeout_seconds: 300,
   proxy_shutdown_timeout_seconds: 10,
+  default_max_tokens: 32768,
   proxy_chain_log_path: ".data/icoo_proxy-chain.log",
   proxy_chain_log_bodies: true,
   proxy_chain_log_max_body_bytes: 0,
@@ -45,6 +46,7 @@ export const useSettingsStore = defineStore("settings", {
           proxy_read_timeout_seconds: Number(this.form.proxy_read_timeout_seconds),
           proxy_write_timeout_seconds: Number(this.form.proxy_write_timeout_seconds),
           proxy_shutdown_timeout_seconds: Number(this.form.proxy_shutdown_timeout_seconds),
+          default_max_tokens: Number(this.form.default_max_tokens),
           proxy_chain_log_max_body_bytes: Number(this.form.proxy_chain_log_max_body_bytes),
         };
         const settings = await SaveProjectSettings(payload);

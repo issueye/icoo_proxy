@@ -940,7 +940,7 @@ func forceStreamRequest(body []byte) ([]byte, error) {
 
 // prepareRequestBody 根据上下游协议关系准备上游请求体：同协议改写模型，跨协议执行请求转换。
 func (s *ProxyService) prepareRequestBody(downstream consts.Protocol, route models.Route, body []byte) ([]byte, error) {
-	return translation.ConvertRequest(downstream, route, body)
+	return translation.ConvertRequest(downstream, route, body, s.cfg.DefaultMaxTokens)
 }
 
 // writeProtocolError 按下游协议格式写出统一错误响应。

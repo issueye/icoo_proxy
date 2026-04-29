@@ -98,6 +98,9 @@
             <FieldLabel label="PROXY_SHUTDOWN_TIMEOUT_SECONDS">
               <input v-model="store.form.proxy_shutdown_timeout_seconds" type="number" min="1" class="field-input" />
             </FieldLabel>
+            <FieldLabel label="PROXY_DEFAULT_MAX_TOKENS">
+              <input v-model="store.form.default_max_tokens" type="number" min="1" class="field-input" />
+            </FieldLabel>
           </div>
         </PanelBlock>
 

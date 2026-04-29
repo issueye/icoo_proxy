@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"icoo_proxy/internal/consts"
+	"icoo_proxy/internal/models"
 )
 
 type Config struct {
@@ -23,6 +24,7 @@ type Config struct {
 	ChainLogPath              string        // 链路日志路径
 	ChainLogBodies            bool          // 是否记录请求和响应体
 	ChainLogMaxBodyBytes      int           // 最大记录请求和响应体字节数
+	DefaultMaxTokens          int           // 项目级默认 max_tokens 兜底值
 
 	AnthropicConfig        *AnthropicConfig
 	OpenAIRResponsesConfig *OpenAIRResponsesConfig
@@ -71,6 +73,7 @@ func Load(workdir string) (Config, error) {
 		ChainLogPath:              strings.TrimSpace(os.Getenv("PROXY_CHAIN_LOG_PATH")),
 		ChainLogBodies:            boolFromEnv("PROXY_CHAIN_LOG_BODIES", true),
 		ChainLogMaxBodyBytes:      nonNegativeIntFromEnv("PROXY_CHAIN_LOG_MAX_BODY_BYTES", 0),
+		DefaultMaxTokens:          intFromEnv("PROXY_DEFAULT_MAX_TOKENS", models.DefaultSupplierModelMaxTokens),
 
 		AnthropicConfig:        &AnthropicConfig{Vendor: consts.VendorAnthropic},
 		OpenAIRResponsesConfig: &OpenAIRResponsesConfig{Vendor: consts.VendorOpenAI},

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"icoo_proxy/internal/models"
 )
 
 type Values struct {
@@ -14,6 +16,7 @@ type Values struct {
 	ProxyReadTimeoutSeconds     int    `json:"proxy_read_timeout_seconds"`
 	ProxyWriteTimeoutSeconds    int    `json:"proxy_write_timeout_seconds"`
 	ProxyShutdownTimeoutSeconds int    `json:"proxy_shutdown_timeout_seconds"`
+	DefaultMaxTokens            int    `json:"default_max_tokens"`
 	ProxyChainLogPath           string `json:"proxy_chain_log_path"`
 	ProxyChainLogBodies         bool   `json:"proxy_chain_log_bodies"`
 	ProxyChainLogMaxBodyBytes   int    `json:"proxy_chain_log_max_body_bytes"`
@@ -25,6 +28,7 @@ var managedEnvKeys = []string{
 	"PROXY_READ_TIMEOUT_SECONDS",
 	"PROXY_WRITE_TIMEOUT_SECONDS",
 	"PROXY_SHUTDOWN_TIMEOUT_SECONDS",
+	"PROXY_DEFAULT_MAX_TOKENS",
 	"PROXY_CHAIN_LOG_PATH",
 	"PROXY_CHAIN_LOG_BODIES",
 	"PROXY_CHAIN_LOG_MAX_BODY_BYTES",
@@ -47,6 +51,7 @@ func (s *ProjectSettingsService) Load(root string) (Values, error) {
 		ProxyReadTimeoutSeconds:     intWithDefault(env, "PROXY_READ_TIMEOUT_SECONDS", 15),
 		ProxyWriteTimeoutSeconds:    intWithDefault(env, "PROXY_WRITE_TIMEOUT_SECONDS", 300),
 		ProxyShutdownTimeoutSeconds: intWithDefault(env, "PROXY_SHUTDOWN_TIMEOUT_SECONDS", 10),
+		DefaultMaxTokens:            intWithDefault(env, "PROXY_DEFAULT_MAX_TOKENS", models.DefaultSupplierModelMaxTokens),
 		ProxyChainLogPath:           stringWithDefault(env, "PROXY_CHAIN_LOG_PATH", filepath.Join(root, ".data", "icoo_proxy-chain.log")),
 		ProxyChainLogBodies:         boolWithDefault(env, "PROXY_CHAIN_LOG_BODIES", true),
 		ProxyChainLogMaxBodyBytes:   intWithDefault(env, "PROXY_CHAIN_LOG_MAX_BODY_BYTES", 0),
@@ -86,6 +91,9 @@ func (s *ProjectSettingsService) validate(values Values) error {
 	if values.ProxyShutdownTimeoutSeconds <= 0 {
 		return fmt.Errorf("proxy_shutdown_timeout_seconds must be greater than 0")
 	}
+	if values.DefaultMaxTokens <= 0 {
+		return fmt.Errorf("default_max_tokens must be greater than 0")
+	}
 	if values.ProxyChainLogMaxBodyBytes < 0 {
 		return fmt.Errorf("proxy_chain_log_max_body_bytes must be 0 or greater")
 	}
@@ -99,6 +107,7 @@ func (s *ProjectSettingsService) managedEnvEntries(values Values) map[string]str
 		"PROXY_READ_TIMEOUT_SECONDS":     strconv.Itoa(values.ProxyReadTimeoutSeconds),
 		"PROXY_WRITE_TIMEOUT_SECONDS":    strconv.Itoa(values.ProxyWriteTimeoutSeconds),
 		"PROXY_SHUTDOWN_TIMEOUT_SECONDS": strconv.Itoa(values.ProxyShutdownTimeoutSeconds),
+		"PROXY_DEFAULT_MAX_TOKENS":       strconv.Itoa(values.DefaultMaxTokens),
 		"PROXY_CHAIN_LOG_PATH":           strings.TrimSpace(values.ProxyChainLogPath),
 		"PROXY_CHAIN_LOG_BODIES":         s.formatBool(values.ProxyChainLogBodies),
 		"PROXY_CHAIN_LOG_MAX_BODY_BYTES": strconv.Itoa(values.ProxyChainLogMaxBodyBytes),
@@ -165,6 +174,7 @@ func (s *ProjectSettingsService) applyProcessEnv(values Values) {
 	set("PROXY_READ_TIMEOUT_SECONDS", strconv.Itoa(values.ProxyReadTimeoutSeconds))
 	set("PROXY_WRITE_TIMEOUT_SECONDS", strconv.Itoa(values.ProxyWriteTimeoutSeconds))
 	set("PROXY_SHUTDOWN_TIMEOUT_SECONDS", strconv.Itoa(values.ProxyShutdownTimeoutSeconds))
+	set("PROXY_DEFAULT_MAX_TOKENS", strconv.Itoa(values.DefaultMaxTokens))
 	set("PROXY_CHAIN_LOG_PATH", strings.TrimSpace(values.ProxyChainLogPath))
 	set("PROXY_CHAIN_LOG_BODIES", s.formatBool(values.ProxyChainLogBodies))
 	set("PROXY_CHAIN_LOG_MAX_BODY_BYTES", strconv.Itoa(values.ProxyChainLogMaxBodyBytes))

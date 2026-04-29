@@ -6,3 +6,4 @@ frontend/.vite-dev.*
 .route-policies
 .suppliers
 .data
+resources/*

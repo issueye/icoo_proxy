@@ -26,7 +26,7 @@ func TestConvertRequestChatToAnthropicPreservesStream(t *testing.T) {
 		"temperature":0.7
 	}`)
 
-	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body)
+	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body, models.DefaultSupplierModelMaxTokens)
 	if err != nil {
 		t.Fatalf("ConvertRequest returned error: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestConvertRequestChatToAnthropicUsesMaxCompletionTokens(t *testing.T) {
 		"max_completion_tokens":256
 	}`)
 
-	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body)
+	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body, models.DefaultSupplierModelMaxTokens)
 	if err != nil {
 		t.Fatalf("ConvertRequest returned error: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestConvertRequestChatToAnthropicUsesRouteDefaultMaxTokens(t *testing.T) {
 		]
 	}`)
 
-	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body)
+	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body, models.DefaultSupplierModelMaxTokens)
 	if err != nil {
 		t.Fatalf("ConvertRequest returned error: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestConvertRequestChatToAnthropicUsesGlobalDefaultMaxTokensWhenRouteMissing
 		]
 	}`)
 
-	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body)
+	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body, models.DefaultSupplierModelMaxTokens)
 	if err != nil {
 		t.Fatalf("ConvertRequest returned error: %v", err)
 	}
@@ -148,6 +148,34 @@ func TestConvertRequestChatToAnthropicUsesGlobalDefaultMaxTokensWhenRouteMissing
 
 	if got := intValue(payload["max_tokens"]); got != models.DefaultSupplierModelMaxTokens {
 		t.Fatalf("expected global default max_tokens=%d, got %d", models.DefaultSupplierModelMaxTokens, got)
+	}
+}
+
+func TestConvertRequestChatToAnthropicUsesConfiguredGlobalDefaultMaxTokensWhenRouteMissing(t *testing.T) {
+	route := models.Route{
+		Upstream: consts.ProtocolAnthropic,
+		Model:    "claude-sonnet-4-20250514",
+	}
+	body := []byte(`{
+		"model":"gpt-4.1",
+		"messages":[
+			{"role":"user","content":"Hello"}
+		]
+	}`)
+
+	const configuredGlobalDefault = 65536
+	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body, configuredGlobalDefault)
+	if err != nil {
+		t.Fatalf("ConvertRequest returned error: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(converted, &payload); err != nil {
+		t.Fatalf("failed to decode converted payload: %v", err)
+	}
+
+	if got := intValue(payload["max_tokens"]); got != configuredGlobalDefault {
+		t.Fatalf("expected configured global default max_tokens=%d, got %d", configuredGlobalDefault, got)
 	}
 }
 
@@ -166,7 +194,7 @@ func TestConvertRequestChatToAnthropicRejectsZeroMaxTokens(t *testing.T) {
 		"max_tokens":0
 	}`)
 
-	_, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body)
+	_, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body, models.DefaultSupplierModelMaxTokens)
 	if err == nil {
 		t.Fatal("expected zero max_tokens error, got nil")
 	}
@@ -186,7 +214,7 @@ func TestConvertRequestResponsesToAnthropicUsesRouteDefaultMaxTokens(t *testing.
 		"input":[{"role":"user","content":"Hello"}]
 	}`)
 
-	converted, err := ConvertRequest(consts.ProtocolOpenAIResponses, route, body)
+	converted, err := ConvertRequest(consts.ProtocolOpenAIResponses, route, body, models.DefaultSupplierModelMaxTokens)
 	if err != nil {
 		t.Fatalf("ConvertRequest returned error: %v", err)
 	}
@@ -215,7 +243,7 @@ func TestConvertRequestChatToAnthropicDoesNotInjectStreamWhenDisabled(t *testing
 		"max_tokens":64
 	}`)
 
-	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body)
+	converted, err := ConvertRequest(consts.ProtocolOpenAIChat, route, body, models.DefaultSupplierModelMaxTokens)
 	if err != nil {
 		t.Fatalf("ConvertRequest returned error: %v", err)
 	}

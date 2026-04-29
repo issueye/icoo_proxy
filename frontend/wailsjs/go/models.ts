@@ -687,6 +687,7 @@ export namespace services {
 	    proxy_read_timeout_seconds: number;
 	    proxy_write_timeout_seconds: number;
 	    proxy_shutdown_timeout_seconds: number;
+	    default_max_tokens: number;
 	    proxy_chain_log_path: string;
 	    proxy_chain_log_bodies: boolean;
 	    proxy_chain_log_max_body_bytes: number;
@@ -702,6 +703,7 @@ export namespace services {
 	        this.proxy_read_timeout_seconds = source["proxy_read_timeout_seconds"];
 	        this.proxy_write_timeout_seconds = source["proxy_write_timeout_seconds"];
 	        this.proxy_shutdown_timeout_seconds = source["proxy_shutdown_timeout_seconds"];
+	        this.default_max_tokens = source["default_max_tokens"];
 	        this.proxy_chain_log_path = source["proxy_chain_log_path"];
 	        this.proxy_chain_log_bodies = source["proxy_chain_log_bodies"];
 	        this.proxy_chain_log_max_body_bytes = source["proxy_chain_log_max_body_bytes"];
@@ -709,3 +711,4 @@ export namespace services {
 	}
 
 }
+

@@ -11,10 +11,13 @@ import (
 
 // ConvertRequest 根据下游协议和路由目标协议转换请求体。
 // 同协议请求会保留原协议格式，仅将 model 改写为路由解析后的目标模型。
-func ConvertRequest(downstream consts.Protocol, route models.Route, body []byte) ([]byte, error) {
+func ConvertRequest(downstream consts.Protocol, route models.Route, body []byte, globalDefaultMaxTokens int) ([]byte, error) {
 	upstream := route.Upstream
 	model := route.Model
 	defaultMaxTokens := route.DefaultMaxTokens
+	if defaultMaxTokens <= 0 {
+		defaultMaxTokens = globalDefaultMaxTokens
+	}
 	if defaultMaxTokens <= 0 {
 		defaultMaxTokens = models.DefaultSupplierModelMaxTokens
 	}
