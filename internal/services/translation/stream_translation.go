@@ -84,6 +84,34 @@ type chatToolCallState struct {
 	OutputDone bool
 }
 
+type anthropicChatBlockState struct {
+	Index        int
+	Type         string
+	ToolCall     *chatToolCallState
+	TextSent     bool
+	InputSent    bool
+	PendingInput string
+}
+
+type anthropicChatStreamState struct {
+	logger            *slog.Logger
+	w                 http.ResponseWriter
+	flusher           http.Flusher
+	requestID         string
+	model             string
+	responseID        string
+	created           int64
+	streamStopped     bool
+	sentAssistantRole bool
+	sawToolUse        bool
+	inputTokens       int
+	outputTokens      int
+	finishReason      string
+	toolCalls         map[string]*chatToolCallState
+	toolCallOrder     []string
+	blocks            map[int]*anthropicChatBlockState
+}
+
 func TranslateResponsesStreamToAnthropic(w http.ResponseWriter, body io.Reader, model, requestID string, logger *slog.Logger) (TokenUsage, error) {
 	state := &anthropicStreamState{
 		w:          w,
@@ -189,6 +217,59 @@ func TranslateResponsesStreamToChat(w http.ResponseWriter, body io.Reader, model
 			continue
 		}
 		if err := state.handleResponsesEvent(eventType, payload); err != nil {
+			return state.tokenUsage(), err
+		}
+		if state.streamStopped {
+			return state.tokenUsage(), nil
+		}
+	}
+
+	return state.tokenUsage(), state.finish(nil)
+}
+
+func TranslateAnthropicStreamToChat(w http.ResponseWriter, body io.Reader, model, requestID string, logger *slog.Logger) (TokenUsage, error) {
+	state := &anthropicChatStreamState{
+		w:         w,
+		logger:    logger,
+		requestID: requestID,
+		model:     model,
+		created:   time.Now().Unix(),
+		toolCalls: make(map[string]*chatToolCallState),
+		blocks:    make(map[int]*anthropicChatBlockState),
+	}
+	if flusher, ok := w.(http.Flusher); ok {
+		state.flusher = flusher
+	}
+
+	reader := bufio.NewReader(body)
+	for {
+		event, err := readSSEEvent(reader)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return state.tokenUsage(), err
+		}
+		if strings.TrimSpace(event.Data) == "" {
+			continue
+		}
+		state.logUpstreamEvent(event)
+		if strings.TrimSpace(event.Data) == "[DONE]" {
+			return state.tokenUsage(), state.finish(nil)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
+			return state.tokenUsage(), fmt.Errorf("decode upstream stream event: %w", err)
+		}
+		eventType := strings.TrimSpace(event.Name)
+		if eventType == "" {
+			eventType = stringValue(payload["type"], "")
+		}
+		if eventType == "" {
+			continue
+		}
+		if err := state.handleAnthropicEvent(eventType, payload); err != nil {
 			return state.tokenUsage(), err
 		}
 		if state.streamStopped {
@@ -540,6 +621,48 @@ func (s *chatCompletionStreamState) handleResponsesEvent(eventType string, paylo
 	}
 }
 
+func (s *anthropicChatStreamState) handleAnthropicEvent(eventType string, payload map[string]interface{}) error {
+	switch eventType {
+	case "message_start":
+		message := objectValue(payload["message"])
+		s.responseID = firstNonEmpty(
+			stringValue(message["id"], ""),
+			stringValue(payload["message_id"], ""),
+			s.responseID,
+			"chatcmpl-proxy-stream",
+		)
+		usage := objectValue(message["usage"])
+		if value := intValue(usage["input_tokens"]); value > 0 {
+			s.inputTokens = value
+		}
+		if value := intValue(usage["output_tokens"]); value > 0 {
+			s.outputTokens = value
+		}
+		return nil
+	case "content_block_start":
+		if err := s.ensureAssistantRoleChunk(); err != nil {
+			return err
+		}
+		return s.handleAnthropicBlockStart(payload)
+	case "content_block_delta":
+		if err := s.ensureAssistantRoleChunk(); err != nil {
+			return err
+		}
+		return s.handleAnthropicBlockDelta(payload)
+	case "content_block_stop":
+		return s.handleAnthropicBlockStop(payload)
+	case "message_delta":
+		return s.handleAnthropicMessageDelta(payload)
+	case "message_stop":
+		return s.finish(nil)
+	case "error":
+		errObj := objectValue(payload["error"])
+		return s.emitError(stringValue(errObj["message"], "upstream stream returned error"))
+	default:
+		return nil
+	}
+}
+
 func (s *anthropicStreamState) ensureMessageStart() error {
 	if s.messageStarted {
 		return nil
@@ -567,6 +690,14 @@ func (s *anthropicStreamState) ensureMessageStart() error {
 }
 
 func (s *chatCompletionStreamState) ensureAssistantRoleChunk() error {
+	if s.sentAssistantRole {
+		return nil
+	}
+	s.sentAssistantRole = true
+	return s.emitChunk(chatCompletionChunkDelta{Role: "assistant"}, "")
+}
+
+func (s *anthropicChatStreamState) ensureAssistantRoleChunk() error {
 	if s.sentAssistantRole {
 		return nil
 	}
@@ -714,6 +845,128 @@ func (s *chatCompletionStreamState) ensureToolCall(payload map[string]interface{
 	return toolCall
 }
 
+func (s *anthropicChatStreamState) handleAnthropicBlockStart(payload map[string]interface{}) error {
+	index := intValue(payload["index"])
+	contentBlock := objectValue(payload["content_block"])
+	block := s.ensureBlock(index)
+	block.Type = firstNonEmpty(stringValue(contentBlock["type"], ""), block.Type, "text")
+
+	switch block.Type {
+	case "tool_use":
+		toolCall := s.ensureToolCallForBlock(block, contentBlock)
+		s.sawToolUse = true
+		if err := s.emitChunk(chatCompletionChunkDelta{ToolCalls: []map[string]interface{}{toolCallStartDelta(toolCall)}}, ""); err != nil {
+			return err
+		}
+		if rawInput, ok := contentBlock["input"]; ok {
+			if data, err := json.Marshal(rawInput); err == nil {
+				block.PendingInput = string(data)
+			}
+		}
+		return nil
+	case "text":
+		text := stringValue(contentBlock["text"], "")
+		if text == "" {
+			return nil
+		}
+		block.TextSent = true
+		return s.emitChunk(chatCompletionChunkDelta{Content: text}, "")
+	default:
+		return nil
+	}
+}
+
+func (s *anthropicChatStreamState) handleAnthropicBlockDelta(payload map[string]interface{}) error {
+	block := s.ensureBlock(intValue(payload["index"]))
+	delta := objectValue(payload["delta"])
+	switch stringValue(delta["type"], "") {
+	case "text_delta":
+		text := stringValue(delta["text"], "")
+		if text == "" {
+			return nil
+		}
+		block.Type = firstNonEmpty(block.Type, "text")
+		block.TextSent = true
+		return s.emitChunk(chatCompletionChunkDelta{Content: text}, "")
+	case "input_json_delta":
+		toolCall := s.ensureToolCallForBlock(block, nil)
+		partial := stringValue(delta["partial_json"], "")
+		if partial == "" {
+			return nil
+		}
+		toolCall.Arguments += partial
+		block.InputSent = true
+		s.sawToolUse = true
+		return s.emitChunk(chatCompletionChunkDelta{ToolCalls: []map[string]interface{}{toolCallArgumentsDelta(toolCall, partial)}}, "")
+	default:
+		return nil
+	}
+}
+
+func (s *anthropicChatStreamState) handleAnthropicBlockStop(payload map[string]interface{}) error {
+	block, ok := s.blocks[intValue(payload["index"])]
+	if !ok || block == nil || block.Type != "tool_use" || block.ToolCall == nil {
+		return nil
+	}
+	if block.InputSent || block.ToolCall.Arguments != "" || block.PendingInput == "" {
+		return nil
+	}
+	block.ToolCall.Arguments = block.PendingInput
+	block.InputSent = true
+	return s.emitChunk(chatCompletionChunkDelta{ToolCalls: []map[string]interface{}{toolCallArgumentsDelta(block.ToolCall, block.PendingInput)}}, "")
+}
+
+func (s *anthropicChatStreamState) handleAnthropicMessageDelta(payload map[string]interface{}) error {
+	delta := objectValue(payload["delta"])
+	if stopReason := stringValue(delta["stop_reason"], ""); stopReason != "" {
+		s.finishReason = stopReason
+	}
+	usage := objectValue(payload["usage"])
+	if _, ok := usage["input_tokens"]; ok {
+		s.inputTokens = intValue(usage["input_tokens"])
+	}
+	if _, ok := usage["output_tokens"]; ok {
+		s.outputTokens = intValue(usage["output_tokens"])
+	}
+	return nil
+}
+
+func (s *anthropicChatStreamState) ensureBlock(index int) *anthropicChatBlockState {
+	if block, ok := s.blocks[index]; ok {
+		return block
+	}
+	block := &anthropicChatBlockState{Index: index}
+	s.blocks[index] = block
+	return block
+}
+
+func (s *anthropicChatStreamState) ensureToolCallForBlock(block *anthropicChatBlockState, contentBlock map[string]interface{}) *chatToolCallState {
+	if block == nil {
+		block = s.ensureBlock(0)
+	}
+	if block.ToolCall != nil {
+		if block.ToolCall.CallID == "" {
+			block.ToolCall.CallID = firstNonEmpty(stringValue(contentBlock["id"], ""), block.ToolCall.Key, fmt.Sprintf("call_%d", block.ToolCall.Index))
+		}
+		if block.ToolCall.Name == "" {
+			block.ToolCall.Name = stringValue(contentBlock["name"], "")
+		}
+		return block.ToolCall
+	}
+	key := fmt.Sprintf("anthropic:%d", block.Index)
+	toolCall := &chatToolCallState{
+		Index:  len(s.toolCallOrder),
+		Key:    key,
+		CallID: firstNonEmpty(stringValue(contentBlock["id"], ""), key, fmt.Sprintf("call_%d", block.Index)),
+		Name:   stringValue(contentBlock["name"], ""),
+	}
+	block.Type = "tool_use"
+	block.ToolCall = toolCall
+	s.toolCalls[key] = toolCall
+	s.toolCallOrder = append(s.toolCallOrder, key)
+	return toolCall
+}
+
 func (s *anthropicStreamState) stopBlock(block *anthropicStreamBlock) error {
 	if block == nil || block.Stopped {
 		return nil
@@ -813,7 +1066,76 @@ func (s *chatCompletionStreamState) finish(response map[string]interface{}) erro
 	return nil
 }
 
+func (s *anthropicChatStreamState) finish(response map[string]interface{}) error {
+	if s.streamStopped {
+		return nil
+	}
+	if response != nil {
+		s.responseID = firstNonEmpty(stringValue(response["id"], ""), s.responseID)
+		usage := objectValue(response["usage"])
+		if value := intValue(usage["input_tokens"]); value > 0 {
+			s.inputTokens = value
+		}
+		if value := intValue(usage["output_tokens"]); value > 0 {
+			s.outputTokens = value
+		}
+	}
+	finishReason := "stop"
+	switch s.finishReason {
+	case "max_tokens":
+		finishReason = "length"
+	case "tool_use":
+		finishReason = "tool_calls"
+	case "end_turn", "stop_sequence", "":
+		finishReason = "stop"
+	default:
+		finishReason = "stop"
+	}
+	if s.sawToolUse {
+		finishReason = "tool_calls"
+	}
+	if err := s.ensureAssistantRoleChunk(); err != nil {
+		return err
+	}
+	if err := s.emitChunk(chatCompletionChunkDelta{}, finishReason); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprint(s.w, "data: [DONE]\n\n"); err != nil {
+		return err
+	}
+	if s.flusher != nil {
+		s.flusher.Flush()
+	}
+	s.streamStopped = true
+	return nil
+}
+
 func (s *chatCompletionStreamState) emitError(message string) error {
+	if s.streamStopped {
+		return nil
+	}
+	payload := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+			"type":    "api_error",
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	s.logDownstreamEvent("error", data)
+	if _, err := fmt.Fprintf(s.w, "data: %s\n\n", data); err != nil {
+		return err
+	}
+	if s.flusher != nil {
+		s.flusher.Flush()
+	}
+	s.streamStopped = true
+	return nil
+}
+
+func (s *anthropicChatStreamState) emitError(message string) error {
 	if s.streamStopped {
 		return nil
 	}
@@ -920,6 +1242,53 @@ func (s *chatCompletionStreamState) emitChunk(delta chatCompletionChunkDelta, fi
 	return nil
 }
 
+func (s *anthropicChatStreamState) emitChunk(delta chatCompletionChunkDelta, finishReason string) error {
+	if s.responseID == "" {
+		s.responseID = "chatcmpl-proxy-stream"
+	}
+	if s.created == 0 {
+		s.created = time.Now().Unix()
+	}
+	payload := map[string]interface{}{
+		"id":      s.responseID,
+		"object":  "chat.completion.chunk",
+		"created": s.created,
+		"model":   s.model,
+		"choices": []map[string]interface{}{{
+			"index": 0,
+			"delta": map[string]interface{}{},
+		}},
+	}
+	choice := payload["choices"].([]map[string]interface{})[0]
+	deltaMap := choice["delta"].(map[string]interface{})
+	if delta.Role != "" {
+		deltaMap["role"] = delta.Role
+	}
+	if delta.Content != "" {
+		deltaMap["content"] = delta.Content
+	}
+	if len(delta.ToolCalls) > 0 {
+		deltaMap["tool_calls"] = delta.ToolCalls
+	}
+	if finishReason != "" {
+		choice["finish_reason"] = finishReason
+	} else {
+		choice["finish_reason"] = nil
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	s.logDownstreamEvent("chat.completion.chunk", data)
+	if _, err := fmt.Fprintf(s.w, "data: %s\n\n", data); err != nil {
+		return err
+	}
+	if s.flusher != nil {
+		s.flusher.Flush()
+	}
+	return nil
+}
+
 func (s *anthropicStreamState) emitErrorEvent(message string) error {
 	return s.emitEvent("error", map[string]interface{}{
 		"type": "error",
@@ -961,6 +1330,14 @@ func (s *chatCompletionStreamState) logUpstreamEvent(event sseEvent) {
 	)
 }
 
+func (s *anthropicChatStreamState) logUpstreamEvent(event sseEvent) {
+	s.logChain("conversion.stream.upstream_event",
+		"request_id", s.requestID,
+		"event", firstNonEmpty(event.Name, "<data-only>"),
+		"data", utils.RedactJSONBody([]byte(event.Data)),
+	)
+}
+
 // logChain 写入结构化链路日志；未配置日志器时直接忽略。
 func (s *anthropicStreamState) logChain(event string, attrs ...interface{}) {
 	if s == nil || s.logger == nil {
@@ -970,6 +1347,13 @@ func (s *anthropicStreamState) logChain(event string, attrs ...interface{}) {
 }
 
 func (s *chatCompletionStreamState) logChain(event string, attrs ...interface{}) {
+	if s == nil || s.logger == nil {
+		return
+	}
+	s.logger.Info(event, attrs...)
+}
+
+func (s *anthropicChatStreamState) logChain(event string, attrs ...interface{}) {
 	if s == nil || s.logger == nil {
 		return
 	}
@@ -992,6 +1376,14 @@ func (s *chatCompletionStreamState) logDownstreamEvent(eventName string, payload
 	)
 }
 
+func (s *anthropicChatStreamState) logDownstreamEvent(eventName string, payload []byte) {
+	s.logChain("conversion.stream.downstream_event",
+		"request_id", s.requestID,
+		"event", eventName,
+		"data", utils.RedactJSONBody(payload),
+	)
+}
+
 func (s *anthropicStreamState) tokenUsage() TokenUsage {
 	return TokenUsage{
 		InputTokens:  s.inputTokens,
@@ -1000,6 +1392,13 @@ func (s *anthropicStreamState) tokenUsage() TokenUsage {
 }
 
 func (s *chatCompletionStreamState) tokenUsage() TokenUsage {
+	return TokenUsage{
+		InputTokens:  s.inputTokens,
+		OutputTokens: s.outputTokens,
+	}.Normalize()
+}
+
+func (s *anthropicChatStreamState) tokenUsage() TokenUsage {
 	return TokenUsage{
 		InputTokens:  s.inputTokens,
 		OutputTokens: s.outputTokens,

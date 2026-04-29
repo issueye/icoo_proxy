@@ -360,6 +360,8 @@ func (s *ProxyService) handleCrossProtocolEventStream(w http.ResponseWriter, res
 		s.translateStreamingResponsesToAnthropic(w, resp, ctx)
 	case ctx.downstream == consts.ProtocolOpenAIChat && ctx.route.Upstream == consts.ProtocolOpenAIResponses && ctx.downstreamWantsStream:
 		s.translateStreamingResponsesToChat(w, resp, ctx)
+	case ctx.downstream == consts.ProtocolOpenAIChat && ctx.route.Upstream == consts.ProtocolAnthropic && ctx.downstreamWantsStream:
+		s.translateStreamingAnthropicToChat(w, resp, ctx)
 	case !ctx.downstreamWantsStream && ctx.route.Upstream == consts.ProtocolOpenAIResponses:
 		s.aggregateAndTranslateResponsesStream(w, resp, ctx)
 	default:
@@ -396,6 +398,28 @@ func (s *ProxyService) translateStreamingResponsesToChat(w http.ResponseWriter, 
 	w.Header().Del("Content-Length")
 	w.WriteHeader(resp.StatusCode)
 	usage, err := translation.TranslateResponsesStreamToChat(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
+	ctx.usage = usage
+	s.logDownstreamResponse(w, resp.StatusCode, "<translated event-stream body not captured>", ctx)
+	item := ctx.view(resp.StatusCode, "", ctx.usage)
+	if err != nil {
+		item.Error = err.Error()
+		s.logChain("conversion.stream.error",
+			"request_id", ctx.requestID,
+			"downstream", ctx.downstream.ToString(),
+			"upstream", ctx.route.Upstream.ToString(),
+			"error", err.Error(),
+		)
+	}
+	s.logRequest(item)
+}
+
+// translateStreamingAnthropicToChat 将 Anthropic 事件流转换为 OpenAI Chat Completions 事件流。
+func (s *ProxyService) translateStreamingAnthropicToChat(w http.ResponseWriter, resp *http.Response, ctx *proxyRequestContext) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Del("Content-Length")
+	w.WriteHeader(resp.StatusCode)
+	usage, err := translation.TranslateAnthropicStreamToChat(w, resp.Body, ctx.route.Model, ctx.requestID, s.logger)
 	ctx.usage = usage
 	s.logDownstreamResponse(w, resp.StatusCode, "<translated event-stream body not captured>", ctx)
 	item := ctx.view(resp.StatusCode, "", ctx.usage)

@@ -287,6 +287,209 @@ func TestTranslateResponsesStreamToAnthropic_ReturnsUsage(t *testing.T) {
 	}
 }
 
+func TestTranslateAnthropicStreamToChat_TextDeltaAndDone(t *testing.T) {
+	body := buildSSEStream(
+		sseJSONEvent("message_start", map[string]any{
+			"type": "message_start",
+			"message": map[string]any{
+				"id": "msg_123",
+				"usage": map[string]any{
+					"input_tokens":  9,
+					"output_tokens": 1,
+				},
+			},
+		}),
+		sseJSONEvent("content_block_start", map[string]any{
+			"type":  "content_block_start",
+			"index": 0,
+			"content_block": map[string]any{
+				"type": "text",
+				"text": "",
+			},
+		}),
+		sseJSONEvent("content_block_delta", map[string]any{
+			"type":  "content_block_delta",
+			"index": 0,
+			"delta": map[string]any{
+				"type": "text_delta",
+				"text": "Hello",
+			},
+		}),
+		sseJSONEvent("message_delta", map[string]any{
+			"type": "message_delta",
+			"delta": map[string]any{
+				"stop_reason": "end_turn",
+			},
+			"usage": map[string]any{
+				"input_tokens":  9,
+				"output_tokens": 5,
+			},
+		}),
+		sseJSONEvent("message_stop", map[string]any{
+			"type": "message_stop",
+		}),
+	)
+
+	recorder := httptest.NewRecorder()
+	usage, err := TranslateAnthropicStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-a1", slog.Default())
+	if err != nil {
+		t.Fatalf("TranslateAnthropicStreamToChat returned error: %v", err)
+	}
+	if usage.InputTokens != 9 || usage.OutputTokens != 5 || usage.TotalTokens != 14 {
+		t.Fatalf("expected usage 9/5/14, got %#v", usage)
+	}
+
+	frames := parseSSEDataFrames(t, recorder.Body.String())
+	if len(frames) != 4 {
+		t.Fatalf("expected 4 SSE data frames, got %d: %v", len(frames), frames)
+	}
+
+	roleChunk := decodeChatChunk(t, frames[0])
+	if got := roleChunk.Choices[0].Delta.Role; got != "assistant" {
+		t.Fatalf("expected first chunk role assistant, got %q", got)
+	}
+
+	textChunk := decodeChatChunk(t, frames[1])
+	if got := textChunk.Choices[0].Delta.Content; got != "Hello" {
+		t.Fatalf("expected text delta Hello, got %q", got)
+	}
+
+	finishChunk := decodeChatChunk(t, frames[2])
+	if finishChunk.Choices[0].FinishReason == nil || *finishChunk.Choices[0].FinishReason != "stop" {
+		t.Fatalf("expected finish_reason stop, got %#v", finishChunk.Choices[0].FinishReason)
+	}
+	if got := finishChunk.ID; got != "msg_123" {
+		t.Fatalf("expected response id msg_123, got %q", got)
+	}
+	if frames[3] != "[DONE]" {
+		t.Fatalf("expected final [DONE] frame, got %q", frames[3])
+	}
+}
+
+func TestTranslateAnthropicStreamToChat_ToolUseStream(t *testing.T) {
+	body := buildSSEStream(
+		sseJSONEvent("message_start", map[string]any{
+			"type": "message_start",
+			"message": map[string]any{
+				"id": "msg_tool",
+			},
+		}),
+		sseJSONEvent("content_block_start", map[string]any{
+			"type":  "content_block_start",
+			"index": 0,
+			"content_block": map[string]any{
+				"type": "tool_use",
+				"id":   "toolu_1",
+				"name": "weather",
+			},
+		}),
+		sseJSONEvent("content_block_delta", map[string]any{
+			"type":  "content_block_delta",
+			"index": 0,
+			"delta": map[string]any{
+				"type":         "input_json_delta",
+				"partial_json": "{\"city\":",
+			},
+		}),
+		sseJSONEvent("content_block_delta", map[string]any{
+			"type":  "content_block_delta",
+			"index": 0,
+			"delta": map[string]any{
+				"type":         "input_json_delta",
+				"partial_json": "\"Paris\"}",
+			},
+		}),
+		sseJSONEvent("message_delta", map[string]any{
+			"type": "message_delta",
+			"delta": map[string]any{
+				"stop_reason": "tool_use",
+			},
+		}),
+		sseJSONEvent("message_stop", map[string]any{
+			"type": "message_stop",
+		}),
+	)
+
+	recorder := httptest.NewRecorder()
+	usage, err := TranslateAnthropicStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-a2", slog.Default())
+	if err != nil {
+		t.Fatalf("TranslateAnthropicStreamToChat returned error: %v", err)
+	}
+	if usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.TotalTokens != 0 {
+		t.Fatalf("expected zero usage for stream without usage payload, got %#v", usage)
+	}
+
+	frames := parseSSEDataFrames(t, recorder.Body.String())
+	if len(frames) != 6 {
+		t.Fatalf("expected 6 SSE data frames, got %d: %v", len(frames), frames)
+	}
+
+	startChunk := decodeChatChunk(t, frames[1])
+	if len(startChunk.Choices[0].Delta.ToolCalls) != 1 {
+		t.Fatalf("expected one tool call in start chunk")
+	}
+	startTool := startChunk.Choices[0].Delta.ToolCalls[0]
+	if startTool.ID != "toolu_1" {
+		t.Fatalf("expected tool call id toolu_1, got %q", startTool.ID)
+	}
+	if startTool.Type != "function" {
+		t.Fatalf("expected tool call type function, got %q", startTool.Type)
+	}
+	if startTool.Function.Name != "weather" {
+		t.Fatalf("expected tool name weather, got %q", startTool.Function.Name)
+	}
+
+	argChunk1 := decodeChatChunk(t, frames[2])
+	if got := argChunk1.Choices[0].Delta.ToolCalls[0].Function.Arguments; got != "{\"city\":" {
+		t.Fatalf("expected first arg delta, got %q", got)
+	}
+	argChunk2 := decodeChatChunk(t, frames[3])
+	if got := argChunk2.Choices[0].Delta.ToolCalls[0].Function.Arguments; got != "\"Paris\"}" {
+		t.Fatalf("expected second arg delta, got %q", got)
+	}
+
+	finishChunk := decodeChatChunk(t, frames[4])
+	if finishChunk.Choices[0].FinishReason == nil || *finishChunk.Choices[0].FinishReason != "tool_calls" {
+		t.Fatalf("expected finish_reason tool_calls, got %#v", finishChunk.Choices[0].FinishReason)
+	}
+	if frames[5] != "[DONE]" {
+		t.Fatalf("expected final [DONE] frame, got %q", frames[5])
+	}
+}
+
+func TestTranslateAnthropicStreamToChat_ErrorEvent(t *testing.T) {
+	body := buildSSEStream(
+		sseJSONEvent("error", map[string]any{
+			"type": "error",
+			"error": map[string]any{
+				"message": "anthropic upstream bad",
+			},
+		}),
+	)
+
+	recorder := httptest.NewRecorder()
+	usage, err := TranslateAnthropicStreamToChat(recorder, strings.NewReader(body), "gpt-5.4", "req-a3", slog.Default())
+	if err != nil {
+		t.Fatalf("TranslateAnthropicStreamToChat returned error: %v", err)
+	}
+	if usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.TotalTokens != 0 {
+		t.Fatalf("expected zero usage for error event, got %#v", usage)
+	}
+
+	frames := parseSSEDataFrames(t, recorder.Body.String())
+	if len(frames) != 1 {
+		t.Fatalf("expected 1 SSE data frame, got %d: %v", len(frames), frames)
+	}
+
+	var payload map[string]map[string]string
+	if err := json.Unmarshal([]byte(frames[0]), &payload); err != nil {
+		t.Fatalf("failed to decode error payload: %v", err)
+	}
+	if got := payload["error"]["message"]; got != "anthropic upstream bad" {
+		t.Fatalf("expected error message anthropic upstream bad, got %q", got)
+	}
+}
+
 func buildSSEStream(events ...string) string {
 	return strings.Join(events, "")
 }
