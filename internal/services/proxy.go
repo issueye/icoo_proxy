@@ -213,7 +213,7 @@ func (s *ProxyService) resolveRequestRoute(w http.ResponseWriter, ctx *proxyRequ
 
 // prepareUpstreamRequestBody 按路由结果改写或转换请求体，并按上游配置强制开启流式请求。
 func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *proxyRequestContext) ([]byte, bool) {
-	preparedBody, err := s.prepareRequestBody(ctx.downstream, ctx.route, ctx.body)
+	preparedBody, err := translation.ConvertRequest(ctx.downstream, ctx.route, ctx.body, s.cfg.DefaultMaxTokens)
 	if err != nil {
 		status := mapPrepareErrorStatus(err)
 		s.fail(w, ctx.downstream, ctx.view(status, err.Error(), ctx.usage))
@@ -504,40 +504,46 @@ func (s *ProxyService) writeUpstreamError(w http.ResponseWriter, resp *http.Resp
 }
 
 func upstreamErrorMessage(statusCode int, body []byte) string {
-	message := extractUpstreamErrorMessage(body)
-	if message == "" {
+	detail := extractUpstreamErrorDetail(body)
+	if detail == "" {
 		return fmt.Sprintf("upstream returned error (%d)", statusCode)
 	}
-	return fmt.Sprintf("upstream returned error (%d): %s", statusCode, message)
+	return fmt.Sprintf("upstream returned error (%d): %s", statusCode, detail)
 }
 
-func extractUpstreamErrorMessage(body []byte) string {
+func extractUpstreamErrorDetail(body []byte) string {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return ""
 	}
-	if message := extractMessageField(payload["error"]); message != "" {
-		return message
+	if detail := formatUpstreamErrorDetail(payload["error"]); detail != "" {
+		return detail
 	}
-	if message := extractMessageField(payload); message != "" {
-		return message
-	}
-	return ""
+	return formatUpstreamErrorDetail(payload)
 }
 
-func extractMessageField(raw interface{}) string {
+func formatUpstreamErrorDetail(raw interface{}) string {
 	switch value := raw.(type) {
 	case map[string]interface{}:
-		if message, ok := value["message"].(string); ok {
-			return strings.TrimSpace(message)
+		parts := make([]string, 0, 4)
+		for _, key := range []string{"message", "type", "code", "detail"} {
+			if text := stringField(value, key); text != "" {
+				parts = append(parts, fmt.Sprintf("%s=%s", key, text))
+			}
 		}
-		if detail, ok := value["detail"].(string); ok {
-			return strings.TrimSpace(detail)
-		}
+		return strings.Join(parts, ", ")
 	case string:
 		return strings.TrimSpace(value)
 	}
 	return ""
+}
+
+func stringField(payload map[string]interface{}, key string) string {
+	value, ok := payload[key].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 // logEventStreamUpstreamResponse 记录上游事件流响应元信息，避免捕获大体积流式内容。
@@ -554,14 +560,18 @@ func (s *ProxyService) logEventStreamUpstreamResponse(resp *http.Response, ctx *
 
 // logJSONUpstreamResponse 记录上游 JSON 响应头、状态码和脱敏后的响应体。
 func (s *ProxyService) logJSONUpstreamResponse(resp *http.Response, body []byte, ctx *proxyRequestContext) {
-	s.logChain("upstream.response",
+	attrs := []interface{}{
 		"request_id", ctx.requestID,
 		"downstream", ctx.downstream.ToString(),
 		"upstream", ctx.route.Upstream.ToString(),
 		"status_code", resp.StatusCode,
 		"headers", sanitizedHeaders(resp.Header),
 		"body", s.logBody(body),
-	)
+	}
+	if resp.StatusCode >= 400 {
+		attrs = append(attrs, "error_detail", extractUpstreamErrorDetail(body))
+	}
+	s.logChain("upstream.response", attrs...)
 }
 
 // logDownstreamResponse 记录返回给下游客户端的响应信息。
@@ -1035,6 +1045,7 @@ func isEventStream(header http.Header) bool {
 // relayStreamWithUsage 将上游流式响应持续转发给下游，并在透传过程中采集 usage。
 func relayStreamWithUsage(w http.ResponseWriter, body io.Reader, protocol consts.Protocol) translation.TokenUsage {
 	flusher, _ := w.(http.Flusher)
+	rc := http.NewResponseController(w)
 	reader := bufio.NewReader(body)
 	collector := streamUsageCollector{protocol: protocol}
 	eventLines := make([]string, 0, 8)
@@ -1049,10 +1060,14 @@ func relayStreamWithUsage(w http.ResponseWriter, body io.Reader, protocol consts
 	for {
 		line, err := reader.ReadString('\n')
 		if len(line) > 0 {
-			_, _ = io.WriteString(w, line)
+			if _, writeErr := io.WriteString(w, line); writeErr != nil {
+				flushEvent()
+				return collector.usage.Normalize()
+			}
 			if flusher != nil {
 				flusher.Flush()
 			}
+			_ = rc.SetWriteDeadline(time.Now().Add(60 * time.Second))
 			eventLines = append(eventLines, line)
 			if strings.TrimRight(line, "\r\n") == "" {
 				flushEvent()
@@ -1215,7 +1230,11 @@ func (s *ProxyService) ClearRecentRequests() {
 // logRequest 写入请求完成日志，并保存到最近请求和可选的持久化记录器。
 func (s *ProxyService) logRequest(item api.RequestView) {
 	s.recordRequest(item)
-	log.Printf("icoo_proxy request_id=%s downstream=%s upstream=%s model=%s status=%d duration_ms=%d", item.RequestID, item.Downstream, item.Upstream, item.Model, item.StatusCode, item.DurationMS)
+	if item.Error != "" {
+		log.Printf("icoo_proxy request_id=%s downstream=%s upstream=%s model=%s status=%d duration_ms=%d error=%q", item.RequestID, item.Downstream, item.Upstream, item.Model, item.StatusCode, item.DurationMS, item.Error)
+	} else {
+		log.Printf("icoo_proxy request_id=%s downstream=%s upstream=%s model=%s status=%d duration_ms=%d", item.RequestID, item.Downstream, item.Upstream, item.Model, item.StatusCode, item.DurationMS)
+	}
 	s.logChain("request.completed",
 		"request_id", item.RequestID,
 		"downstream", item.Downstream,

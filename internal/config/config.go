@@ -66,7 +66,7 @@ func Load(workdir string) (Config, error) {
 		Host:                      strings.TrimSpace(os.Getenv("PROXY_HOST")),
 		Port:                      intFromEnv("PROXY_PORT", 18181),
 		ReadTimeout:               durationFromEnv("PROXY_READ_TIMEOUT_SECONDS", 15*time.Second),
-		WriteTimeout:              durationFromEnv("PROXY_WRITE_TIMEOUT_SECONDS", 300*time.Second),
+		WriteTimeout:              durationFromEnv("PROXY_WRITE_TIMEOUT_SECONDS", 0),
 		ShutdownTimeout:           durationFromEnv("PROXY_SHUTDOWN_TIMEOUT_SECONDS", 10*time.Second),
 		ProxyAPIKeys:              csvFromEnv("PROXY_API_KEYS"),
 		AllowUnauthenticatedLocal: boolFromEnv("PROXY_ALLOW_UNAUTHENTICATED_LOCAL", true),

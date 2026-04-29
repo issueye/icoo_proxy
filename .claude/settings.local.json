@@ -3,7 +3,12 @@
     "allow": [
       "Bash(npm *)",
       "Bash(python *)",
-      "Bash(sqlite3 *)"
+      "Bash(sqlite3 *)",
+      "Bash(go build *)",
+      "Bash(node *)",
+      "Bash(go test *)",
+      "Bash(git diff *)",
+      "Bash(gofmt -w \"E:/codes/icoo_proxy/internal/services/proxy.go\" \"E:/codes/icoo_proxy/internal/services/proxy_test.go\")"
     ]
   }
 }

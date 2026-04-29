@@ -52,22 +52,28 @@ func TestUpstreamErrorMessage(t *testing.T) {
 		want       string
 	}{
 		{
+			name:       "openai nested error message and type",
+			statusCode: 502,
+			body:       []byte(`{"error":{"message":"Upstream request failed","type":"upstream_error"}}`),
+			want:       "upstream returned error (502): message=Upstream request failed, type=upstream_error",
+		},
+		{
 			name:       "openai nested error message",
 			statusCode: 429,
 			body:       []byte(`{"error":{"message":"rate limit exceeded"}}`),
-			want:       "upstream returned error (429): rate limit exceeded",
+			want:       "upstream returned error (429): message=rate limit exceeded",
 		},
 		{
 			name:       "top level anthropic style message",
 			statusCode: 400,
 			body:       []byte(`{"type":"error","message":"prompt is too long"}`),
-			want:       "upstream returned error (400): prompt is too long",
+			want:       "upstream returned error (400): message=prompt is too long, type=error",
 		},
 		{
 			name:       "detail fallback",
 			statusCode: 503,
 			body:       []byte(`{"error":{"detail":"upstream unavailable"}}`),
-			want:       "upstream returned error (503): upstream unavailable",
+			want:       "upstream returned error (503): detail=upstream unavailable",
 		},
 		{
 			name:       "invalid json fallback",

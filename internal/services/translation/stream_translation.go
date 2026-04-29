@@ -1062,6 +1062,7 @@ func (s *chatCompletionStreamState) finish(response map[string]interface{}) erro
 	if s.flusher != nil {
 		s.flusher.Flush()
 	}
+	setWriteDeadline(s.w)
 	s.streamStopped = true
 	return nil
 }
@@ -1106,6 +1107,7 @@ func (s *anthropicChatStreamState) finish(response map[string]interface{}) error
 	if s.flusher != nil {
 		s.flusher.Flush()
 	}
+	setWriteDeadline(s.w)
 	s.streamStopped = true
 	return nil
 }
@@ -1131,6 +1133,7 @@ func (s *chatCompletionStreamState) emitError(message string) error {
 	if s.flusher != nil {
 		s.flusher.Flush()
 	}
+	setWriteDeadline(s.w)
 	s.streamStopped = true
 	return nil
 }
@@ -1156,6 +1159,7 @@ func (s *anthropicChatStreamState) emitError(message string) error {
 	if s.flusher != nil {
 		s.flusher.Flush()
 	}
+	setWriteDeadline(s.w)
 	s.streamStopped = true
 	return nil
 }
@@ -1239,6 +1243,7 @@ func (s *chatCompletionStreamState) emitChunk(delta chatCompletionChunkDelta, fi
 	if s.flusher != nil {
 		s.flusher.Flush()
 	}
+	setWriteDeadline(s.w)
 	return nil
 }
 
@@ -1286,6 +1291,7 @@ func (s *anthropicChatStreamState) emitChunk(delta chatCompletionChunkDelta, fin
 	if s.flusher != nil {
 		s.flusher.Flush()
 	}
+	setWriteDeadline(s.w)
 	return nil
 }
 
@@ -1311,6 +1317,7 @@ func (s *anthropicStreamState) emitEvent(eventName string, payload map[string]in
 	if s.flusher != nil {
 		s.flusher.Flush()
 	}
+	setWriteDeadline(s.w)
 	return nil
 }
 
@@ -1412,4 +1419,9 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// setWriteDeadline 扩展下游写入超时，避免长连接 SSE 流被 Go HTTP Server WriteTimeout 中断。
+func setWriteDeadline(w http.ResponseWriter) {
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Minute))
 }
