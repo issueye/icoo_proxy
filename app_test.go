@@ -18,11 +18,14 @@ func TestDeleteSupplierRejectsEnabledPolicyReference(t *testing.T) {
 	t.Cleanup(func() { _ = core.Close() })
 
 	record, err := core.Services().Supplier().Upsert(models.SupplierUpsertInput{
-		Name:         "Policy Vendor",
-		Protocol:     consts.ProtocolOpenAIResponses.ToString(),
-		BaseURL:      "https://example.com",
-		Enabled:      true,
-		Models:       "gpt-4.1-mini",
+		Name:     "Policy Vendor",
+		Protocol: consts.ProtocolOpenAIResponses.ToString(),
+		BaseURL:  "https://example.com",
+		Enabled:  true,
+		Models: []models.SupplierModelItem{{
+			Name:      "gpt-4.1-mini",
+			MaxTokens: 32768,
+		}},
 		DefaultModel: "gpt-4.1-mini",
 		UserAgent:    "PolicyVendor/1.0",
 	})

@@ -14,6 +14,10 @@ import (
 func ConvertRequest(downstream consts.Protocol, route models.Route, body []byte) ([]byte, error) {
 	upstream := route.Upstream
 	model := route.Model
+	defaultMaxTokens := route.DefaultMaxTokens
+	if defaultMaxTokens <= 0 {
+		defaultMaxTokens = models.DefaultSupplierModelMaxTokens
+	}
 
 	switch {
 	// anthropic -> anthropic
@@ -27,7 +31,7 @@ func ConvertRequest(downstream consts.Protocol, route models.Route, body []byte)
 		return translateAnthropicToResponsesRequest(body, model)
 	// openai chat -> anthropic
 	case downstream == consts.ProtocolOpenAIChat && upstream == consts.ProtocolAnthropic:
-		return translateChatToAnthropicRequest(body, model)
+		return translateChatToAnthropicRequest(body, model, defaultMaxTokens)
 	// openai chat -> openai chat
 	case downstream == consts.ProtocolOpenAIChat && upstream == consts.ProtocolOpenAIChat:
 		return RewriteModel(body, model)
@@ -36,7 +40,7 @@ func ConvertRequest(downstream consts.Protocol, route models.Route, body []byte)
 		return translateChatToResponsesRequest(body, model)
 	// openai responses -> anthropic
 	case downstream == consts.ProtocolOpenAIResponses && upstream == consts.ProtocolAnthropic:
-		return translateResponsesToAnthropicRequest(body, model)
+		return translateResponsesToAnthropicRequest(body, model, defaultMaxTokens)
 	// openai responses -> openai chat
 	case downstream == consts.ProtocolOpenAIResponses && upstream == consts.ProtocolOpenAIChat:
 		return translateResponsesToChatRequest(body, model)
@@ -114,16 +118,21 @@ func translateAnthropicToResponsesRequest(body []byte, model string) ([]byte, er
 	return json.Marshal(request)
 }
 
-func translateResponsesToAnthropicRequest(body []byte, model string) ([]byte, error) {
+func translateResponsesToAnthropicRequest(body []byte, model string, defaultMaxTokens int) ([]byte, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("invalid json body")
 	}
 
+	maxTokens, err := resolveAnthropicMaxTokens(payload, defaultMaxTokens, "max_output_tokens")
+	if err != nil {
+		return nil, err
+	}
+
 	request := map[string]interface{}{
 		"model":      model,
 		"messages":   normalizeResponsesInput(payload["input"]),
-		"max_tokens": intValue(payload["max_output_tokens"]),
+		"max_tokens": maxTokens,
 	}
 	if stream, _ := payload["stream"].(bool); stream {
 		request["stream"] = true
@@ -146,12 +155,12 @@ func translateAnthropicToChatRequest(body []byte, model string) ([]byte, error) 
 	return translateResponsesToChatRequest(responsesBody, model)
 }
 
-func translateChatToAnthropicRequest(body []byte, model string) ([]byte, error) {
+func translateChatToAnthropicRequest(body []byte, model string, defaultMaxTokens int) ([]byte, error) {
 	responsesBody, err := translateChatToResponsesRequest(body, model)
 	if err != nil {
 		return nil, err
 	}
-	return translateResponsesToAnthropicRequest(responsesBody, model)
+	return translateResponsesToAnthropicRequest(responsesBody, model, defaultMaxTokens)
 }
 
 func translateChatToResponsesRequest(body []byte, model string) ([]byte, error) {
@@ -187,9 +196,7 @@ func translateChatToResponsesRequest(body []byte, model string) ([]byte, error) 
 		request["instructions"] = instructions
 	}
 	copyIfExists(payload, request, "temperature", "top_p", "tool_choice")
-	if value, ok := payload["max_tokens"]; ok {
-		request["max_output_tokens"] = value
-	}
+	copyFirstIfExists(payload, request, "max_output_tokens", "max_completion_tokens", "max_tokens")
 	if value, ok := payload["tools"]; ok {
 		request["tools"] = chatToolsToResponsesTools(value)
 	}
@@ -952,6 +959,35 @@ func intValue(raw interface{}) int {
 	}
 }
 
+func positiveIntField(payload map[string]interface{}, key string) (int, bool) {
+	value, ok := payload[key]
+	if !ok {
+		return 0, false
+	}
+	parsed := intValue(value)
+	if parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
+}
+
+func resolveAnthropicMaxTokens(payload map[string]interface{}, defaultMaxTokens int, keys ...string) (int, error) {
+	for _, key := range keys {
+		if _, exists := payload[key]; !exists {
+			continue
+		}
+		maxTokens, ok := positiveIntField(payload, key)
+		if !ok {
+			return 0, fmt.Errorf("anthropic request requires max_tokens (or max_completion_tokens) to be a positive integer")
+		}
+		return maxTokens, nil
+	}
+	if defaultMaxTokens <= 0 {
+		defaultMaxTokens = models.DefaultSupplierModelMaxTokens
+	}
+	return defaultMaxTokens, nil
+}
+
 func stringValue(raw interface{}, fallback string) string {
 	if value, ok := raw.(string); ok && value != "" {
 		return value
@@ -963,6 +999,15 @@ func copyIfExists(from, to map[string]interface{}, keys ...string) {
 	for _, key := range keys {
 		if value, ok := from[key]; ok {
 			to[key] = value
+		}
+	}
+}
+
+func copyFirstIfExists(from, to map[string]interface{}, targetKey string, sourceKeys ...string) {
+	for _, key := range sourceKeys {
+		if value, ok := from[key]; ok {
+			to[targetKey] = value
+			return
 		}
 	}
 }

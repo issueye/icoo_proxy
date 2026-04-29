@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -135,10 +136,18 @@ func (s *SupplierService) Upsert(input models.SupplierUpsertInput) (models.Suppl
 	if baseURL == "" {
 		return models.SupplierRecord{}, fmt.Errorf("supplier base_url is required")
 	}
-	modelArr := splitSupplierCSVLike(input.Models)
+	modelItems := models.NormalizeSupplierModelItems(input.Models)
 	defaultModel := strings.TrimSpace(input.DefaultModel)
-	if defaultModel != "" && !slices.Contains(modelArr, defaultModel) {
-		return models.SupplierRecord{}, fmt.Errorf("supplier default_model must exist in models list")
+	if defaultModel != "" {
+		matched, ok := models.FindSupplierModel(modelItems, defaultModel)
+		if !ok {
+			return models.SupplierRecord{}, fmt.Errorf("supplier default_model must exist in models list")
+		}
+		defaultModel = matched.Name
+	}
+	serializedModels, err := marshalSupplierModelItems(modelItems)
+	if err != nil {
+		return models.SupplierRecord{}, err
 	}
 
 	now := time.Now()
@@ -160,7 +169,7 @@ func (s *SupplierService) Upsert(input models.SupplierUpsertInput) (models.Suppl
 		UserAgent:    strings.TrimSpace(input.UserAgent),
 		Enabled:      input.Enabled,
 		Description:  strings.TrimSpace(input.Description),
-		Models:       strings.Join(modelArr, ","),
+		Models:       serializedModels,
 		DefaultModel: defaultModel,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -208,7 +217,7 @@ func toSupplierRecord(item models.SupplierModel) models.SupplierRecord {
 		UserAgent:    item.UserAgent,
 		Enabled:      item.Enabled,
 		Description:  item.Description,
-		Models:       slices.Clone(splitSupplierCSVLike(item.Models)),
+		Models:       slices.Clone(parseSupplierModelItems(item.Models)),
 		DefaultModel: strings.TrimSpace(item.DefaultModel),
 		UpdatedAt:    item.UpdatedAt.Format(time.RFC3339),
 		CreatedAt:    item.CreatedAt.Format(time.RFC3339),
@@ -227,7 +236,7 @@ func toSupplierSnapshot(item models.SupplierModel) models.Snapshot {
 		OnlyStream:   item.OnlyStream,
 		UserAgent:    item.UserAgent,
 		IsEnabled:    item.Enabled,
-		Models:       slices.Clone(splitSupplierCSVLike(item.Models)),
+		Models:       slices.Clone(parseSupplierModelItems(item.Models)),
 		DefaultModel: strings.TrimSpace(item.DefaultModel),
 	}
 }
@@ -267,6 +276,43 @@ func normalizeVendor(raw string, protocol consts.Protocol) consts.Vendor {
 	default:
 		return consts.Vendor("")
 	}
+}
+
+func parseSupplierModelItems(raw string) []models.SupplierModelItem {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil
+	}
+
+	var structured []models.SupplierModelItem
+	if err := json.Unmarshal([]byte(value), &structured); err == nil {
+		return models.NormalizeSupplierModelItems(structured)
+	}
+
+	var legacy []string
+	if err := json.Unmarshal([]byte(value), &legacy); err == nil {
+		items := make([]models.SupplierModelItem, 0, len(legacy))
+		for _, model := range legacy {
+			items = append(items, models.SupplierModelItem{Name: model})
+		}
+		return models.NormalizeSupplierModelItems(items)
+	}
+
+	fields := splitSupplierCSVLike(value)
+	items := make([]models.SupplierModelItem, 0, len(fields))
+	for _, field := range fields {
+		items = append(items, models.SupplierModelItem{Name: field})
+	}
+	return models.NormalizeSupplierModelItems(items)
+}
+
+func marshalSupplierModelItems(items []models.SupplierModelItem) (string, error) {
+	normalized := models.NormalizeSupplierModelItems(items)
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return "", fmt.Errorf("marshal supplier models: %w", err)
+	}
+	return string(data), nil
 }
 
 func splitSupplierCSVLike(raw string) []string {

@@ -384,6 +384,20 @@ export namespace models {
 	        this.created_at = source["created_at"];
 	    }
 	}
+	export class SupplierModelItem {
+	    name: string;
+	    max_tokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SupplierModelItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.max_tokens = source["max_tokens"];
+	    }
+	}
 	export class SupplierRecord {
 	    id: string;
 	    name: string;
@@ -395,7 +409,7 @@ export namespace models {
 	    user_agent: string;
 	    enabled: boolean;
 	    description: string;
-	    models: string[];
+	    models: SupplierModelItem[];
 	    default_model: string;
 	    updated_at: string;
 	    created_at: string;
@@ -416,11 +430,29 @@ export namespace models {
 	        this.user_agent = source["user_agent"];
 	        this.enabled = source["enabled"];
 	        this.description = source["description"];
-	        this.models = source["models"];
+	        this.models = this.convertValues(source["models"], SupplierModelItem);
 	        this.default_model = source["default_model"];
 	        this.updated_at = source["updated_at"];
 	        this.created_at = source["created_at"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class SupplierUpsertInput {
 	    id: string;
@@ -433,7 +465,7 @@ export namespace models {
 	    user_agent: string;
 	    enabled: boolean;
 	    description: string;
-	    models: string;
+	    models: SupplierModelItem[];
 	    default_model: string;
 	
 	    static createFrom(source: any = {}) {
@@ -452,9 +484,27 @@ export namespace models {
 	        this.user_agent = source["user_agent"];
 	        this.enabled = source["enabled"];
 	        this.description = source["description"];
-	        this.models = source["models"];
+	        this.models = this.convertValues(source["models"], SupplierModelItem);
 	        this.default_model = source["default_model"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class UpsertInput {
 	    id: string;
@@ -659,4 +709,3 @@ export namespace services {
 	}
 
 }
-

@@ -88,19 +88,25 @@ func TestGetSuppliersPageSupportsPaginationAndFilters(t *testing.T) {
 
 	inputs := []models.SupplierUpsertInput{
 		{
-			Name:         "Alpha Supplier",
-			Protocol:     consts.ProtocolOpenAIChat.ToString(),
-			BaseURL:      "https://alpha.example.com",
-			Enabled:      true,
-			Models:       "gpt-4.1-mini",
+			Name:     "Alpha Supplier",
+			Protocol: consts.ProtocolOpenAIChat.ToString(),
+			BaseURL:  "https://alpha.example.com",
+			Enabled:  true,
+			Models: []models.SupplierModelItem{{
+				Name:      "gpt-4.1-mini",
+				MaxTokens: 32768,
+			}},
 			DefaultModel: "gpt-4.1-mini",
 		},
 		{
-			Name:         "Beta Supplier",
-			Protocol:     consts.ProtocolAnthropic.ToString(),
-			BaseURL:      "https://beta.example.com",
-			Enabled:      false,
-			Models:       "claude-3-5-sonnet",
+			Name:     "Beta Supplier",
+			Protocol: consts.ProtocolAnthropic.ToString(),
+			BaseURL:  "https://beta.example.com",
+			Enabled:  false,
+			Models: []models.SupplierModelItem{{
+				Name:      "claude-3-5-sonnet",
+				MaxTokens: 32768,
+			}},
 			DefaultModel: "claude-3-5-sonnet",
 		},
 	}

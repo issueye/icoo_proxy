@@ -33,8 +33,68 @@ const protocolOptions = routeDefinitions.map((item) => ({
   value: item.key,
 }));
 
+const DEFAULT_MODEL_MAX_TOKENS = 32768;
+
+const createEmptyModelItem = () => ({
+  name: "",
+  max_tokens: DEFAULT_MODEL_MAX_TOKENS,
+});
+
+const normalizeMaxTokens = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  return parsed > 0 ? parsed : DEFAULT_MODEL_MAX_TOKENS;
+};
+
+const normalizeModelItem = (item) => {
+  if (typeof item === "string") {
+    const name = item.trim();
+    return name
+      ? {
+          name,
+          max_tokens: DEFAULT_MODEL_MAX_TOKENS,
+        }
+      : null;
+  }
+
+  const name = String(item?.name || "").trim();
+  if (!name) {
+    return null;
+  }
+
+  return {
+    name,
+    max_tokens: normalizeMaxTokens(item?.max_tokens),
+  };
+};
+
 const normalizeModels = (models) =>
-  (models || []).map((item) => String(item).trim()).filter(Boolean);
+  (models || [])
+    .map(normalizeModelItem)
+    .filter(Boolean);
+
+const cloneModelsForForm = (models) => {
+  const normalized = normalizeModels(models);
+  return normalized.length ? normalized : [createEmptyModelItem()];
+};
+
+const normalizeDefaultModel = (models, defaultModel) => {
+  const target = String(defaultModel || "").trim();
+  if (!target) {
+    return "";
+  }
+
+  const matched = normalizeModels(models).find((item) => item.name === target);
+  return matched?.name || "";
+};
+
+const buildSupplierPayload = (form) => {
+  const models = normalizeModels(form.models);
+  return {
+    ...form,
+    default_model: normalizeDefaultModel(models, form.default_model),
+    models,
+  };
+};
 
 const emptyForm = () => ({
   id: "",
@@ -47,7 +107,7 @@ const emptyForm = () => ({
   user_agent: "",
   enabled: true,
   description: "",
-  models: [""],
+  models: [createEmptyModelItem()],
   default_model: "",
 });
 
@@ -229,7 +289,7 @@ export const useSuppliersStore = defineStore("suppliers", {
         user_agent: item.user_agent || "",
         enabled: Boolean(item.enabled),
         description: item.description || "",
-        models: item.models?.length ? [...item.models] : [""],
+        models: cloneModelsForForm(item.models),
         default_model: item.default_model || "",
       };
     },
@@ -248,7 +308,7 @@ export const useSuppliersStore = defineStore("suppliers", {
         user_agent: item.user_agent || "",
         enabled: Boolean(item.enabled),
         description: item.description || "",
-        models: item.models?.length ? [...item.models] : [""],
+        models: cloneModelsForForm(item.models),
         default_model: item.default_model || "",
       };
     },
@@ -273,11 +333,7 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.saving = true;
       this.error = "";
       try {
-        await SaveSupplier({
-            ...this.form,
-            default_model: String(this.form.default_model || "").trim(),
-            models: normalizeModels(this.form.models).join(", "),
-          });
+        await SaveSupplier(buildSupplierPayload(this.form));
         await Promise.all([
           this.fetchPage({ page: this.page, pageSize: this.pageSize }),
           this.refreshSupplierCatalog(),
@@ -293,11 +349,7 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.saving = true;
       this.error = "";
       try {
-        await SaveSupplier({
-            ...this.modelForm,
-            default_model: String(this.modelForm.default_model || "").trim(),
-            models: normalizeModels(this.modelForm.models).join(", "),
-          });
+        await SaveSupplier(buildSupplierPayload(this.modelForm));
         await Promise.all([
           this.fetchPage({ page: this.page, pageSize: this.pageSize }),
           this.refreshSupplierCatalog(),

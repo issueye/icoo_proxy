@@ -600,14 +600,23 @@ func applyRoutePolicies(cfg *config.Config, svc *services.Services) (map[consts.
 		}
 		configureUpstream(cfg, supplier)
 		defaults[policy.DownstreamProtocol] = models.Route{
-			Name:     policy.DownstreamProtocol.ToString(),
-			Upstream: supplier.Protocol,
-			Model:    supplier.DefaultModel,
-			Source:   "default",
-			Supplier: supplier,
+			Name:             policy.DownstreamProtocol.ToString(),
+			Upstream:         supplier.Protocol,
+			Model:            supplier.DefaultModel,
+			DefaultMaxTokens: defaultSupplierModelMaxTokens(supplier),
+			Source:           "default",
+			Supplier:         supplier,
 		}
 	}
 	return defaults, nil
+}
+
+func defaultSupplierModelMaxTokens(supplier models.Snapshot) int {
+	item, ok := models.FindSupplierModel(supplier.Models, supplier.DefaultModel)
+	if !ok || item.MaxTokens <= 0 {
+		return models.DefaultSupplierModelMaxTokens
+	}
+	return item.MaxTokens
 }
 
 func configureUpstream(cfg *config.Config, supplier models.Snapshot) {

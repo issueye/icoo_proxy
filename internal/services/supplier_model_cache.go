@@ -19,7 +19,7 @@ type cachedSupplier struct {
 	name     string
 	protocol consts.Protocol
 	enabled  bool
-	models   map[string]string
+	models   map[string]models.SupplierModelItem
 	snapshot models.Snapshot
 }
 
@@ -44,33 +44,35 @@ func (c *SupplierModelCache) Rebuild(suppliers []models.Snapshot) error {
 		if supplierName == "" {
 			continue
 		}
+		modelItems := supplierModelItems(supplier)
 		entry := cachedSupplier{
 			name:     strings.TrimSpace(supplier.Name),
 			protocol: supplier.Protocol,
 			enabled:  supplier.IsEnabled,
-			models:   make(map[string]string, len(splitSupplierModels(supplier))),
+			models:   make(map[string]models.SupplierModelItem, len(modelItems)),
 			snapshot: supplier,
 		}
-		for _, rawModel := range splitSupplierModels(supplier) {
-			modelKey := normalizeCacheSegment(rawModel)
-			modelName := strings.TrimSpace(rawModel)
+		for _, item := range modelItems {
+			modelKey := normalizeCacheSegment(item.Name)
+			modelName := strings.TrimSpace(item.Name)
 			if modelKey == "" || modelName == "" {
 				continue
 			}
-			entry.models[modelKey] = modelName
+			entry.models[modelKey] = item
 			if !supplier.IsEnabled {
 				continue
 			}
-			qualifiedKey := buildQualifiedCacheKey(supplier.Name, rawModel)
+			qualifiedKey := buildQualifiedCacheKey(supplier.Name, modelName)
 			if qualifiedKey == "" {
 				continue
 			}
 			qualified[qualifiedKey] = models.Route{
-				Name:     strings.TrimSpace(supplier.Name) + "/" + modelName,
-				Upstream: supplier.Protocol,
-				Model:    modelName,
-				Source:   "qualified-supplier-model",
-				Supplier: supplier,
+				Name:             strings.TrimSpace(supplier.Name) + "/" + modelName,
+				Upstream:         supplier.Protocol,
+				Model:            modelName,
+				DefaultMaxTokens: item.MaxTokens,
+				Source:           "qualified-supplier-model",
+				Supplier:         supplier,
 			}
 		}
 		byName[supplierName] = entry
@@ -115,38 +117,32 @@ func (c *SupplierModelCache) ResolveBySupplierAndModel(supplierName, model strin
 	if !ok || !entry.enabled {
 		return models.Route{}, false
 	}
-	modelName, ok := entry.models[modelKey]
+	item, ok := entry.models[modelKey]
 	if !ok {
 		return models.Route{}, false
 	}
 	return models.Route{
-		Name:     entry.name + "/" + modelName,
-		Upstream: entry.protocol,
-		Model:    modelName,
-		Source:   "route-policy-supplier-model",
-		Supplier: entry.snapshot,
+		Name:             entry.name + "/" + item.Name,
+		Upstream:         entry.protocol,
+		Model:            item.Name,
+		DefaultMaxTokens: item.MaxTokens,
+		Source:           "route-policy-supplier-model",
+		Supplier:         entry.snapshot,
 	}, true
 }
 
-func splitSupplierModels(supplier models.Snapshot) []string {
-	models := make([]string, 0, len(supplier.Models)+1)
-	seen := make(map[string]struct{}, len(supplier.Models)+1)
-	appendModel := func(raw string) {
-		model := strings.TrimSpace(raw)
-		if model == "" {
-			return
+func supplierModelItems(supplier models.Snapshot) []models.SupplierModelItem {
+	items := make([]models.SupplierModelItem, 0, len(supplier.Models)+1)
+	items = append(items, supplier.Models...)
+	if strings.TrimSpace(supplier.DefaultModel) != "" {
+		if _, ok := models.FindSupplierModel(items, supplier.DefaultModel); !ok {
+			items = append(items, models.SupplierModelItem{
+				Name:      supplier.DefaultModel,
+				MaxTokens: models.DefaultSupplierModelMaxTokens,
+			})
 		}
-		if _, ok := seen[model]; ok {
-			return
-		}
-		seen[model] = struct{}{}
-		models = append(models, model)
 	}
-	for _, model := range supplier.Models {
-		appendModel(model)
-	}
-	appendModel(supplier.DefaultModel)
-	return models
+	return models.NormalizeSupplierModelItems(items)
 }
 
 func normalizeQualifiedModel(raw string) string {

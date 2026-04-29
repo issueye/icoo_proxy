@@ -49,7 +49,7 @@
       </UTable>
     </div>
 
-    <UTable :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed fixed-field="freeze" min-width="1480px"
+    <UTable :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed fixed-field="freeze" min-width="1640px"
       table-class="supplier-table" pagination pagination-mode="server" :page="store.page" :page-size="store.pageSize"
       :total="store.total" :page-size-options="[8, 20, 50]" @page-change="store.changePage">
       <template #empty>
@@ -86,15 +86,16 @@
       </template>
       <template #cell-user_agent="{ row }">
         <p v-if="row.user_agent" class="mt-0.5 table-meta table-cell-wrap">UA: {{ row.user_agent }}</p>
+        <span v-else class="table-meta">使用默认 UA</span>
       </template>
       <template #cell-key="{ row }">
         <UTag code size="xs">{{ row.api_key_masked || "未保存 API Key" }}</UTag>
       </template>
       <template #cell-models="{ row }">
         <div class="flex flex-wrap gap-1.5">
-          <UTag v-for="model in row.models || []" :key="model"
-            :variant="row.default_model === model ? 'success' : 'info'" size="xs">
-            {{ row.default_model === model ? `${model} · 默认` : model }}
+          <UTag v-for="model in row.models || []" :key="`${model.name}-${model.max_tokens}`"
+            :variant="row.default_model === model.name ? 'success' : 'info'" size="xs">
+            {{ row.default_model === model.name ? `${formatModelTag(model)} · 默认` : formatModelTag(model) }}
           </UTag>
           <span v-if="!(row.models || []).length" class="table-meta">无模型</span>
         </div>
@@ -192,12 +193,12 @@
     </UModal>
 
     <UModal v-model:open="modelModalOpen" :title="store.modelForm.id ? `管理模型 · ${store.modelForm.name}` : '管理模型'"
-      width="680px" @close="store.resetModelForm">
+      width="760px" @close="store.resetModelForm">
       <form id="model-form" class="space-y-3" @submit.prevent="submitModelEditor">
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-sm font-medium text-[#262626]">候选模型列表</p>
-            <p class="mt-0.5 text-[11px] text-[#8c8c8c]">默认模型必须来自当前候选模型列表。</p>
+            <p class="mt-0.5 text-[11px] text-[#8c8c8c]">默认模型必须来自当前候选模型列表，未填写 max_tokens 时会回退到 32768。</p>
           </div>
           <button type="button" class="btn btn-secondary px-2 py-1 text-xs"
             @click="addModelRow(store.modelForm.models)">
@@ -206,11 +207,18 @@
         </div>
 
         <div class="space-y-2">
-          <div v-for="(model, index) in store.modelForm.models" :key="index" class="flex items-center gap-2">
-            <input :value="model" class="field-input" :placeholder="index === 0 ? '例如：gpt-4.1-mini' : '继续添加模型'"
-              @input="updateModelRow(store.modelForm.models, index, $event.target.value)" />
+          <div v-for="(model, index) in store.modelForm.models" :key="index" class="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
+            <FieldLabel :label="`模型 ${index + 1}`">
+              <input :value="model.name" class="field-input" :placeholder="index === 0 ? '例如：gpt-4.1-mini' : '继续添加模型'"
+                @input="updateModelRow(store.modelForm.models, index, 'name', $event.target.value)" />
+            </FieldLabel>
+            <FieldLabel label="max_tokens">
+              <input :value="model.max_tokens" type="number" min="1" step="1" class="field-input"
+                placeholder="32768"
+                @input="updateModelRow(store.modelForm.models, index, 'max_tokens', $event.target.value)" />
+            </FieldLabel>
             <button type="button" class="btn btn-secondary shrink-0 px-2 py-2"
-              :disabled="store.modelForm.models.length === 1" @click="removeModelRow(store.modelForm.models, index)">
+              :disabled="store.modelForm.models.length === 1" @click="removeModelRow(store.modelForm, index)">
               删除
             </button>
           </div>
@@ -267,7 +275,6 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
 
 import FieldLabel from "../components/FieldLabel.vue";
-import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
@@ -277,6 +284,8 @@ import USelect from "../components/ued/USelect.vue";
 import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
+
+const DEFAULT_MODEL_MAX_TOKENS = 32768;
 
 const store = useSuppliersStore();
 const supplierModalOpen = ref(false);
@@ -324,18 +333,20 @@ const routeManagementColumns = [
 ];
 
 const supplierTableColumns = [
-  { key: "supplier", title: "供应商", width: "10%", freeze: "left" },
-  { key: "protocol", title: "协议 / 地址", width: "20%" },
-  { key: "address", title: "地址", width: "20%" },
-  { key: "user_agent", title: "User-Agent", width: "20%" },
-  { key: "health", title: "健康状态", width: "15%" },
+  { key: "supplier", title: "供应商", width: "12%", freeze: "left" },
+  { key: "protocol", title: "协议 / 地址", width: "12%" },
+  { key: "address", title: "地址", width: "18%" },
+  { key: "user_agent", title: "User-Agent", width: "14%" },
+  { key: "key", title: "API Key", width: "12%" },
+  { key: "models", title: "模型 / Max Tokens", width: "18%" },
+  { key: "health", title: "健康状态", width: "14%" },
   { key: "status", title: "状态", width: "5%", freeze: "right" },
 ];
 
 const supplierFormDefaultOptions = computed(() => [
   { label: "不设置默认模型", value: "" },
   ...store.form.models
-    .map((item) => String(item).trim())
+    .map((item) => getModelName(item))
     .filter(Boolean)
     .map((item) => ({ label: item, value: item })),
 ]);
@@ -343,10 +354,27 @@ const supplierFormDefaultOptions = computed(() => [
 const modelEditorDefaultOptions = computed(() => [
   { label: "不设置默认模型", value: "" },
   ...store.modelForm.models
-    .map((item) => String(item).trim())
+    .map((item) => getModelName(item))
     .filter(Boolean)
     .map((item) => ({ label: item, value: item })),
 ]);
+
+function getModelName(model) {
+  return String(model?.name || "").trim();
+}
+
+function getModelMaxTokens(model) {
+  const parsed = Number.parseInt(model?.max_tokens, 10);
+  return parsed > 0 ? parsed : DEFAULT_MODEL_MAX_TOKENS;
+}
+
+function formatModelTag(model) {
+  const name = getModelName(model);
+  if (!name) {
+    return `未命名模型 · ${getModelMaxTokens(model)}`;
+  }
+  return `${name} · ${getModelMaxTokens(model)}`;
+}
 
 function healthTone(record) {
   if (!record) {
@@ -359,13 +387,6 @@ function healthTone(record) {
     return "warning";
   }
   return "error";
-}
-
-function formatCheckedAt(value) {
-  if (!value) {
-    return "尚未检查";
-  }
-  return new Date(value).toLocaleString();
 }
 
 function openDeleteConfirm(item) {
@@ -410,18 +431,28 @@ function closeModelModal() {
 }
 
 function addModelRow(target) {
-  target.push("");
+  target.push({
+    name: "",
+    max_tokens: DEFAULT_MODEL_MAX_TOKENS,
+  });
 }
 
-function updateModelRow(target, index, value) {
-  target[index] = value;
-}
-
-function removeModelRow(target, index) {
-  if (target.length === 1) {
+function updateModelRow(target, index, field, value) {
+  if (!target[index]) {
     return;
   }
-  target.splice(index, 1);
+  target[index][field] = value;
+}
+
+function removeModelRow(form, index) {
+  if (form.models.length === 1) {
+    return;
+  }
+  const removed = form.models[index];
+  form.models.splice(index, 1);
+  if (removed?.name && form.default_model === removed.name) {
+    form.default_model = "";
+  }
 }
 
 async function submitSupplier() {

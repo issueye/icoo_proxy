@@ -14,6 +14,8 @@ const emptyForm = () => ({
   enabled: true,
 });
 
+const getModelName = (model) => String(model?.name || "").trim();
+
 export const useModelAliasesStore = defineStore("modelAliases", {
   state: () => ({
     loading: false,
@@ -55,11 +57,19 @@ export const useModelAliasesStore = defineStore("modelAliases", {
       if (!supplier || !supplier.models?.length) {
         return [];
       }
-      return supplier.models.map((model) => ({
-        label:
-          model === supplier.default_model ? `${model} (默认)` : model,
-        value: model,
-      }));
+      return supplier.models
+        .map((model) => {
+          const name = getModelName(model);
+          if (!name) {
+            return null;
+          }
+          return {
+            label:
+              name === supplier.default_model ? `${name} (默认)` : name,
+            value: name,
+          };
+        })
+        .filter(Boolean);
     },
   },
   actions: {
