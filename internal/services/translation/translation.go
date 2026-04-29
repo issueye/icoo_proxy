@@ -91,6 +91,13 @@ func ConvertResponse(downstream, upstream consts.Protocol, model string, body []
 	}
 }
 
+type chatReasoningPart struct {
+	Type      string `json:"type"`
+	Thinking  string `json:"thinking,omitempty"`
+	Signature string `json:"signature,omitempty"`
+	Data      string `json:"data,omitempty"`
+}
+
 const defaultResponsesReasoningEffort = "medium"
 
 func translateAnthropicToResponsesRequest(body []byte, model string) ([]byte, error) {
@@ -249,15 +256,19 @@ func translateResponsesToChatResponse(body []byte, model string) ([]byte, error)
 
 	content := extractResponsesText(payload)
 	toolCalls := extractResponsesFunctionCalls(payload["output"])
+	reasoning := extractResponsesReasoningContent(payload["output"])
 	message := map[string]interface{}{
 		"role":    "assistant",
 		"content": content,
+	}
+	if len(reasoning) > 0 {
+		message["reasoning"] = reasoning
 	}
 	finishReason := mapResponsesStatusToFinishReason(payload)
 	if len(toolCalls) > 0 {
 		message["tool_calls"] = toolCalls
 		finishReason = "tool_calls"
-		if content == "" {
+		if content == "" && len(reasoning) == 0 {
 			message["content"] = nil
 		}
 	}
@@ -381,14 +392,24 @@ func translateAnthropicToResponsesResponse(body []byte, model string) ([]byte, e
 	}
 
 	text := extractAnthropicText(payload["content"])
+	reasoning := extractAnthropicReasoningContent(payload["content"])
 	output := make([]map[string]interface{}, 0)
-	if text != "" {
-		output = append(output, map[string]interface{}{
-			"id":      "msg_proxy_1",
-			"type":    "message",
-			"role":    "assistant",
-			"content": []map[string]interface{}{{"type": "output_text", "text": text}},
-		})
+	if text != "" || len(reasoning) > 0 {
+		message := map[string]interface{}{
+			"id":   "msg_proxy_1",
+			"type": "message",
+			"role": "assistant",
+		}
+		if text != "" {
+			message["content"] = []map[string]interface{}{{"type": "output_text", "text": text}}
+		}
+		if len(reasoning) > 0 {
+			message["reasoning"] = reasoning
+		}
+		if _, ok := message["content"]; !ok {
+			message["content"] = []map[string]interface{}{}
+		}
+		output = append(output, message)
 	}
 	output = append(output, anthropicContentToResponsesFunctionCalls(payload["content"])...)
 	if len(output) == 0 {
@@ -478,6 +499,16 @@ func normalizeResponsesInput(raw interface{}) []map[string]interface{} {
 			if role == "" {
 				role = "user"
 			}
+			if role == "assistant" {
+				reasoning := extractAssistantReasoningFromMessage(item)
+				if len(reasoning) > 0 {
+					items = append(items, map[string]interface{}{
+						"role":    role,
+						"content": buildAnthropicAssistantContent(item["content"], reasoning),
+					})
+					continue
+				}
+			}
 			items = append(items, map[string]interface{}{
 				"role":    role,
 				"content": normalizeMessageContent(item["content"]),
@@ -532,10 +563,16 @@ func normalizeResponsesInputToChatMessages(raw interface{}) []map[string]interfa
 				if role == "" {
 					role = "user"
 				}
-				items = append(items, map[string]interface{}{
+				message := map[string]interface{}{
 					"role":    role,
 					"content": normalizeMessageContent(item["content"]),
-				})
+				}
+				if role == "assistant" {
+					if reasoning := extractResponsesReasoningContent([]interface{}{item}); len(reasoning) > 0 {
+						message["reasoning"] = reasoning
+					}
+				}
+				items = append(items, message)
 			}
 		}
 		return items
@@ -558,11 +595,30 @@ func chatMessageToResponsesInput(msg map[string]interface{}) []map[string]interf
 	}
 
 	items := make([]map[string]interface{}, 0)
-	if content := contentToText(msg["content"]); content != "" {
-		items = append(items, map[string]interface{}{
-			"role":    role,
-			"content": content,
-		})
+	content := normalizeMessageContent(msg["content"])
+	assistantContentHandled := false
+	if role == "assistant" {
+		reasoning := normalizeChatReasoning(msg["reasoning"])
+		if len(reasoning) > 0 {
+			assistantMessage := map[string]interface{}{
+				"role":      role,
+				"content":   content,
+				"reasoning": reasoning,
+			}
+			if content == nil {
+				assistantMessage["content"] = ""
+			}
+			items = append(items, assistantMessage)
+			assistantContentHandled = true
+		}
+	}
+	if !assistantContentHandled {
+		if content := contentToText(content); content != "" {
+			items = append(items, map[string]interface{}{
+				"role":    role,
+				"content": content,
+			})
+		}
 	}
 	if role == "assistant" {
 		toolCalls, _ := msg["tool_calls"].([]interface{})
@@ -583,7 +639,7 @@ func chatMessageToResponsesInput(msg map[string]interface{}) []map[string]interf
 	if len(items) == 0 {
 		items = append(items, map[string]interface{}{
 			"role":    role,
-			"content": normalizeMessageContent(msg["content"]),
+			"content": content,
 		})
 	}
 	return items
@@ -663,6 +719,7 @@ func normalizeMessageContent(raw interface{}) interface{} {
 func anthropicAssistantContentToResponsesInput(content []interface{}) []map[string]interface{} {
 	items := make([]map[string]interface{}, 0)
 	textParts := make([]string, 0)
+	reasoning := make([]map[string]interface{}, 0)
 	for _, rawPart := range content {
 		part, ok := rawPart.(map[string]interface{})
 		if !ok {
@@ -674,6 +731,17 @@ func anthropicAssistantContentToResponsesInput(content []interface{}) []map[stri
 			if text, ok := part["text"].(string); ok && text != "" {
 				textParts = append(textParts, text)
 			}
+		case "thinking":
+			reasoning = append(reasoning, map[string]interface{}{
+				"type":      "thinking",
+				"thinking":  stringValue(part["thinking"], ""),
+				"signature": stringValue(part["signature"], ""),
+			})
+		case "redacted_thinking":
+			reasoning = append(reasoning, map[string]interface{}{
+				"type": "redacted_thinking",
+				"data": stringValue(part["data"], ""),
+			})
 		case "tool_use":
 			items = append(items, map[string]interface{}{
 				"type":      "function_call",
@@ -683,11 +751,15 @@ func anthropicAssistantContentToResponsesInput(content []interface{}) []map[stri
 			})
 		}
 	}
-	if len(textParts) > 0 {
-		items = append([]map[string]interface{}{{
+	if len(textParts) > 0 || len(reasoning) > 0 {
+		message := map[string]interface{}{
 			"role":    "assistant",
 			"content": strings.Join(textParts, "\n"),
-		}}, items...)
+		}
+		if len(reasoning) > 0 {
+			message["reasoning"] = reasoning
+		}
+		items = append([]map[string]interface{}{message}, items...)
 	}
 	return items
 }
@@ -827,6 +899,172 @@ func anthropicContentToResponsesFunctionCalls(raw interface{}) []map[string]inte
 		})
 	}
 	return result
+}
+
+func extractResponsesReasoningContent(raw interface{}) []map[string]interface{} {
+	items, _ := raw.([]interface{})
+	result := make([]map[string]interface{}, 0)
+	for _, rawItem := range items {
+		item, ok := rawItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		reasoning, _ := item["reasoning"].([]interface{})
+		for _, rawPart := range reasoning {
+			part, ok := rawPart.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			partType := stringValue(part["type"], "")
+			switch partType {
+			case "thinking":
+				result = append(result, map[string]interface{}{
+					"type":      "thinking",
+					"thinking":  stringValue(part["thinking"], ""),
+					"signature": stringValue(part["signature"], ""),
+				})
+			case "redacted_thinking":
+				result = append(result, map[string]interface{}{
+					"type": "redacted_thinking",
+					"data": stringValue(part["data"], ""),
+				})
+			}
+		}
+	}
+	return result
+}
+
+func extractAnthropicReasoningContent(raw interface{}) []map[string]interface{} {
+	parts, _ := raw.([]interface{})
+	result := make([]map[string]interface{}, 0)
+	for _, rawPart := range parts {
+		part, ok := rawPart.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		switch stringValue(part["type"], "") {
+		case "thinking":
+			result = append(result, map[string]interface{}{
+				"type":      "thinking",
+				"thinking":  stringValue(part["thinking"], ""),
+				"signature": stringValue(part["signature"], ""),
+			})
+		case "redacted_thinking":
+			result = append(result, map[string]interface{}{
+				"type": "redacted_thinking",
+				"data": stringValue(part["data"], ""),
+			})
+		}
+	}
+	return result
+}
+
+func extractAssistantReasoningFromMessage(message map[string]interface{}) []chatReasoningPart {
+	rawParts, _ := message["reasoning"].([]interface{})
+	parts := make([]chatReasoningPart, 0, len(rawParts))
+	for _, rawPart := range rawParts {
+		part, ok := rawPart.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		typeName := stringValue(part["type"], "")
+		switch typeName {
+		case "thinking":
+			parts = append(parts, chatReasoningPart{
+				Type:      "thinking",
+				Thinking:  stringValue(part["thinking"], ""),
+				Signature: stringValue(part["signature"], ""),
+			})
+		case "redacted_thinking":
+			parts = append(parts, chatReasoningPart{
+				Type: "redacted_thinking",
+				Data: stringValue(part["data"], ""),
+			})
+		}
+	}
+	return parts
+}
+
+func normalizeChatReasoning(raw interface{}) []chatReasoningPart {
+	switch value := raw.(type) {
+	case []chatReasoningPart:
+		return value
+	case []interface{}:
+		parts := make([]chatReasoningPart, 0, len(value))
+		for _, rawPart := range value {
+			part, ok := rawPart.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			typeName := stringValue(part["type"], "")
+			switch typeName {
+			case "thinking":
+				parts = append(parts, chatReasoningPart{
+					Type:      "thinking",
+					Thinking:  stringValue(part["thinking"], ""),
+					Signature: stringValue(part["signature"], ""),
+				})
+			case "redacted_thinking":
+				parts = append(parts, chatReasoningPart{
+					Type: "redacted_thinking",
+					Data: stringValue(part["data"], ""),
+				})
+			}
+		}
+		return parts
+	default:
+		return nil
+	}
+}
+
+func buildAnthropicAssistantContent(rawContent interface{}, reasoning []chatReasoningPart) []map[string]interface{} {
+	content := make([]map[string]interface{}, 0, len(reasoning)+1)
+	for _, part := range reasoning {
+		switch part.Type {
+		case "thinking":
+			content = append(content, map[string]interface{}{
+				"type":      "thinking",
+				"thinking":  part.Thinking,
+				"signature": part.Signature,
+			})
+		case "redacted_thinking":
+			content = append(content, map[string]interface{}{
+				"type": "redacted_thinking",
+				"data": part.Data,
+			})
+		}
+	}
+	if text := contentToText(rawContent); text != "" {
+		content = append(content, map[string]interface{}{
+			"type": "text",
+			"text": text,
+		})
+		return content
+	}
+	if normalized, ok := normalizeMessageContent(rawContent).([]interface{}); ok {
+		for _, rawPart := range normalized {
+			part, ok := rawPart.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if stringValue(part["type"], "") == "text" || stringValue(part["type"], "") == "input_text" || stringValue(part["type"], "") == "output_text" {
+				content = append(content, map[string]interface{}{
+					"type": "text",
+					"text": stringValue(part["text"], ""),
+				})
+			}
+		}
+	}
+	return content
+}
+
+func appendAnthropicContentPart(message map[string]interface{}, part map[string]interface{}) {
+	if message == nil || part == nil {
+		return
+	}
+	existing, _ := message["content"].([]map[string]interface{})
+	existing = append(existing, part)
+	message["content"] = existing
 }
 
 func extractAnthropicText(raw interface{}) string {
