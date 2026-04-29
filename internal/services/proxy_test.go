@@ -44,6 +44,49 @@ func TestProxyRequestContextViewIncludesEndpoint(t *testing.T) {
 	}
 }
 
+func TestUpstreamErrorMessage(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       []byte
+		want       string
+	}{
+		{
+			name:       "openai nested error message",
+			statusCode: 429,
+			body:       []byte(`{"error":{"message":"rate limit exceeded"}}`),
+			want:       "upstream returned error (429): rate limit exceeded",
+		},
+		{
+			name:       "top level anthropic style message",
+			statusCode: 400,
+			body:       []byte(`{"type":"error","message":"prompt is too long"}`),
+			want:       "upstream returned error (400): prompt is too long",
+		},
+		{
+			name:       "detail fallback",
+			statusCode: 503,
+			body:       []byte(`{"error":{"detail":"upstream unavailable"}}`),
+			want:       "upstream returned error (503): upstream unavailable",
+		},
+		{
+			name:       "invalid json fallback",
+			statusCode: 500,
+			body:       []byte(`not-json`),
+			want:       "upstream returned error (500)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := upstreamErrorMessage(tt.statusCode, tt.body)
+			if got != tt.want {
+				t.Fatalf("upstreamErrorMessage() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestProxyUsesRouteScopedSupplierForUpstreamRequest(t *testing.T) {
 	service := New(config.Config{
 		OpenAIRResponsesConfig: &config.OpenAIRResponsesConfig{

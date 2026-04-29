@@ -440,6 +440,7 @@ func (s *ProxyService) handleCrossProtocolJSON(w http.ResponseWriter, resp *http
 		return
 	}
 	s.logJSONUpstreamResponse(resp, upstreamBody, ctx)
+	ctx.usage = translation.ExtractUsage(ctx.route.Upstream, upstreamBody)
 	if resp.StatusCode >= 400 {
 		s.writeUpstreamError(w, resp, upstreamBody, ctx)
 		return
@@ -475,7 +476,44 @@ func (s *ProxyService) writeUpstreamError(w http.ResponseWriter, resp *http.Resp
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
 	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(body), ctx)
-	s.logRequest(ctx.view(resp.StatusCode, "upstream returned error", ctx.usage))
+	s.logRequest(ctx.view(resp.StatusCode, upstreamErrorMessage(resp.StatusCode, body), ctx.usage))
+}
+
+func upstreamErrorMessage(statusCode int, body []byte) string {
+	message := extractUpstreamErrorMessage(body)
+	if message == "" {
+		return fmt.Sprintf("upstream returned error (%d)", statusCode)
+	}
+	return fmt.Sprintf("upstream returned error (%d): %s", statusCode, message)
+}
+
+func extractUpstreamErrorMessage(body []byte) string {
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	if message := extractMessageField(payload["error"]); message != "" {
+		return message
+	}
+	if message := extractMessageField(payload); message != "" {
+		return message
+	}
+	return ""
+}
+
+func extractMessageField(raw interface{}) string {
+	switch value := raw.(type) {
+	case map[string]interface{}:
+		if message, ok := value["message"].(string); ok {
+			return strings.TrimSpace(message)
+		}
+		if detail, ok := value["detail"].(string); ok {
+			return strings.TrimSpace(detail)
+		}
+	case string:
+		return strings.TrimSpace(value)
+	}
+	return ""
 }
 
 // logEventStreamUpstreamResponse 记录上游事件流响应元信息，避免捕获大体积流式内容。

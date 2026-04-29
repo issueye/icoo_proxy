@@ -119,14 +119,14 @@ func translateResponsesToAnthropicRequest(body []byte, model string) ([]byte, er
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("invalid json body")
 	}
-	if stream, _ := payload["stream"].(bool); stream {
-		return nil, fmt.Errorf("streaming cross protocol translation is not implemented yet")
-	}
 
 	request := map[string]interface{}{
 		"model":      model,
 		"messages":   normalizeResponsesInput(payload["input"]),
 		"max_tokens": intValue(payload["max_output_tokens"]),
+	}
+	if stream, _ := payload["stream"].(bool); stream {
+		request["stream"] = true
 	}
 	if instructions, ok := payload["instructions"].(string); ok && strings.TrimSpace(instructions) != "" {
 		request["system"] = instructions
