@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"icoo_proxy/internal/consts"
 	"icoo_proxy/internal/models"
+	anthropicmodel "icoo_proxy/internal/models/anthropic"
+	openaichatmodel "icoo_proxy/internal/models/openai_chat"
+	openairesponsesmodel "icoo_proxy/internal/models/openai_responses"
 	"strings"
 	"time"
 )
@@ -100,59 +103,294 @@ type chatReasoningPart struct {
 
 const defaultResponsesReasoningEffort = "medium"
 
-func translateAnthropicToResponsesRequest(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
+type anthropicRequestEnvelope struct {
+	Typed anthropicmodel.RequestMessagesRequest
+}
+
+type anthropicResponseEnvelope struct {
+	Typed    anthropicmodel.ResponseBody
+	HasUsage bool
+}
+
+type openAIChatRequestEnvelope struct {
+	Typed               openaichatmodel.ReqeustBody
+	MaxTokens           *int
+	MaxCompletionTokens *int
+}
+
+type openAIChatResponseEnvelope struct {
+	Typed    openaichatmodel.Response
+	HasUsage bool
+}
+
+type openAIResponsesRequestEnvelope struct {
+	Typed           openairesponsesmodel.RequestBody
+	MaxOutputTokens *int
+}
+
+type openAIResponsesResponseEnvelope struct {
+	Typed    openairesponsesmodel.ResponseBody
+	HasUsage bool
+}
+
+func decodeAnthropicRequest(body []byte) (*anthropicRequestEnvelope, error) {
+	var typed anthropicmodel.RequestMessagesRequest
+	if err := json.Unmarshal(body, &typed); err != nil {
 		return nil, fmt.Errorf("invalid json body")
 	}
+	return &anthropicRequestEnvelope{Typed: typed}, nil
+}
 
-	messages, _ := payload["messages"].([]interface{})
+func decodeAnthropicResponse(body []byte) (*anthropicResponseEnvelope, error) {
+	var typed anthropicmodel.ResponseBody
+	if err := json.Unmarshal(body, &typed); err != nil {
+		return nil, fmt.Errorf("invalid upstream json body")
+	}
+	var presence struct {
+		Usage *json.RawMessage `json:"usage,omitempty"`
+	}
+	_ = json.Unmarshal(body, &presence)
+	return &anthropicResponseEnvelope{
+		Typed:    typed,
+		HasUsage: presence.Usage != nil,
+	}, nil
+}
+
+func decodeOpenAIChatRequest(body []byte) (*openAIChatRequestEnvelope, error) {
+	var typed openaichatmodel.ReqeustBody
+	if err := json.Unmarshal(body, &typed); err != nil {
+		return nil, fmt.Errorf("invalid json body")
+	}
+	var raw struct {
+		MaxTokens           *int `json:"max_tokens,omitempty"`
+		MaxCompletionTokens *int `json:"max_completion_tokens,omitempty"`
+	}
+	_ = json.Unmarshal(body, &raw)
+	return &openAIChatRequestEnvelope{
+		Typed:               typed,
+		MaxTokens:           raw.MaxTokens,
+		MaxCompletionTokens: raw.MaxCompletionTokens,
+	}, nil
+}
+
+func decodeOpenAIChatResponse(body []byte) (*openAIChatResponseEnvelope, error) {
+	var typed openaichatmodel.Response
+	if err := json.Unmarshal(body, &typed); err != nil {
+		return nil, fmt.Errorf("invalid upstream json body")
+	}
+	var presence struct {
+		Usage *json.RawMessage `json:"usage,omitempty"`
+	}
+	_ = json.Unmarshal(body, &presence)
+	return &openAIChatResponseEnvelope{
+		Typed:    typed,
+		HasUsage: presence.Usage != nil,
+	}, nil
+}
+
+func decodeOpenAIResponsesRequest(body []byte) (*openAIResponsesRequestEnvelope, error) {
+	var typed openairesponsesmodel.RequestBody
+	if err := json.Unmarshal(body, &typed); err != nil {
+		return nil, fmt.Errorf("invalid json body")
+	}
+	var raw struct {
+		MaxOutputTokens *int `json:"max_output_tokens,omitempty"`
+	}
+	_ = json.Unmarshal(body, &raw)
+	return &openAIResponsesRequestEnvelope{
+		Typed:           typed,
+		MaxOutputTokens: raw.MaxOutputTokens,
+	}, nil
+}
+
+func decodeOpenAIResponsesResponse(body []byte) (*openAIResponsesResponseEnvelope, error) {
+	var typed openairesponsesmodel.ResponseBody
+	if err := json.Unmarshal(body, &typed); err != nil {
+		return nil, fmt.Errorf("invalid upstream json body")
+	}
+	var presence struct {
+		Usage *json.RawMessage `json:"usage,omitempty"`
+	}
+	_ = json.Unmarshal(body, &presence)
+	return &openAIResponsesResponseEnvelope{
+		Typed:    typed,
+		HasUsage: presence.Usage != nil,
+	}, nil
+}
+
+func responseRequestToMap(payload *openAIResponsesRequestEnvelope) map[string]interface{} {
+	result := map[string]interface{}{}
+	if payload.MaxOutputTokens != nil {
+		result["max_output_tokens"] = *payload.MaxOutputTokens
+	} else {
+		appendIfNotEmpty(result, "max_output_tokens", payload.Typed.MaxOutputTokens)
+	}
+	return result
+}
+
+func responsesResponseToMap(payload *openAIResponsesResponseEnvelope) map[string]interface{} {
+	result := map[string]interface{}{}
+	appendIfNotEmpty(result, "id", payload.Typed.ID)
+	appendIfNotEmpty(result, "status", payload.Typed.Status.ToString())
+	if output := toJSONArray(payload.Typed.Output); len(output) > 0 {
+		result["output"] = output
+	}
+	if payload.HasUsage {
+		result["usage"] = responsesUsageToMap(payload.Typed.Usage)
+	}
+	return result
+}
+
+func toInterfacesFromObjectMaps(items []map[string]interface{}) []interface{} {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		result = append(result, item)
+	}
+	return result
+}
+
+func toJSONValue(value interface{}) interface{} {
+	if value == nil {
+		return nil
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	var decoded interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return nil
+	}
+	return decoded
+}
+
+func toJSONArray(value interface{}) []interface{} {
+	items, _ := toJSONValue(value).([]interface{})
+	return items
+}
+
+func toJSONObject(value interface{}) map[string]interface{} {
+	object, _ := toJSONValue(value).(map[string]interface{})
+	return object
+}
+
+func chatUsageToMap(usage openaichatmodel.ResponseUsage) map[string]interface{} {
+	return toJSONObject(usage)
+}
+
+func responsesUsageToMap(usage openairesponsesmodel.ResponseUsage) map[string]interface{} {
+	return toJSONObject(usage)
+}
+
+func anthropicUsageToMap(usage anthropicmodel.ResponseUsage) map[string]interface{} {
+	return toJSONObject(usage)
+}
+
+func appendIfNotEmpty(target map[string]interface{}, key string, value interface{}) {
+	switch v := value.(type) {
+	case nil:
+		return
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return
+		}
+	case int:
+		if v == 0 {
+			return
+		}
+	case int64:
+		if v == 0 {
+			return
+		}
+	case float64:
+		if v == 0 {
+			return
+		}
+	case bool:
+		if !v {
+			return
+		}
+	case []map[string]interface{}:
+		if len(v) == 0 {
+			return
+		}
+	case []interface{}:
+		if len(v) == 0 {
+			return
+		}
+	case map[string]interface{}:
+		if len(v) == 0 {
+			return
+		}
+	}
+	target[key] = value
+}
+
+func translateAnthropicToResponsesRequest(body []byte, model string) ([]byte, error) {
+	payload, err := decodeAnthropicRequest(body)
+	if err != nil {
+		return nil, err
+	}
+	typed := payload.Typed
+
+	messages := toJSONArray(typed.Messages)
 	request := map[string]interface{}{
 		"model": model,
 		"input": normalizeAnthropicMessages(messages),
 	}
-	if stream, _ := payload["stream"].(bool); stream {
+	if typed.Stream {
 		request["stream"] = true
 	}
-	if system := anthropicSystemToInstructions(payload["system"]); system != "" {
+	if system := anthropicSystemToInstructions(toJSONValue(typed.System)); system != "" {
 		request["instructions"] = system
 	}
-	copyIfExists(payload, request, "temperature", "top_p")
-	if value, ok := payload["max_tokens"]; ok {
-		request["max_output_tokens"] = value
+	if typed.Temperature != nil {
+		request["temperature"] = *typed.Temperature
 	}
-	if value, ok := payload["tools"]; ok {
-		request["tools"] = anthropicToolsToResponsesTools(value)
+	if typed.TopP != nil {
+		request["top_p"] = *typed.TopP
+	}
+	if typed.MaxTokens > 0 {
+		request["max_output_tokens"] = typed.MaxTokens
+	}
+	if len(typed.Tools) > 0 {
+		request["tools"] = anthropicToolsToResponsesTools(toJSONArray(typed.Tools))
 	}
 	ApplyDefaultResponsesReasoning(defaultResponsesReasoningEffort, request)
 	return json.Marshal(request)
 }
 
 func translateResponsesToAnthropicRequest(body []byte, model string, defaultMaxTokens int) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid json body")
+	payload, err := decodeOpenAIResponsesRequest(body)
+	if err != nil {
+		return nil, err
 	}
+	typed := payload.Typed
 
-	maxTokens, err := resolveAnthropicMaxTokens(payload, defaultMaxTokens, "max_output_tokens")
+	maxTokens, err := resolveAnthropicMaxTokens(responseRequestToMap(payload), defaultMaxTokens, "max_output_tokens")
 	if err != nil {
 		return nil, err
 	}
 
 	request := map[string]interface{}{
 		"model":      model,
-		"messages":   normalizeResponsesInput(payload["input"]),
+		"messages":   normalizeResponsesInput(toJSONValue(typed.Input)),
 		"max_tokens": maxTokens,
 	}
-	if stream, _ := payload["stream"].(bool); stream {
+	if typed.Stream {
 		request["stream"] = true
 	}
-	if instructions, ok := payload["instructions"].(string); ok && strings.TrimSpace(instructions) != "" {
+	instructions := typed.Instructions
+	if strings.TrimSpace(instructions) != "" {
 		request["system"] = instructions
 	}
-	copyIfExists(payload, request, "temperature", "top_p")
-	if value, ok := payload["tools"]; ok {
-		request["tools"] = responsesToolsToAnthropicTools(value)
+	appendIfNotEmpty(request, "temperature", typed.Temperature)
+	appendIfNotEmpty(request, "top_p", typed.TopP)
+	if len(typed.Tools) > 0 {
+		request["tools"] = responsesToolsToAnthropicTools(toJSONArray(typed.Tools))
 	}
 	return json.Marshal(request)
 }
@@ -174,13 +412,13 @@ func translateChatToAnthropicRequest(body []byte, model string, defaultMaxTokens
 }
 
 func translateChatToResponsesRequest(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid json body")
+	payload, err := decodeOpenAIChatRequest(body)
+	if err != nil {
+		return nil, err
 	}
+	typed := payload.Typed
 
-	stream, _ := payload["stream"].(bool)
-	messages, _ := payload["messages"].([]interface{})
+	messages := toJSONArray(typed.Messages)
 	instructions := collectSystemMessages(messages)
 	input := make([]map[string]interface{}, 0, len(messages))
 	for _, raw := range messages {
@@ -199,38 +437,52 @@ func translateChatToResponsesRequest(body []byte, model string) ([]byte, error) 
 		"model": model,
 		"input": input,
 	}
-	if stream {
+	if typed.Stream {
 		request["stream"] = true
 	}
 	if instructions != "" {
 		request["instructions"] = instructions
 	}
-	copyIfExists(payload, request, "temperature", "top_p", "tool_choice")
-	copyFirstIfExists(payload, request, "max_output_tokens", "max_completion_tokens", "max_tokens")
-	if value, ok := payload["tools"]; ok {
-		request["tools"] = chatToolsToResponsesTools(value)
+	appendIfNotEmpty(request, "temperature", typed.Temperature)
+	appendIfNotEmpty(request, "top_p", typed.TopP)
+	if typed.ToolChoice != nil {
+		request["tool_choice"] = toJSONValue(typed.ToolChoice)
+	}
+	if payload.MaxCompletionTokens != nil {
+		request["max_output_tokens"] = *payload.MaxCompletionTokens
+	} else if payload.MaxTokens != nil {
+		request["max_output_tokens"] = *payload.MaxTokens
+	} else if typed.MaxCompletionTokens > 0 {
+		request["max_output_tokens"] = typed.MaxCompletionTokens
+	} else if typed.MaxTokens > 0 {
+		request["max_output_tokens"] = typed.MaxTokens
+	}
+	if len(typed.Tools) > 0 {
+		request["tools"] = chatToolsToResponsesTools(toJSONArray(typed.Tools))
 	}
 	ApplyDefaultResponsesReasoning(defaultResponsesReasoningEffort, request)
 	return json.Marshal(request)
 }
 
 func translateResponsesToChatRequest(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid json body")
+	payload, err := decodeOpenAIResponsesRequest(body)
+	if err != nil {
+		return nil, err
 	}
-	if stream, _ := payload["stream"].(bool); stream {
+	typed := payload.Typed
+	if typed.Stream {
 		return nil, fmt.Errorf("streaming cross protocol translation is not implemented yet")
 	}
 
 	messages := make([]map[string]interface{}, 0)
-	if instructions, ok := payload["instructions"].(string); ok && strings.TrimSpace(instructions) != "" {
+	instructions := typed.Instructions
+	if strings.TrimSpace(instructions) != "" {
 		messages = append(messages, map[string]interface{}{
 			"role":    "system",
 			"content": instructions,
 		})
 	}
-	for _, item := range normalizeResponsesInputToChatMessages(payload["input"]) {
+	for _, item := range normalizeResponsesInputToChatMessages(toJSONValue(typed.Input)) {
 		messages = append(messages, item)
 	}
 
@@ -238,25 +490,32 @@ func translateResponsesToChatRequest(body []byte, model string) ([]byte, error) 
 		"model":    model,
 		"messages": messages,
 	}
-	copyIfExists(payload, request, "temperature", "top_p", "tool_choice")
-	if value, ok := payload["max_output_tokens"]; ok {
-		request["max_tokens"] = value
+	appendIfNotEmpty(request, "temperature", typed.Temperature)
+	appendIfNotEmpty(request, "top_p", typed.TopP)
+	if typed.ToolChoice != nil {
+		request["tool_choice"] = toJSONValue(typed.ToolChoice)
 	}
-	if value, ok := payload["tools"]; ok {
-		request["tools"] = responsesToolsToChatTools(value)
+	if typed.MaxOutputTokens > 0 {
+		request["max_tokens"] = typed.MaxOutputTokens
+	}
+	if len(typed.Tools) > 0 {
+		request["tools"] = responsesToolsToChatTools(toJSONArray(typed.Tools))
 	}
 	return json.Marshal(request)
 }
 
 func translateResponsesToChatResponse(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid upstream json body")
+	payload, err := decodeOpenAIResponsesResponse(body)
+	if err != nil {
+		return nil, err
 	}
+	typed := payload.Typed
 
-	content := extractResponsesText(payload)
-	toolCalls := extractResponsesFunctionCalls(payload["output"])
-	reasoning := extractResponsesReasoningContent(payload["output"])
+	payloadMap := responsesResponseToMap(payload)
+	output := toJSONArray(typed.Output)
+	content := extractResponsesText(payloadMap)
+	toolCalls := extractResponsesFunctionCalls(output)
+	reasoning := extractResponsesReasoningContent(output)
 	message := map[string]interface{}{
 		"role":    "assistant",
 		"content": content,
@@ -264,7 +523,7 @@ func translateResponsesToChatResponse(body []byte, model string) ([]byte, error)
 	if len(reasoning) > 0 {
 		message["reasoning"] = reasoning
 	}
-	finishReason := mapResponsesStatusToFinishReason(payload)
+	finishReason := mapResponsesStatusToFinishReason(payloadMap)
 	if len(toolCalls) > 0 {
 		message["tool_calls"] = toolCalls
 		finishReason = "tool_calls"
@@ -273,7 +532,7 @@ func translateResponsesToChatResponse(body []byte, model string) ([]byte, error)
 		}
 	}
 	response := map[string]interface{}{
-		"id":      stringValue(payload["id"], "chatcmpl-proxy"),
+		"id":      stringValue(typed.ID, "chatcmpl-proxy"),
 		"object":  "chat.completion",
 		"created": time.Now().Unix(),
 		"model":   model,
@@ -285,19 +544,21 @@ func translateResponsesToChatResponse(body []byte, model string) ([]byte, error)
 			},
 		},
 	}
-	if usage, ok := payload["usage"]; ok {
-		response["usage"] = mapUsageToChat(usage)
+	if payload.HasUsage {
+		response["usage"] = mapUsageToChat(responsesUsageToMap(typed.Usage))
 	}
 	return json.Marshal(response)
 }
 
 func translateChatToResponsesResponse(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid upstream json body")
+	payload, err := decodeOpenAIChatResponse(body)
+	if err != nil {
+		return nil, err
 	}
+	typed := payload.Typed
 
-	text := extractChatAssistantText(payload["choices"])
+	choices := toJSONArray(typed.Choices)
+	text := extractChatAssistantText(choices)
 	output := make([]map[string]interface{}, 0)
 	if text != "" {
 		output = append(output, map[string]interface{}{
@@ -309,7 +570,7 @@ func translateChatToResponsesResponse(body []byte, model string) ([]byte, error)
 			},
 		})
 	}
-	output = append(output, chatChoicesToResponsesFunctionCalls(payload["choices"])...)
+	output = append(output, chatChoicesToResponsesFunctionCalls(choices)...)
 	status := "completed"
 	if len(output) == 0 {
 		output = append(output, map[string]interface{}{
@@ -320,14 +581,14 @@ func translateChatToResponsesResponse(body []byte, model string) ([]byte, error)
 		})
 	}
 	response := map[string]interface{}{
-		"id":     stringValue(payload["id"], "resp-proxy"),
+		"id":     stringValue(typed.ID, "resp-proxy"),
 		"object": "response",
 		"model":  model,
 		"status": status,
 		"output": output,
 	}
-	if usage, ok := payload["usage"]; ok {
-		response["usage"] = mapUsageToResponses(usage)
+	if payload.HasUsage {
+		response["usage"] = mapUsageToResponses(chatUsageToMap(typed.Usage))
 	}
 	return json.Marshal(response)
 }
@@ -349,12 +610,15 @@ func translateChatToAnthropicResponse(body []byte, model string) ([]byte, error)
 }
 
 func translateResponsesToAnthropicResponse(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid upstream json body")
+	payload, err := decodeOpenAIResponsesResponse(body)
+	if err != nil {
+		return nil, err
 	}
+	typed := payload.Typed
 
-	text := extractResponsesText(payload)
+	payloadMap := responsesResponseToMap(payload)
+	output := toJSONArray(typed.Output)
+	text := extractResponsesText(payloadMap)
 	content := make([]map[string]interface{}, 0)
 	if text != "" {
 		content = append(content, map[string]interface{}{
@@ -362,8 +626,8 @@ func translateResponsesToAnthropicResponse(body []byte, model string) ([]byte, e
 			"text": text,
 		})
 	}
-	content = append(content, responsesOutputToAnthropicToolUse(payload["output"])...)
-	stopReason := mapResponsesStatusToAnthropicStopReason(payload)
+	content = append(content, responsesOutputToAnthropicToolUse(output)...)
+	stopReason := mapResponsesStatusToAnthropicStopReason(payloadMap)
 	if len(content) == 0 {
 		content = append(content, map[string]interface{}{"type": "text", "text": ""})
 	}
@@ -371,7 +635,7 @@ func translateResponsesToAnthropicResponse(body []byte, model string) ([]byte, e
 		stopReason = "tool_use"
 	}
 	response := map[string]interface{}{
-		"id":            stringValue(payload["id"], "msg_proxy"),
+		"id":            stringValue(typed.ID, "msg_proxy"),
 		"type":          "message",
 		"role":          "assistant",
 		"model":         model,
@@ -379,20 +643,22 @@ func translateResponsesToAnthropicResponse(body []byte, model string) ([]byte, e
 		"stop_sequence": nil,
 		"content":       content,
 	}
-	if usage, ok := payload["usage"]; ok {
-		response["usage"] = mapUsageToAnthropic(usage)
+	if payload.HasUsage {
+		response["usage"] = mapUsageToAnthropic(responsesUsageToMap(typed.Usage))
 	}
 	return json.Marshal(response)
 }
 
 func translateAnthropicToResponsesResponse(body []byte, model string) ([]byte, error) {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("invalid upstream json body")
+	payload, err := decodeAnthropicResponse(body)
+	if err != nil {
+		return nil, err
 	}
+	typed := payload.Typed
 
-	text := extractAnthropicText(payload["content"])
-	reasoning := extractAnthropicReasoningContent(payload["content"])
+	contentItems := toJSONArray(typed.Content)
+	text := extractAnthropicText(contentItems)
+	reasoning := extractAnthropicReasoningContent(contentItems)
 	output := make([]map[string]interface{}, 0)
 	if text != "" || len(reasoning) > 0 {
 		message := map[string]interface{}{
@@ -411,7 +677,7 @@ func translateAnthropicToResponsesResponse(body []byte, model string) ([]byte, e
 		}
 		output = append(output, message)
 	}
-	output = append(output, anthropicContentToResponsesFunctionCalls(payload["content"])...)
+	output = append(output, anthropicContentToResponsesFunctionCalls(contentItems)...)
 	if len(output) == 0 {
 		output = append(output, map[string]interface{}{
 			"id":      "msg_proxy_1",
@@ -421,14 +687,14 @@ func translateAnthropicToResponsesResponse(body []byte, model string) ([]byte, e
 		})
 	}
 	response := map[string]interface{}{
-		"id":     stringValue(payload["id"], "resp-proxy"),
+		"id":     stringValue(typed.ID, "resp-proxy"),
 		"object": "response",
 		"model":  model,
 		"status": "completed",
 		"output": output,
 	}
-	if usage, ok := payload["usage"]; ok {
-		response["usage"] = mapAnthropicUsageToResponses(usage)
+	if payload.HasUsage {
+		response["usage"] = mapAnthropicUsageToResponses(anthropicUsageToMap(typed.Usage))
 	}
 	return json.Marshal(response)
 }
@@ -1234,23 +1500,6 @@ func stringValue(raw interface{}, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func copyIfExists(from, to map[string]interface{}, keys ...string) {
-	for _, key := range keys {
-		if value, ok := from[key]; ok {
-			to[key] = value
-		}
-	}
-}
-
-func copyFirstIfExists(from, to map[string]interface{}, targetKey string, sourceKeys ...string) {
-	for _, key := range sourceKeys {
-		if value, ok := from[key]; ok {
-			to[targetKey] = value
-			return
-		}
-	}
 }
 
 func chatToolsToResponsesTools(raw interface{}) []map[string]interface{} {

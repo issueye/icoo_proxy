@@ -16,14 +16,22 @@ func (r RequestMediaType) ToString() string {
 	return string(r)
 }
 
+// ReasoningPart 表示 reasoning 内容块。
+type ReasoningPart struct {
+	Type      string `json:"type"`
+	Thinking  string `json:"thinking,omitempty"`
+	Signature string `json:"signature,omitempty"`
+	Data      string `json:"data,omitempty"`
+}
+
 // RequestMessage 表示请求消息。
 type RequestMessage struct {
-	Role             RoleType   `json:"role"`              // 角色
-	Name             string     `json:"name"`              // 工具名称
-	ToolCalls        []ToolCall `json:"tool_calls"`        // 工具调用列表
-	ToolCallID       string     `json:"tool_call_id"`      // 工具调用ID
-	ReasoningContent string     `json:"reasoning_content"` // 推理内容
-	Content          any        `json:"content"`           // 内容 string | MediaContent
+	Role       RoleType        `json:"role"`                 // 角色
+	Name       string          `json:"name"`                 // 工具名称
+	ToolCalls  []ToolCall      `json:"tool_calls,omitempty"` // 工具调用列表
+	ToolCallID string          `json:"tool_call_id"`         // 工具调用ID
+	Reasoning  []ReasoningPart `json:"reasoning,omitempty"`  // 推理内容
+	Content    any             `json:"content"`              // 内容 string | MediaContent
 }
 
 type StreamOptions struct {

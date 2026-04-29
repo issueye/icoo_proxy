@@ -76,6 +76,14 @@ func (s ResponseStatus) ToString() string {
 	return string(s)
 }
 
+// ReasoningPart 表示 reasoning 内容块。
+type ReasoningPart struct {
+	Type      string `json:"type"`
+	Thinking  string `json:"thinking,omitempty"`
+	Signature string `json:"signature,omitempty"`
+	Data      string `json:"data,omitempty"`
+}
+
 type ToolParameter struct {
 	Type       string         `json:"type"`       // 参数类型 "object"
 	Name       string         `json:"name"`       // 参数名称
@@ -87,6 +95,6 @@ type Tool struct {
 	Type        ToolFunctionType `json:"type"`                  // 工具类型
 	Name        string           `json:"name"`                  // 工具名称
 	Description string           `json:"description"`           // 工具描述
-	Parameters  []ToolParameter  `json:"parameters"`            // 工具参数
+	Parameters  any              `json:"parameters"`            // 工具参数
 	Strict      bool             `json:"strict" default:"true"` // 是否严格模式 默认 true
 }

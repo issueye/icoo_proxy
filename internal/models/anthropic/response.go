@@ -14,10 +14,18 @@ func (s StopReason) ToString() string {
 	return string(s)
 }
 
-// ResponseContent 响应内容
-type ResponseContent struct {
-	Type string `json:"type"` // 内容类型
-	Text string `json:"text"` // 文本内容
+// ResponseContentBlock 表示 Anthropic 响应内容块。
+type ResponseContentBlock struct {
+	Type      string `json:"type"`
+	Text      string `json:"text,omitempty"`
+	Thinking  string `json:"thinking,omitempty"`
+	Signature string `json:"signature,omitempty"`
+	Data      string `json:"data,omitempty"`
+	ID        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Input     any    `json:"input,omitempty"`
+	ToolUseID string `json:"tool_use_id,omitempty"`
+	Content   any    `json:"content,omitempty"`
 }
 
 // ResponseUsage 响应使用情况
@@ -30,11 +38,11 @@ type ResponseUsage struct {
 
 // ResponseBody 响应体
 type ResponseBody struct {
-	ID         string          `json:"id"`          // 响应 ID
-	Type       string          `json:"type"`        // 响应类型
-	Role       string          `json:"role"`        // 响应角色
-	Content    ResponseContent `json:"content"`     // 响应内容
-	Model      string          `json:"model"`       // 模型名称
-	StopReason StopReason      `json:"stop_reason"` // 停止原因 "end_turn" | "max_tokens" | "stop_sequence" | "tool_use"
-	Usage      ResponseUsage   `json:"usage"`       // 响应使用情况
+	ID         string                 `json:"id"`          // 响应 ID
+	Type       string                 `json:"type"`        // 响应类型
+	Role       string                 `json:"role"`        // 响应角色
+	Content    []ResponseContentBlock `json:"content"`     // 响应内容块
+	Model      string                 `json:"model"`       // 模型名称
+	StopReason StopReason             `json:"stop_reason"` // 停止原因 "end_turn" | "max_tokens" | "stop_sequence" | "tool_use"
+	Usage      ResponseUsage          `json:"usage"`       // 响应使用情况
 }

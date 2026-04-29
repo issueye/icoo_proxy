@@ -2,7 +2,7 @@ package openai_responses
 
 // InputContent 输入内容
 type InputContent struct {
-	Type     InputType `json:"type"`                // 内容类型
+	Type     InputType `json:"type,omitempty"`      // 内容类型
 	Text     string    `json:"text,omitempty"`      // 文本内容 input_text
 	ImageUrl string    `json:"image_url,omitempty"` // 图片 URL input_image
 	Detail   string    `json:"detail,omitempty"`    // 详细内容 input_image
@@ -13,9 +13,25 @@ type InputContent struct {
 
 // InputMessage 输入消息
 type InputMessage struct {
-	Type    string       `json:"type" default:"message"` // 内容类型 "message"
-	Role    RoleType     `json:"role"`                   // 角色
-	Content InputContent `json:"content"`                // 内容
+	Type      string          `json:"type,omitempty"` // 内容类型 "message"
+	Role      RoleType        `json:"role"`           // 角色
+	Content   any             `json:"content"`        // 内容 string | []InputContent
+	Reasoning []ReasoningPart `json:"reasoning,omitempty"`
+}
+
+// InputFunctionCall 表示函数调用输入。
+type InputFunctionCall struct {
+	Type      string `json:"type"`
+	CallID    string `json:"call_id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+}
+
+// InputFunctionCallOutput 表示函数调用结果输入。
+type InputFunctionCallOutput struct {
+	Type   string `json:"type"`
+	CallID string `json:"call_id,omitempty"`
+	Output any    `json:"output,omitempty"`
 }
 
 // RequestReasoning 请求原因参数
@@ -26,9 +42,9 @@ type RequestReasoning struct {
 
 // RequestBody 请求体
 type RequestBody struct {
-	Model              string           `json:"model"`                // 模型名称
-	Input              any              `json:"input"`                // 输入内容 string | []InputMessage
-	Instruction        string           `json:"instruction"`          // 指令
+	Model              string           `json:"model"` // 模型名称
+	Input              any              `json:"input"` // 输入内容 string | []InputMessage | function_call*
+	Instructions       string           `json:"instructions,omitempty"`
 	MaxOutputTokens    int              `json:"max_output_tokens"`    // 最大输出 token 数
 	Temperature        float64          `json:"temperature"`          // 温度参数
 	TopP               float64          `json:"top_p"`                // Top-P 参数

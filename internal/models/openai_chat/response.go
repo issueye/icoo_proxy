@@ -2,12 +2,12 @@ package openai_chat
 
 // ResponseMessage 表示响应消息。
 type ResponseMessage struct {
-	Role             RoleType   `json:"role"`              // 角色
-	Content          any        `json:"content"`           // 内容 string | MediaContent
-	Name             string     `json:"name"`              // 名称
-	ToolCalls        []ToolCall `json:"tool_calls"`        // 工具调用
-	ToolCallID       string     `json:"tool_call_id"`      // 工具调用ID
-	ReasoningContent string     `json:"reasoning_content"` // 推理内容
+	Role       RoleType        `json:"role"`                 // 角色
+	Content    any             `json:"content"`              // 内容 string | MediaContent
+	Name       string          `json:"name"`                 // 名称
+	ToolCalls  []ToolCall      `json:"tool_calls,omitempty"` // 工具调用
+	ToolCallID string          `json:"tool_call_id"`         // 工具调用ID
+	Reasoning  []ReasoningPart `json:"reasoning,omitempty"`  // 推理内容
 }
 
 // ResponseChoice 表示响应选择。

@@ -10,22 +10,25 @@ type RequestSource struct {
 	URL       string `json:"url,omitempty"`        // 媒体 URL
 }
 
-// RequestContent 表示聊天内容
-type RequestContent struct {
-	Type      ContentType     `json:"type"`                  // 内容类型
-	Text      string          `json:"text,omitempty"`        // 文本内容
-	Source    RequestSource   `json:"source,omitempty"`      // 来源信息
-	ID        string          `json:"id,omitempty"`          // 块 ID 或 tool_use ID
-	Name      string          `json:"name,omitempty"`        // 工具名称
-	Input     json.RawMessage `json:"input,omitempty"`       // tool_use 输入参数
-	ToolUseID string          `json:"tool_use_id,omitempty"` // 关联的 tool_use ID
-	Content   string          `json:"content,omitempty"`     // tool_result 内容
+// RequestContentBlock 表示 Anthropic 请求内容块。
+type RequestContentBlock struct {
+	Type      string         `json:"type"`
+	Text      string         `json:"text,omitempty"`
+	Source    *RequestSource `json:"source,omitempty"`
+	ID        string         `json:"id,omitempty"`
+	Name      string         `json:"name,omitempty"`
+	Input     any            `json:"input,omitempty"`
+	ToolUseID string         `json:"tool_use_id,omitempty"`
+	Content   any            `json:"content,omitempty"`
+	Thinking  string         `json:"thinking,omitempty"`
+	Signature string         `json:"signature,omitempty"`
+	Data      string         `json:"data,omitempty"`
 }
 
 // RequestMessage 表示单条 Anthropic 消息。
 type RequestMessage struct {
-	Role    string         `json:"role"`    // 消息角色 "user" | "assistant"
-	Content RequestContent `json:"content"` // 消息内容，可能为字符串或块数组
+	Role    string `json:"role"`    // 消息角色 "user" | "assistant"
+	Content any    `json:"content"` // 消息内容，可能为字符串或块数组
 }
 
 // RequestToolChoice 表示工具选择策略。
@@ -40,17 +43,11 @@ type RequestThinking struct {
 	BudgetTokens int    `json:"budget_tokens"` // 总 token 数
 }
 
-type RequestToolInputSchema struct {
-	Type       string         `json:"type"`                 // 输入参数类型
-	Properties map[string]any `json:"properties,omitempty"` // 输入参数属性
-	Required   []string       `json:"required,omitempty"`   // 必填参数
-}
-
 // RequestTool 表示 Anthropic 工具定义。
 type RequestTool struct {
-	Name        string                 `json:"name"`                   // 工具名称
-	Description string                 `json:"description,omitempty"`  // 工具说明
-	InputSchema RequestToolInputSchema `json:"input_schema,omitempty"` // 输入参数 Schema
+	Name        string `json:"name"`                   // 工具名称
+	Description string `json:"description,omitempty"`  // 工具说明
+	InputSchema any    `json:"input_schema,omitempty"` // 输入参数 Schema
 }
 
 // RequestMessagesRequest 表示 Anthropic Messages 请求体。
@@ -67,4 +64,9 @@ type RequestMessagesRequest struct {
 	Tools         []RequestTool     `json:"tools,omitempty"`          // 可用工具定义列表
 	ToolChoice    RequestToolChoice `json:"tool_choice,omitempty"`    // 工具选择策略
 	Thinking      *RequestThinking  `json:"thinking,omitempty"`       // thinking 配置
+}
+
+func (r RequestContentBlock) MarshalJSON() ([]byte, error) {
+	type alias RequestContentBlock
+	return json.Marshal(alias(r))
 }

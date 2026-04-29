@@ -26,17 +26,22 @@ type ResponseUsage struct {
 
 // ResponseOutputContent 表示输出内容。
 type ResponseOutputContent struct {
-	Type string `json:"type"` // 内容类型
-	Text string `json:"text"` // 内容文本
+	Type string `json:"type"`           // 内容类型
+	Text string `json:"text,omitempty"` // 内容文本
 }
 
 // ResponseOutput 表示输出。
 type ResponseOutput struct {
-	Type    OutputType              `json:"type"`    // 输出类型
-	ID      string                  `json:"id"`      // 输出ID
-	Status  ResponseStatus          `json:"status"`  // 状态码
-	Role    RoleType                `json:"role"`    // 角色
-	Content []ResponseOutputContent `json:"content"` // 输出内容
+	Type      OutputType              `json:"type"`                // 输出类型
+	ID        string                  `json:"id,omitempty"`        // 输出ID
+	Status    ResponseStatus          `json:"status,omitempty"`    // 状态码
+	Role      RoleType                `json:"role,omitempty"`      // 角色
+	Content   []ResponseOutputContent `json:"content,omitempty"`   // 输出内容
+	Reasoning []ReasoningPart         `json:"reasoning,omitempty"` // 推理内容
+	CallID    string                  `json:"call_id,omitempty"`
+	Name      string                  `json:"name,omitempty"`
+	Arguments string                  `json:"arguments,omitempty"`
+	Output    any                     `json:"output,omitempty"`
 }
 
 // ResponseBody 表示响应体。
