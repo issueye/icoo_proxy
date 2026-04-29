@@ -14,7 +14,12 @@
       "WebSearch",
       "Bash(go list *)",
       "Bash(go mod *)",
-      "Bash(go env *)"
+      "Bash(go env *)",
+      "Bash(git -C \"E:/codes/icoo_proxy/.claude/worktrees/agent-a1777c42401905c11\" branch --show-current)",
+      "Bash(git -C \"E:/codes/icoo_proxy/.claude/worktrees/agent-a1777c42401905c11\" rev-parse HEAD)",
+      "Bash(git -C \"E:/codes/icoo_proxy/.claude/worktrees/agent-a1777c42401905c11\" log --oneline --decorate -1)",
+      "Bash(git -C \"E:/codes/icoo_proxy/.claude/worktrees/agent-a1777c42401905c11\" status --short)",
+      "Bash(git worktree *)"
     ]
   }
 }
