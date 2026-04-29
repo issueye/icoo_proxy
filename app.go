@@ -170,6 +170,18 @@ func (a *App) GetTrafficPage(page int, pageSize int, filter string) map[string]i
 	}
 }
 
+func (a *App) ClearTrafficRequests() error {
+	if a.traffic != nil {
+		if err := a.traffic.Clear(); err != nil {
+			return err
+		}
+	}
+	if a.service != nil {
+		a.service.ClearRecentRequests()
+	}
+	return nil
+}
+
 func (a *App) GetSuppliersPage(page int, pageSize int, keyword string, protocol string) services.SupplierPageResult {
 	if a.app == nil {
 		return services.SupplierPageResult{

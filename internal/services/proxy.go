@@ -1205,6 +1205,13 @@ func (s *ProxyService) RecentRequests() []api.RequestView {
 	return slices.Clone(s.recent)
 }
 
+// ClearRecentRequests 清空内存中的最近请求记录。
+func (s *ProxyService) ClearRecentRequests() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recent = nil
+}
+
 // logRequest 写入请求完成日志，并保存到最近请求和可选的持久化记录器。
 func (s *ProxyService) logRequest(item api.RequestView) {
 	s.recordRequest(item)

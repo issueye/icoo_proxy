@@ -6,6 +6,8 @@ import {api} from '../models';
 
 export function CheckSupplier(arg1:string):Promise<Array<services.HealthRecord>>;
 
+export function ClearTrafficRequests():Promise<void>;
+
 export function DeleteAuthKey(arg1:string):Promise<Array<models.AuthKeyRecord>>;
 
 export function DeleteEndpoint(arg1:string):Promise<Array<models.EndpointRecord>>;

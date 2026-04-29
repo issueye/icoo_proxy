@@ -172,6 +172,64 @@ func TestServiceTokenStatsIgnoresLegacyRecordsWithoutUsage(t *testing.T) {
 	}
 }
 
+func TestServiceClearRemovesAllRequestsAndStats(t *testing.T) {
+	root := t.TempDir()
+	service, err := NewService(root)
+	if err != nil {
+		t.Fatalf("new traffic service: %v", err)
+	}
+	defer func() { _ = service.Close() }()
+
+	items := []api.RequestView{
+		{
+			RequestID:    "req-clear-1",
+			Downstream:   "openai-chat",
+			Upstream:     "openai-responses",
+			StatusCode:   200,
+			DurationMS:   11,
+			InputTokens:  2,
+			OutputTokens: 3,
+			TotalTokens:  5,
+			CreatedAt:    time.Date(2026, 4, 27, 10, 5, 0, 0, time.UTC).Format(time.RFC3339),
+		},
+		{
+			RequestID:    "req-clear-2",
+			Downstream:   "anthropic",
+			Upstream:     "anthropic",
+			StatusCode:   500,
+			DurationMS:   22,
+			InputTokens:  4,
+			OutputTokens: 6,
+			TotalTokens:  10,
+			CreatedAt:    time.Date(2026, 4, 27, 10, 6, 0, 0, time.UTC).Format(time.RFC3339),
+		},
+	}
+
+	for _, item := range items {
+		if err := service.RecordRequest(item); err != nil {
+			t.Fatalf("record request %s: %v", item.RequestID, err)
+		}
+	}
+
+	if err := service.Clear(); err != nil {
+		t.Fatalf("clear requests: %v", err)
+	}
+
+	if got := service.ListRecent(10); len(got) != 0 {
+		t.Fatalf("expected no requests after clear, got %#v", got)
+	}
+
+	stats := service.TokenStats()
+	if stats.InputTokens != 0 || stats.OutputTokens != 0 || stats.TotalTokens != 0 {
+		t.Fatalf("expected zero token stats after clear, got %#v", stats)
+	}
+
+	result := service.QueryPage("all", 1, 10)
+	if result.Total != 0 || result.TotalRequests != 0 {
+		t.Fatalf("expected empty page result after clear, got %#v", result)
+	}
+}
+
 func TestServiceQueryPageSupportsFilterAndPagination(t *testing.T) {
 	root := t.TempDir()
 	service, err := NewService(root)

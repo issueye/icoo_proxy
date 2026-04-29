@@ -57,6 +57,30 @@ func (s *Service) Close() error {
 	return s.db.Close()
 }
 
+func (s *Service) Clear() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+
+	iter := s.db.NewIterator(util.BytesPrefix([]byte(keyPrefix)), nil)
+	defer iter.Release()
+
+	batch := new(leveldb.Batch)
+	hasEntries := false
+	for iter.Next() {
+		key := append([]byte(nil), iter.Key()...)
+		batch.Delete(key)
+		hasEntries = true
+	}
+	if err := iter.Error(); err != nil {
+		return err
+	}
+	if !hasEntries {
+		return nil
+	}
+	return s.db.Write(batch, nil)
+}
+
 func (s *Service) RecordRequest(item api.RequestView) error {
 	if s == nil || s.db == nil {
 		return nil

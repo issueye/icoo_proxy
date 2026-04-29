@@ -19,6 +19,10 @@ export function CheckSupplier(arg1) {
   return invoke("CheckSupplier", arg1);
 }
 
+export function ClearTrafficRequests() {
+  return invoke("ClearTrafficRequests");
+}
+
 export function DeleteAuthKey(arg1) {
   return invoke("DeleteAuthKey", arg1);
 }

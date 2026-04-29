@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { GetTrafficPage } from "../lib/wailsApp";
+import { ClearTrafficRequests, GetTrafficPage } from "../lib/wailsApp";
 
 function defaultTokenStats() {
   return {
@@ -13,6 +13,7 @@ export const useTrafficStore = defineStore("traffic", {
   state: () => ({
     loading: false,
     refreshing: false,
+    clearing: false,
     error: "",
     requests: [],
     tokenStats: defaultTokenStats(),
@@ -73,6 +74,29 @@ export const useTrafficStore = defineStore("traffic", {
     },
     async refresh() {
       await this.fetchPage({ refreshing: true });
+    },
+    async clear() {
+      this.clearing = true;
+      this.error = "";
+      try {
+        await ClearTrafficRequests();
+        this.requests = [];
+        this.tokenStats = defaultTokenStats();
+        this.totalRequests = 0;
+        this.total = 0;
+        this.successCount = 0;
+        this.errorCount = 0;
+        this.averageLatency = 0;
+        this.page = 1;
+        this.protocolOptions = ["all"];
+        this.filter = "all";
+        this.lastUpdatedAt = new Date().toISOString();
+        await this.fetchPage({ page: 1, pageSize: this.pageSize, refreshing: true });
+      } catch (error) {
+        this.error = error?.message || String(error);
+      } finally {
+        this.clearing = false;
+      }
     },
     async setFilter(value) {
       this.filter = value;

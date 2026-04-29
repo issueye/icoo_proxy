@@ -2,10 +2,15 @@
   <section class="page-section traffic-page">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <button class="btn btn-primary" :class="{ 'is-loading': store.refreshing }" :disabled="store.refreshing"
-          @click="store.refresh">
+        <button class="btn btn-primary" :class="{ 'is-loading': store.refreshing }"
+          :disabled="store.refreshing || store.clearing" @click="store.refresh">
           <span v-if="store.refreshing" class="btn__spinner" />
           {{ store.refreshing ? "刷新中..." : "刷新流量" }}
+        </button>
+        <button class="btn btn-danger" :class="{ 'is-loading': store.clearing }"
+          :disabled="store.refreshing || store.clearing || !store.totalRequests" @click="openClearConfirm">
+          <span v-if="store.clearing" class="btn__spinner" />
+          {{ store.clearing ? "清空中..." : "清空请求" }}
         </button>
         <label class="field-toggle rounded-md">
           <input :checked="store.autoRefresh" type="checkbox" class="field-checkbox"
@@ -91,19 +96,28 @@
         </template>
       </UTable>
     </div>
+
+    <UConfirmDialog v-model:open="confirmState.open" title="确认清空请求记录" message="确定要清空流量监控中的所有请求信息吗？"
+      description="清空后当前保存的请求记录与统计数据将被移除，且无法恢复。" confirm-text="确认清空" cancel-text="取消"
+      :loading="store.clearing" danger @confirm="confirmClear" />
   </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, watch } from "vue";
 import { useTrafficStore } from "../stores/traffic";
 
 import StatCard from "../components/StatCard.vue";
+import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import USelect from "../components/ued/USelect.vue";
 import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
+import { message } from "../components/ued/message";
 
 const store = useTrafficStore();
+const confirmState = reactive({
+  open: false,
+});
 let refreshTimer = null;
 const tableColumns = [
   { key: "requestId", title: "请求 ID", width: 180, freeze: "left" },
@@ -161,6 +175,18 @@ function formatDateTime(value) {
 function formatTokenCount(value) {
   const amount = Number(value || 0);
   return new Intl.NumberFormat("zh-CN").format(amount);
+}
+
+function openClearConfirm() {
+  confirmState.open = true;
+}
+
+async function confirmClear() {
+  await store.clear();
+  if (!store.error) {
+    confirmState.open = false;
+    message.success("流量请求记录已清空。");
+  }
 }
 
 watch(

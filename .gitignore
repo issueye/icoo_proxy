@@ -7,3 +7,7 @@ frontend/.vite-dev.*
 .suppliers
 .data
 resources/*
+build/promo/*
+tools/promo/*
+frontend/src/promo/*
+frontend/promo.html

@@ -6,6 +6,10 @@ export function CheckSupplier(arg1) {
   return window['go']['main']['App']['CheckSupplier'](arg1);
 }
 
+export function ClearTrafficRequests() {
+  return window['go']['main']['App']['ClearTrafficRequests']();
+}
+
 export function DeleteAuthKey(arg1) {
   return window['go']['main']['App']['DeleteAuthKey'](arg1);
 }
