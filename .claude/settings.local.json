@@ -13,7 +13,8 @@
       "mcp__context7__query-docs",
       "WebSearch",
       "Bash(go list *)",
-      "Bash(go mod *)"
+      "Bash(go mod *)",
+      "Bash(go env *)"
     ]
   }
 }

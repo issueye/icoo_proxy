@@ -320,30 +320,6 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.traffic-stats :deep(.stat-card) {
-  min-height: 84px;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 12px;
-}
-
-.traffic-stats :deep(.stat-card__icon) {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-}
-
-.traffic-stats :deep(.stat-card__label) {
-  line-height: 1.35;
-}
-
-.traffic-stats :deep(.stat-card__value) {
-  margin-top: 6px;
-  font-size: 18px;
-  line-height: 1.1;
-  word-break: keep-all;
-}
-
 .token-cell {
   display: grid;
   gap: 4px;

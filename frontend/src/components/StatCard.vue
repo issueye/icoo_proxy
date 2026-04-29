@@ -13,6 +13,8 @@
         <svg v-else-if="icon === 'timer'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4"/><path d="M12 14v-4"/><path d="M4 13a8 8 0 1 0 16 0 8 8 0 0 0-16 0"/><path d="M12 10 9 7"/></svg>
         <svg v-else-if="icon === 'layers'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         <svg v-else-if="icon === 'heart-pulse'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>
+        <svg v-else-if="icon === 'endpoint'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6"/><path d="M18 15v6"/><path d="M12 9v6"/><path d="M5 9h14"/><path d="M11 15h8"/><path d="M4 3h4"/><path d="M10 15h4"/><path d="M16 21h4"/></svg>
+        <svg v-else-if="icon === 'supplier'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01"/><path d="M9 12h.01"/><path d="M9 15h.01"/><path d="M15 9h.01"/><path d="M15 12h.01"/><path d="M15 15h.01"/></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
       </slot>
     </div>
@@ -47,9 +49,9 @@ defineProps({
 
 <style scoped>
 .stat-card {
-  @apply relative flex min-h-[84px] items-center gap-3 rounded border bg-white px-3 py-3 transition;
+  @apply relative flex min-h-[84px] items-center gap-2.5 rounded border bg-white p-3 transition;
   border-color: var(--ued-color-border);
-  border-radius: var(--ued-radius-md);
+  border-radius: 12px;
   box-shadow: var(--ued-shadow-card);
 }
 .stat-card:hover {
@@ -60,17 +62,17 @@ defineProps({
 .stat-card__icon {
   @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border bg-slate-50 text-slate-500;
   border-color: var(--ued-color-border);
-  border-radius: var(--ued-radius-md);
+  border-radius: 10px;
 }
 .stat-card__body {
   @apply min-w-0 flex-1;
 }
 .stat-card__label {
-  @apply text-xs font-medium;
+  @apply text-xs font-medium leading-[1.35];
   color: var(--ued-color-text-muted);
 }
 .stat-card__value {
-  @apply mt-1 break-all text-base font-semibold leading-5;
+  @apply mt-1.5 break-keep text-[18px] font-semibold leading-[1.1];
   color: var(--ued-color-text);
 }
 
