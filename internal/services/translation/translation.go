@@ -347,15 +347,15 @@ func translateAnthropicToResponsesRequest(body []byte, model string) ([]byte, er
 	if system := anthropicSystemToInstructions(toJSONValue(typed.System)); system != "" {
 		request["instructions"] = system
 	}
-	if typed.Temperature != nil {
-		request["temperature"] = *typed.Temperature
-	}
-	if typed.TopP != nil {
-		request["top_p"] = *typed.TopP
-	}
-	if typed.MaxTokens > 0 {
-		request["max_output_tokens"] = typed.MaxTokens
-	}
+	// if typed.Temperature != nil {
+	// 	request["temperature"] = *typed.Temperature
+	// }
+	// if typed.TopP != nil {
+	// 	request["top_p"] = *typed.TopP
+	// }
+	// if typed.MaxTokens > 0 {
+	// 	request["max_output_tokens"] = typed.MaxTokens
+	// }
 	if len(typed.Tools) > 0 {
 		request["tools"] = anthropicToolsToResponsesTools(toJSONArray(typed.Tools))
 	}

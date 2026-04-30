@@ -85,7 +85,6 @@ func (c *CatalogService) SetPolicyResolver(resolver DownstreamPolicyResolver) {
 
 func (c *CatalogService) Resolve(downstream consts.Protocol, requestedModel string) (models.Route, error) {
 	model := strings.TrimSpace(requestedModel)
-	slog.Info("下游请求模型和协议", "model", model, "downstream", downstream)
 
 	defaultRoute, hasDefault := c.defaults[downstream]
 	if model == "" {
