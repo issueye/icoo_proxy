@@ -25,6 +25,8 @@ type Config struct {
 	ChainLogBodies            bool          // 是否记录请求和响应体
 	ChainLogMaxBodyBytes      int           // 最大记录请求和响应体字节数
 	DefaultMaxTokens          int           // 项目级默认 max_tokens 兜底值
+	DownRequestDir            string        // 下游请求日志目录
+	UpRequestDir              string        // 上游请求日志目录
 
 	AnthropicConfig        *AnthropicConfig
 	OpenAIRResponsesConfig *OpenAIRResponsesConfig
@@ -84,6 +86,12 @@ func Load(workdir string) (Config, error) {
 	}
 	if cfg.ChainLogPath == "" {
 		cfg.ChainLogPath = filepath.Join(workdir, ".data", "icoo_proxy-chain.log")
+	}
+	if cfg.DownRequestDir == "" {
+		cfg.DownRequestDir = filepath.Join(workdir, ".data", "down_request")
+	}
+	if cfg.UpRequestDir == "" {
+		cfg.UpRequestDir = filepath.Join(workdir, ".data", "up_request")
 	}
 	return cfg, nil
 }

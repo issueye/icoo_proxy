@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -26,13 +28,15 @@ import (
 
 // ProxyService 负责代理入口的鉴权、路由解析、协议转换、上游转发和请求记录。
 type ProxyService struct {
-	cfg      config.Config
-	client   *http.Client
-	logger   *slog.Logger
-	recorder RequestRecorder
-	mu       sync.RWMutex
-	recent   []api.RequestView
-	catalog  *CatalogService
+	cfg            config.Config
+	client         *http.Client
+	logger         *slog.Logger
+	recorder       RequestRecorder
+	mu             sync.RWMutex
+	recent         []api.RequestView
+	catalog        *CatalogService
+	downRequestDir string
+	upRequestDir   string
 }
 
 // RequestRecorder 定义代理请求记录器，用于将请求概览写入持久化存储。
@@ -43,9 +47,11 @@ type RequestRecorder interface {
 // New 创建代理服务实例，并注入运行配置和模型路由目录。
 func New(cfg config.Config, catalog *CatalogService) *ProxyService {
 	return &ProxyService{
-		cfg:     cfg,
-		catalog: catalog,
-		client:  &http.Client{},
+		cfg:            cfg,
+		catalog:        catalog,
+		client:         &http.Client{},
+		downRequestDir: cfg.DownRequestDir,
+		upRequestDir:   cfg.UpRequestDir,
 	}
 }
 
@@ -171,14 +177,13 @@ func (s *ProxyService) readDownstreamRequest(w http.ResponseWriter, r *http.Requ
 		return false
 	}
 	ctx.body = body
+	s.saveDownstreamRequest(ctx, r, body)
 	s.logChain("downstream.request",
 		"request_id", ctx.requestID,
 		"downstream", ctx.downstream.ToString(),
 		"method", r.Method,
 		"path", r.URL.Path,
 		"remote_addr", r.RemoteAddr,
-		"headers", sanitizedHeaders(r.Header),
-		"body", s.logBody(body),
 	)
 	return true
 }
@@ -240,8 +245,6 @@ func (s *ProxyService) prepareUpstreamRequestBody(w http.ResponseWriter, ctx *pr
 		"target_model", ctx.route.Model,
 		"translated", ctx.route.Upstream != ctx.downstream,
 		"forced_stream", forcedUpstreamStream,
-		"input_body", s.logBody(ctx.body),
-		"output_body", s.logBody(preparedBody),
 	)
 	return preparedBody, true
 }
@@ -261,14 +264,13 @@ func (s *ProxyService) sendUpstreamRequest(w http.ResponseWriter, r *http.Reques
 	}
 
 	s.applyRequestHeaders(req, r, ctx.route)
+	s.saveUpstreamRequest(ctx, req, preparedBody, upstreamURL)
 	s.logChain("upstream.request",
 		"request_id", ctx.requestID,
 		"downstream", ctx.downstream.ToString(),
 		"upstream", ctx.route.Upstream.ToString(),
 		"method", req.Method,
 		"url", upstreamURL,
-		"headers", sanitizedHeaders(req.Header),
-		"body", s.logBody(preparedBody),
 	)
 
 	resp, err := s.client.Do(req)
@@ -566,7 +568,6 @@ func (s *ProxyService) logJSONUpstreamResponse(resp *http.Response, body []byte,
 		"upstream", ctx.route.Upstream.ToString(),
 		"status_code", resp.StatusCode,
 		"headers", sanitizedHeaders(resp.Header),
-		"body", s.logBody(body),
 	}
 	if resp.StatusCode >= 400 {
 		attrs = append(attrs, "error_detail", extractUpstreamErrorDetail(body))
@@ -582,7 +583,6 @@ func (s *ProxyService) logDownstreamResponse(w http.ResponseWriter, statusCode i
 		"upstream", ctx.route.Upstream.ToString(),
 		"status_code", statusCode,
 		"headers", sanitizedHeaders(w.Header()),
-		"body", body,
 	)
 }
 
@@ -593,7 +593,6 @@ func (s *ProxyService) logStreamAggregation(body []byte, ctx *proxyRequestContex
 		"downstream", ctx.downstream.ToString(),
 		"upstream", ctx.route.Upstream.ToString(),
 		"target_model", ctx.route.Model,
-		"output_body", s.logBody(body),
 	)
 }
 
@@ -605,8 +604,6 @@ func (s *ProxyService) logResponseConversion(inputBody, outputBody []byte, ctx *
 		"upstream", ctx.route.Upstream.ToString(),
 		"target_model", ctx.route.Model,
 		"translated", ctx.route.Upstream != ctx.downstream,
-		"input_body", s.logBody(inputBody),
-		"output_body", s.logBody(outputBody),
 	)
 }
 
@@ -1158,6 +1155,52 @@ func (c *streamUsageCollector) merge(next translation.TokenUsage) {
 func streamObjectValue(raw interface{}) map[string]interface{} {
 	value, _ := raw.(map[string]interface{})
 	return value
+}
+
+// saveDownstreamRequest 保存下游请求参数到文件
+func (s *ProxyService) saveDownstreamRequest(ctx *proxyRequestContext, r *http.Request, body []byte) {
+	if s.downRequestDir == "" {
+		return
+	}
+	if err := os.MkdirAll(s.downRequestDir, 0o755); err != nil {
+		return
+	}
+	filePath := filepath.Join(s.downRequestDir, ctx.requestID+".log")
+	data := map[string]interface{}{
+		"request_id": ctx.requestID,
+		"downstream": ctx.downstream.ToString(),
+		"method":     r.Method,
+		"path":       r.URL.Path,
+		"remote_addr": r.RemoteAddr,
+		"headers":    sanitizedHeaders(r.Header),
+		"body":       json.RawMessage(body),
+		"timestamp":  time.Now().Format(time.RFC3339),
+	}
+	content, _ := json.MarshalIndent(data, "", "  ")
+	_ = os.WriteFile(filePath, content, 0o644)
+}
+
+// saveUpstreamRequest 保存上游请求参数到文件
+func (s *ProxyService) saveUpstreamRequest(ctx *proxyRequestContext, req *http.Request, body []byte, url string) {
+	if s.upRequestDir == "" {
+		return
+	}
+	if err := os.MkdirAll(s.upRequestDir, 0o755); err != nil {
+		return
+	}
+	filePath := filepath.Join(s.upRequestDir, ctx.requestID+".log")
+	data := map[string]interface{}{
+		"request_id": ctx.requestID,
+		"downstream": ctx.downstream.ToString(),
+		"upstream":   ctx.route.Upstream.ToString(),
+		"method":     req.Method,
+		"url":        url,
+		"headers":    sanitizedHeaders(req.Header),
+		"body":       json.RawMessage(body),
+		"timestamp":  time.Now().Format(time.RFC3339),
+	}
+	content, _ := json.MarshalIndent(data, "", "  ")
+	_ = os.WriteFile(filePath, content, 0o644)
 }
 
 // logChain 写入结构化链路日志；未配置日志器时直接忽略。
