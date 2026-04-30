@@ -395,6 +395,47 @@ func translateResponsesToAnthropicRequest(body []byte, model string, defaultMaxT
 	return json.Marshal(request)
 }
 
+// func translateResponsesToAnthropicRequest(body []byte, model string, defaultMaxTokens int) ([]byte, error) {
+// 	payload, err := decodeOpenAIResponsesRequest(body)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	typed := payload.Typed
+
+// 	maxTokens, err := resolveAnthropicMaxTokens(responseRequestToMap(payload), defaultMaxTokens, "max_output_tokens")
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	// 构建请求体
+// 	requestData := anthropicmodel.RequestMessagesRequest{
+// 		Model:     model,
+// 		MaxTokens: maxTokens,
+// 	}
+
+// 	// 处理 stream
+// 	if typed.Stream {
+// 		requestData.Stream = true
+// 	}
+
+// 	// 处理 instructions
+// 	instructions := typed.Instructions
+// 	if strings.TrimSpace(instructions) != "" {
+// 		requestData.System = instructions
+// 	}
+
+// 	// 处理 tools
+// 	if len(typed.Tools) > 0 {
+// 		requestData.Tools = responsesToolsToAnthropicTools(toJSONArray(typed.Tools))
+// 	}
+
+// 	// 处理数据
+// 	requestData.Messages = normalizeAnthropicMessages(toJSONValue(typed.Input))
+
+// 	// 处理 messages
+// 	return requestData.MarshalJSON()
+// }
+
 func translateAnthropicToChatRequest(body []byte, model string) ([]byte, error) {
 	responsesBody, err := translateAnthropicToResponsesRequest(body, model)
 	if err != nil {
@@ -910,6 +951,29 @@ func chatMessageToResponsesInput(msg map[string]interface{}) []map[string]interf
 	}
 	return items
 }
+
+// func normalizeAnthropicMessages(raw []interface{}) []anthropicmodel.RequestMessage {
+// 	items := make([]anthropicmodel.RequestMessage, 0, len(raw))
+// 	for _, rawItem := range raw {
+// 		item, ok := rawItem.(map[string]interface{})
+// 		if !ok {
+// 			continue
+// 		}
+
+// 		message := anthropicmodel.RequestMessage{}
+// 		role, _ := item["role"].(string)
+// 		if role == "" {
+// 			role = "user"
+// 		}
+// 		message.Role = role
+// 		content, _ := item["content"].([]interface{})
+// 		message.Content = content
+
+// 		// content, _ := item["content"].([]interface{})
+// 		// items = append(items, anthropicUserContentToResponsesInput(content, role)...)
+// 	}
+// 	return items
+// }
 
 func normalizeAnthropicMessages(raw []interface{}) []map[string]interface{} {
 	items := make([]map[string]interface{}, 0, len(raw))
@@ -1572,9 +1636,9 @@ func anthropicToolsToResponsesTools(raw interface{}) []map[string]interface{} {
 	return items
 }
 
-func responsesToolsToAnthropicTools(raw interface{}) []map[string]interface{} {
+func responsesToolsToAnthropicTools(raw interface{}) []anthropicmodel.RequestTool {
 	tools, _ := raw.([]interface{})
-	items := make([]map[string]interface{}, 0, len(tools))
+	items := make([]anthropicmodel.RequestTool, 0, len(tools))
 	for _, rawTool := range tools {
 		tool, ok := rawTool.(map[string]interface{})
 		if !ok {
@@ -1583,10 +1647,10 @@ func responsesToolsToAnthropicTools(raw interface{}) []map[string]interface{} {
 		if stringValue(tool["type"], "") != "function" {
 			continue
 		}
-		items = append(items, map[string]interface{}{
-			"name":         stringValue(tool["name"], ""),
-			"description":  stringValue(tool["description"], ""),
-			"input_schema": objectValue(firstNonNil(tool["parameters"], tool["input_schema"])),
+		items = append(items, anthropicmodel.RequestTool{
+			Name:        stringValue(tool["name"], ""),
+			Description: stringValue(tool["description"], ""),
+			InputSchema: objectValue(firstNonNil(tool["parameters"], tool["input_schema"])),
 		})
 	}
 	return items

@@ -70,3 +70,8 @@ func (r RequestContentBlock) MarshalJSON() ([]byte, error) {
 	type alias RequestContentBlock
 	return json.Marshal(alias(r))
 }
+
+func (r RequestMessagesRequest) MarshalJSON() ([]byte, error) {
+	type alias RequestMessagesRequest
+	return json.Marshal(alias(r))
+}

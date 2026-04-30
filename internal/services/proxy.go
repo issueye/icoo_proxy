@@ -318,7 +318,10 @@ func (s *ProxyService) handleSameProtocolEventStream(w http.ResponseWriter, resp
 	if ctx.downstreamWantsStream {
 		w.WriteHeader(resp.StatusCode)
 		s.logDownstreamResponse(w, resp.StatusCode, "<event-stream body not captured>", ctx)
-		ctx.usage = relayStreamWithUsage(w, resp.Body, ctx.route.Upstream)
+		s.saveUpstreamResponse(ctx, resp, nil, true)
+		body := s.wrapStreamForDownstreamSave(resp.Body, ctx)
+		ctx.usage = relayStreamWithUsage(w, body, ctx.route.Upstream)
+		s.saveDownstreamResponse(ctx, resp.StatusCode, w.Header(), nil, true)
 		return true
 	}
 	if ctx.route.Upstream != consts.ProtocolOpenAIResponses {
@@ -333,9 +336,11 @@ func (s *ProxyService) handleSameProtocolEventStream(w http.ResponseWriter, resp
 	}
 	ctx.usage = translation.ExtractUsage(ctx.route.Upstream, aggregatedBody)
 	s.logStreamAggregation(aggregatedBody, ctx)
+	s.saveUpstreamResponse(ctx, resp, aggregatedBody, false)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(aggregatedBody)
+	s.saveDownstreamResponse(ctx, resp.StatusCode, w.Header(), aggregatedBody, false)
 	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(aggregatedBody), ctx)
 	return true
 }
@@ -348,6 +353,8 @@ func (s *ProxyService) handleSameProtocolJSON(w http.ResponseWriter, resp *http.
 	}
 	s.logJSONUpstreamResponse(resp, upstreamBody, ctx)
 	ctx.usage = translation.ExtractUsage(ctx.route.Upstream, upstreamBody)
+	s.saveUpstreamResponse(ctx, resp, upstreamBody, false)
+	s.saveDownstreamResponse(ctx, resp.StatusCode, w.Header(), upstreamBody, false)
 	s.logDownstreamResponse(w, resp.StatusCode, s.logBody(upstreamBody), ctx)
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(upstreamBody)
@@ -1165,16 +1172,16 @@ func (s *ProxyService) saveDownstreamRequest(ctx *proxyRequestContext, r *http.R
 	if err := os.MkdirAll(s.downRequestDir, 0o755); err != nil {
 		return
 	}
-	filePath := filepath.Join(s.downRequestDir, ctx.requestID+".log")
+	filePath := filepath.Join(s.downRequestDir, "request_"+ctx.requestID+".log")
 	data := map[string]interface{}{
-		"request_id": ctx.requestID,
-		"downstream": ctx.downstream.ToString(),
-		"method":     r.Method,
-		"path":       r.URL.Path,
+		"request_id":  ctx.requestID,
+		"type":        "downstream_request",
+		"method":      r.Method,
+		"path":        r.URL.Path,
 		"remote_addr": r.RemoteAddr,
-		"headers":    sanitizedHeaders(r.Header),
-		"body":       json.RawMessage(body),
-		"timestamp":  time.Now().Format(time.RFC3339),
+		"headers":     sanitizedHeaders(r.Header),
+		"body":        json.RawMessage(body),
+		"timestamp":   time.Now().Format(time.RFC3339),
 	}
 	content, _ := json.MarshalIndent(data, "", "  ")
 	_ = os.WriteFile(filePath, content, 0o644)
@@ -1188,9 +1195,10 @@ func (s *ProxyService) saveUpstreamRequest(ctx *proxyRequestContext, req *http.R
 	if err := os.MkdirAll(s.upRequestDir, 0o755); err != nil {
 		return
 	}
-	filePath := filepath.Join(s.upRequestDir, ctx.requestID+".log")
+	filePath := filepath.Join(s.upRequestDir, "request_"+ctx.requestID+".log")
 	data := map[string]interface{}{
 		"request_id": ctx.requestID,
+		"type":       "upstream_request",
 		"downstream": ctx.downstream.ToString(),
 		"upstream":   ctx.route.Upstream.ToString(),
 		"method":     req.Method,
@@ -1201,6 +1209,103 @@ func (s *ProxyService) saveUpstreamRequest(ctx *proxyRequestContext, req *http.R
 	}
 	content, _ := json.MarshalIndent(data, "", "  ")
 	_ = os.WriteFile(filePath, content, 0o644)
+}
+
+// saveDownstreamResponse 保存下游响应到文件（支持流式追加）
+func (s *ProxyService) saveDownstreamResponse(ctx *proxyRequestContext, statusCode int, headers http.Header, body []byte, isStream bool) {
+	if s.downRequestDir == "" {
+		return
+	}
+	if err := os.MkdirAll(s.downRequestDir, 0o755); err != nil {
+		return
+	}
+	filePath := filepath.Join(s.downRequestDir, "response_"+ctx.requestID+".log")
+	data := map[string]interface{}{
+		"request_id": ctx.requestID,
+		"type":       "downstream_response",
+		"status_code": statusCode,
+		"headers":    sanitizedHeaders(headers),
+		"timestamp":  time.Now().Format(time.RFC3339),
+	}
+	if body != nil {
+		data["body"] = json.RawMessage(body)
+	}
+	content, _ := json.MarshalIndent(data, "", "  ")
+	if isStream {
+		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err == nil {
+			_, _ = f.Write(append(content, '\n'))
+			_ = f.Close()
+		}
+	} else {
+		_ = os.WriteFile(filePath, content, 0o644)
+	}
+}
+
+// saveUpstreamResponse 保存上游响应到文件（支持流式追加）
+func (s *ProxyService) saveUpstreamResponse(ctx *proxyRequestContext, resp *http.Response, body []byte, isStream bool) {
+	if s.upRequestDir == "" {
+		return
+	}
+	if err := os.MkdirAll(s.upRequestDir, 0o755); err != nil {
+		return
+	}
+	filePath := filepath.Join(s.upRequestDir, "response_"+ctx.requestID+".log")
+	data := map[string]interface{}{
+		"request_id":  ctx.requestID,
+		"type":        "upstream_response",
+		"status_code": resp.StatusCode,
+		"headers":     sanitizedHeaders(resp.Header),
+		"timestamp":   time.Now().Format(time.RFC3339),
+	}
+	if body != nil {
+		data["body"] = json.RawMessage(body)
+	}
+	content, _ := json.MarshalIndent(data, "", "  ")
+	if isStream {
+		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err == nil {
+			_, _ = f.Write(append(content, '\n'))
+			_ = f.Close()
+		}
+	} else {
+		_ = os.WriteFile(filePath, content, 0o644)
+	}
+}
+
+// wrapStreamForDownstreamSave 包装流式响应，保存数据到下游响应文件
+func (s *ProxyService) wrapStreamForDownstreamSave(body io.Reader, ctx *proxyRequestContext) io.Reader {
+	if s.downRequestDir == "" {
+		return body
+	}
+	pipeReader, pipeWriter := io.Pipe()
+	go func() {
+		defer pipeWriter.Close()
+		scanner := bufio.NewScanner(body)
+		for scanner.Scan() {
+			line := scanner.Bytes()
+			if len(line) > 0 {
+				s.appendDownstreamStreamData(ctx, line)
+			}
+			pipeWriter.Write(append(line, '\n'))
+		}
+	}()
+	return pipeReader
+}
+
+// appendDownstreamStreamData 追加流式数据到下游响应文件
+func (s *ProxyService) appendDownstreamStreamData(ctx *proxyRequestContext, data []byte) {
+	if s.downRequestDir == "" {
+		return
+	}
+	filePath := filepath.Join(s.downRequestDir, "response_"+ctx.requestID+".log")
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(data)
+	_, _ = f.Write([]byte("\n"))
 }
 
 // logChain 写入结构化链路日志；未配置日志器时直接忽略。
