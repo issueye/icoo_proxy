@@ -1,0 +1,149 @@
+import { defineStore } from "pinia";
+import { DeleteAuthKey, GetAuthKeySecret, GetAuthKeysPage, ReloadProxy, SaveAuthKey } from "../lib/apiClient";
+
+const emptyForm = () => ({
+  id: "",
+  name: "",
+  secret: "",
+  enabled: true,
+  description: "",
+});
+
+function randomSecret() {
+  const bytes = new Uint8Array(24);
+  window.crypto?.getRandomValues?.(bytes);
+  const hex = Array.from(bytes, (item) => item.toString(16).padStart(2, "0")).join("");
+  return `icoo_${hex || Date.now()}`;
+}
+
+export const useAuthKeysStore = defineStore("authKeys", {
+  state: () => ({
+    loading: false,
+    saving: false,
+    deleting: "",
+    reloading: false,
+    copying: "",
+    error: "",
+    items: [],
+    total: 0,
+    totalCount: 0,
+    enabledCount: 0,
+    page: 1,
+    pageSize: 8,
+    keyword: "",
+    status: "all",
+    form: emptyForm(),
+  }),
+  actions: {
+    async fetchPage({ page = this.page, pageSize = this.pageSize } = {}) {
+      this.loading = true;
+      this.error = "";
+
+      try {
+        const result = await GetAuthKeysPage(page, pageSize, this.keyword, this.status);
+        this.items = result?.items || [];
+        this.total = Number(result?.total || 0);
+        this.totalCount = Number(result?.total_count || 0);
+        this.enabledCount = Number(result?.enabled_count || 0);
+        this.page = Number(result?.page || page || 1);
+        this.pageSize = Number(result?.page_size || pageSize || 8);
+      } catch (error) {
+        this.error = error?.message || String(error);
+      } finally {
+        this.loading = false;
+      }
+    },
+    async load() {
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    async changePage({ page, pageSize }) {
+      await this.fetchPage({
+        page: page || this.page,
+        pageSize: pageSize || this.pageSize,
+      });
+    },
+    async applyFilters(filters = {}) {
+      this.keyword = String(filters.keyword ?? this.keyword ?? "").trim();
+      this.status = ["enabled", "disabled"].includes(filters.status) ? filters.status : "all";
+      this.page = 1;
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    async resetFilters() {
+      this.keyword = "";
+      this.status = "all";
+      this.page = 1;
+      await this.fetchPage({ page: 1, pageSize: this.pageSize });
+    },
+    select(item) {
+      this.form = {
+        id: item.id,
+        name: item.name,
+        secret: "",
+        enabled: Boolean(item.enabled),
+        description: item.description || "",
+      };
+    },
+    resetForm() {
+      this.form = emptyForm();
+    },
+    generateSecret() {
+      this.form.secret = randomSecret();
+    },
+    async save() {
+      this.saving = true;
+      this.error = "";
+      try {
+        await SaveAuthKey({ ...this.form });
+        this.resetForm();
+        await this.fetchPage({ page: this.page, pageSize: this.pageSize });
+      } catch (error) {
+        this.error = error?.message || String(error);
+      } finally {
+        this.saving = false;
+      }
+    },
+    async remove(id) {
+      this.deleting = id;
+      this.error = "";
+      try {
+        await DeleteAuthKey(id);
+        if (this.form.id === id) {
+          this.resetForm();
+        }
+        await this.fetchPage({ page: this.page, pageSize: this.pageSize });
+      } catch (error) {
+        this.error = error?.message || String(error);
+      } finally {
+        this.deleting = "";
+      }
+    },
+    async reloadProxy() {
+      this.reloading = true;
+      this.error = "";
+      try {
+        await ReloadProxy();
+      } catch (error) {
+        this.error = error?.message || String(error);
+      } finally {
+        this.reloading = false;
+      }
+    },
+    async copySecret(id) {
+      this.copying = id;
+      this.error = "";
+      try {
+        const result = await GetAuthKeySecret(id);
+        const secret = typeof result === "string" ? result : result?.secret || "";
+        if (secret) {
+          await navigator.clipboard.writeText(secret);
+        }
+        return secret;
+      } catch (error) {
+        this.error = error?.message || String(error);
+        return "";
+      } finally {
+        this.copying = "";
+      }
+    },
+  },
+});

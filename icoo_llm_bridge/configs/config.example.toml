@@ -1,0 +1,18 @@
+host = "127.0.0.1"
+port = 18181
+read_timeout_seconds = 15
+write_timeout_seconds = 300
+shutdown_timeout_seconds = 10
+allow_local_without_auth = true
+default_max_tokens = 32768
+data_dir = ".data"
+
+[log]
+chain_log_path = ".data/bridge-chain.log"
+chain_log_bodies = false
+chain_log_max_body_bytes = 8192
+
+[archive]
+enabled = false
+down_request_dir = ".data/down_request"
+up_request_dir = ".data/up_request"

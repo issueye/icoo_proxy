@@ -1,0 +1,407 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"strings"
+	"time"
+
+	"icoo_llm_bridge/internal/config"
+	"icoo_llm_bridge/internal/constants"
+	"icoo_llm_bridge/internal/model/domain"
+	"icoo_llm_bridge/internal/model/entity"
+	"icoo_llm_bridge/internal/utils/ai_llm_proxy"
+)
+
+type proxyService struct {
+	cfg       config.Config
+	logger    *slog.Logger
+	converter ai_llm_proxy.Converter
+	auth      proxyAuth
+	routes    RouteResolver
+	traffic   TrafficService
+	client    *http.Client
+}
+
+type proxyAuth interface {
+	Verify(ctx context.Context, secret string, scope string) bool
+}
+
+func NewProxyService(
+	cfg config.Config,
+	logger *slog.Logger,
+	converter ai_llm_proxy.Converter,
+	auth proxyAuth,
+	routes RouteResolver,
+	traffic TrafficService,
+) ProxyService {
+	return &proxyService{
+		cfg:       cfg,
+		logger:    logger,
+		converter: converter,
+		auth:      auth,
+		routes:    routes,
+		traffic:   traffic,
+		client:    &http.Client{Timeout: cfg.WriteTimeout},
+	}
+}
+
+func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream constants.Protocol) {
+	start := time.Now()
+	requestID := newProxyRequestID()
+	w.Header().Set("X-ICOO-Request-ID", requestID)
+
+	if r.Method != http.MethodPost {
+		s.writeProxyError(w, downstream, http.StatusMethodNotAllowed, "method not allowed")
+		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusMethodNotAllowed, start, "method not allowed", domain.TokenUsage{}, "", nil)
+		return
+	}
+	if !s.authorize(r) {
+		s.writeProxyError(w, downstream, http.StatusUnauthorized, "invalid proxy api key")
+		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusUnauthorized, start, "invalid proxy api key", domain.TokenUsage{}, "", nil)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.writeProxyError(w, downstream, http.StatusBadRequest, "failed to read request body")
+		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusBadRequest, start, "failed to read request body", domain.TokenUsage{}, "", nil)
+		return
+	}
+	requestedModel, err := extractRequestModel(body)
+	if err != nil {
+		s.writeProxyError(w, downstream, http.StatusBadRequest, err.Error())
+		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusBadRequest, start, err.Error(), domain.TokenUsage{}, "", body)
+		return
+	}
+	route, err := s.routes.Resolve(r.Context(), downstream, requestedModel)
+	if err != nil {
+		s.writeProxyError(w, downstream, http.StatusBadRequest, err.Error())
+		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusBadRequest, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		return
+	}
+	upstreamBody, err := s.converter.ConvertRequest(ai_llm_proxy.RequestInput{
+		Downstream: downstream,
+		Upstream:   route.UpstreamProtocol,
+		Model:      route.Model,
+		Body:       body,
+	})
+	if err != nil {
+		s.writeProxyError(w, downstream, http.StatusBadRequest, err.Error())
+		s.recordTraffic(r, requestID, downstream, route, http.StatusBadRequest, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		return
+	}
+
+	resp, err := s.sendUpstream(r, route, upstreamBody)
+	if err != nil {
+		s.writeProxyError(w, downstream, http.StatusBadGateway, err.Error())
+		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		return
+	}
+	defer resp.Body.Close()
+
+	if isEventStream(resp.Header) {
+		s.handleStreamResponse(w, r, resp, requestID, downstream, route, start, requestedModel, body)
+		return
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.writeProxyError(w, downstream, http.StatusBadGateway, "read upstream response failed")
+		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		return
+	}
+
+	converted, err := s.converter.ConvertResponse(ai_llm_proxy.ResponseInput{
+		Downstream: downstream,
+		Upstream:   route.UpstreamProtocol,
+		Model:      route.Model,
+		Body:       respBody,
+	})
+	if err != nil {
+		s.writeProxyError(w, downstream, http.StatusBadGateway, err.Error())
+		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		return
+	}
+
+	copySafeHeaders(w.Header(), resp.Header)
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(converted)
+	usage := s.converter.ExtractUsage(route.UpstreamProtocol, respBody).Normalize()
+	s.recordTraffic(r, requestID, downstream, route, resp.StatusCode, start, "", usage, requestedModel, body)
+}
+
+func (s *proxyService) authorize(r *http.Request) bool {
+	if s.cfg.AllowLocalWithoutAuth && isLoopbackRemote(r.RemoteAddr) {
+		return true
+	}
+	key := extractRequestAPIKey(r)
+	return key != "" && s.auth != nil && s.auth.Verify(r.Context(), key, "proxy")
+}
+
+func (s *proxyService) sendUpstream(r *http.Request, route domain.Route, body []byte) (*http.Response, error) {
+	url := joinUpstreamURL(route.Provider.BaseURL, route.UpstreamProtocol)
+	if strings.TrimSpace(url) == "" {
+		return nil, fmt.Errorf("upstream base_url is required")
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build upstream request: %w", err)
+	}
+	applyUpstreamHeaders(req, r, route)
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("upstream request failed: %w", err)
+	}
+	return resp, nil
+}
+
+func (s *proxyService) handleStreamResponse(
+	w http.ResponseWriter,
+	r *http.Request,
+	resp *http.Response,
+	requestID string,
+	downstream constants.Protocol,
+	route domain.Route,
+	start time.Time,
+	requestedModel string,
+	requestBody []byte,
+) {
+	prepareStreamHeaders(w.Header(), resp.Header)
+	w.WriteHeader(resp.StatusCode)
+	writer := flushWriter{writer: w}
+	result, err := s.converter.ConvertStream(ai_llm_proxy.StreamInput{
+		Downstream: downstream,
+		Upstream:   route.UpstreamProtocol,
+		Model:      route.Model,
+		Reader:     resp.Body,
+		Writer:     writer,
+	})
+	if err != nil {
+		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), result.Usage, requestedModel, requestBody)
+		if s.logger != nil {
+			s.logger.Warn("stream conversion failed", "request_id", requestID, "error", err)
+		}
+		return
+	}
+	s.recordTraffic(r, requestID, downstream, route, resp.StatusCode, start, "", result.Usage, requestedModel, requestBody)
+}
+
+func (s *proxyService) recordTraffic(
+	r *http.Request,
+	requestID string,
+	downstream constants.Protocol,
+	route domain.Route,
+	statusCode int,
+	start time.Time,
+	message string,
+	usage domain.TokenUsage,
+	requestedModel string,
+	requestBody []byte,
+) {
+	if s.traffic == nil {
+		return
+	}
+	bodyPreview, bodyBytes, bodyTruncated := s.requestBodyPreview(requestBody, r.ContentLength)
+	item := entity.TrafficRecord{
+		ID:                   requestID,
+		RequestID:            requestID,
+		Endpoint:             r.URL.Path,
+		Method:               r.Method,
+		ClientIP:             clientIP(r.RemoteAddr),
+		UserAgent:            r.UserAgent(),
+		ContentType:          r.Header.Get("Content-Type"),
+		DownstreamProtocol:   downstream.String(),
+		UpstreamProtocol:     route.UpstreamProtocol.String(),
+		RequestedModel:       requestedModel,
+		Model:                route.Model,
+		RequestBody:          bodyPreview,
+		RequestBodyBytes:     bodyBytes,
+		RequestBodyTruncated: bodyTruncated,
+		StatusCode:           statusCode,
+		DurationMS:           time.Since(start).Milliseconds(),
+		InputTokens:          usage.InputTokens,
+		OutputTokens:         usage.OutputTokens,
+		TotalTokens:          usage.TotalTokens,
+		Error:                message,
+		CreatedAt:            time.Now(),
+	}
+	if err := s.traffic.Record(r.Context(), item); err != nil && s.logger != nil {
+		s.logger.Warn("failed to record traffic", "error", err)
+	}
+}
+
+func (s *proxyService) requestBodyPreview(body []byte, contentLength int64) (string, int64, bool) {
+	bodyBytes := int64(len(body))
+	if bodyBytes == 0 && contentLength > 0 {
+		bodyBytes = contentLength
+	}
+	if !s.cfg.Log.ChainLogBodies || len(body) == 0 {
+		return "", bodyBytes, false
+	}
+	limit := s.cfg.Log.ChainLogMaxBodyBytes
+	if limit <= 0 {
+		return "", bodyBytes, bodyBytes > 0
+	}
+	if len(body) > limit {
+		return string(body[:limit]), bodyBytes, true
+	}
+	return string(body), bodyBytes, false
+}
+
+func (s *proxyService) writeProxyError(w http.ResponseWriter, protocol constants.Protocol, status int, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	if protocol == constants.ProtocolAnthropic {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"type": "error",
+			"error": map[string]string{
+				"type":    "invalid_request_error",
+				"message": message,
+			},
+		})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error": map[string]string{
+			"type":    "invalid_request_error",
+			"message": message,
+		},
+	})
+}
+
+func extractRequestModel(body []byte) (string, error) {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", fmt.Errorf("invalid json body")
+	}
+	model, _ := payload["model"].(string)
+	return strings.TrimSpace(model), nil
+}
+
+func extractRequestAPIKey(r *http.Request) string {
+	if key := strings.TrimSpace(r.Header.Get("x-api-key")); key != "" {
+		return key
+	}
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	if len(auth) > 7 && strings.EqualFold(auth[:7], "Bearer ") {
+		return strings.TrimSpace(auth[7:])
+	}
+	return ""
+}
+
+func joinUpstreamURL(baseURL string, protocol constants.Protocol) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if base == "" {
+		return ""
+	}
+	endpoint := upstreamEndpoint(protocol)
+	if strings.HasSuffix(base, endpoint) {
+		return base
+	}
+	if strings.HasSuffix(base, "/v1") {
+		return base + strings.TrimPrefix(endpoint, "/v1")
+	}
+	return base + endpoint
+}
+
+func upstreamEndpoint(protocol constants.Protocol) string {
+	switch protocol {
+	case constants.ProtocolAnthropic:
+		return "/v1/messages"
+	case constants.ProtocolOpenAIChat:
+		return "/v1/chat/completions"
+	case constants.ProtocolOpenAIResponses:
+		return "/v1/responses"
+	default:
+		return ""
+	}
+}
+
+func applyUpstreamHeaders(req *http.Request, source *http.Request, route domain.Route) {
+	req.Header.Set("Content-Type", "application/json")
+	if accept := strings.TrimSpace(source.Header.Get("Accept")); accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+	switch route.UpstreamProtocol {
+	case constants.ProtocolAnthropic:
+		req.Header.Set("x-api-key", route.Provider.APIKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	case constants.ProtocolOpenAIChat, constants.ProtocolOpenAIResponses:
+		req.Header.Set("Authorization", "Bearer "+route.Provider.APIKey)
+	}
+	if route.Provider.UserAgent != "" {
+		req.Header.Set("User-Agent", route.Provider.UserAgent)
+	}
+}
+
+func copySafeHeaders(dst http.Header, src http.Header) {
+	for key, values := range src {
+		switch strings.ToLower(key) {
+		case "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade", "content-length":
+			continue
+		}
+		for _, value := range values {
+			dst.Add(key, value)
+		}
+	}
+	if dst.Get("Content-Type") == "" {
+		dst.Set("Content-Type", "application/json; charset=utf-8")
+	}
+}
+
+func prepareStreamHeaders(dst http.Header, src http.Header) {
+	copySafeHeaders(dst, src)
+	dst.Set("Content-Type", "text/event-stream")
+	dst.Set("Cache-Control", "no-cache")
+	dst.Del("Content-Length")
+}
+
+func isEventStream(header http.Header) bool {
+	return strings.Contains(strings.ToLower(header.Get("Content-Type")), "text/event-stream")
+}
+
+type flushWriter struct {
+	writer http.ResponseWriter
+}
+
+func (w flushWriter) Write(data []byte) (int, error) {
+	n, err := w.writer.Write(data)
+	if flusher, ok := w.writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	return n, err
+}
+
+func isLoopbackRemote(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(remoteAddr))
+	if err != nil {
+		host = strings.TrimSpace(remoteAddr)
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func clientIP(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(remoteAddr))
+	if err == nil {
+		return host
+	}
+	return strings.TrimSpace(remoteAddr)
+}
+
+func newProxyRequestID() string {
+	var data [8]byte
+	if _, err := rand.Read(data[:]); err != nil {
+		return fmt.Sprintf("req-%d", time.Now().UnixNano())
+	}
+	return "req-" + hex.EncodeToString(data[:])
+}

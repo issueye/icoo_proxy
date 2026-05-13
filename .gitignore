@@ -1,0 +1,7 @@
+*.exe
+*.db
+*.log
+*.txt
+
+.claude
+icoo_proxy/*

@@ -1,0 +1,6 @@
+*.exe
+*.db
+*.log
+*.txt
+
+frontend/node_modules/*
