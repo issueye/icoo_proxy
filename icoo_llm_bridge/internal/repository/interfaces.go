@@ -38,6 +38,7 @@ type RoutingRuleRepository interface {
 type APIKeyRepository interface {
 	List(ctx context.Context) ([]entity.APIKey, error)
 	ListEnabled(ctx context.Context) ([]entity.APIKey, error)
+	Find(ctx context.Context, id string) (entity.APIKey, error)
 	Save(ctx context.Context, item *entity.APIKey) error
 	Delete(ctx context.Context, id string) error
 }

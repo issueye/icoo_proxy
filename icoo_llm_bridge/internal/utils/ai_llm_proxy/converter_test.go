@@ -176,6 +176,42 @@ func TestProtocolConverterResponsesStreamToChat(t *testing.T) {
 	}
 }
 
+func TestProtocolConverterResponsesStreamToChatLargeDataLine(t *testing.T) {
+	converter := NewProtocolConverter()
+	largeText := strings.Repeat("x", 70*1024)
+	eventBody, err := json.Marshal(ResponsesStreamEvent{
+		Type:        "response.output_text.delta",
+		OutputIndex: 0,
+		Delta:       largeText,
+	})
+	if err != nil {
+		t.Fatalf("marshal stream event: %v", err)
+	}
+	input := strings.Join([]string{
+		`event: response.output_text.delta`,
+		`data: ` + string(eventBody),
+		``,
+	}, "\n")
+	var out strings.Builder
+
+	_, err = converter.ConvertStream(StreamInput{
+		Downstream: constants.ProtocolOpenAIChat,
+		Upstream:   constants.ProtocolOpenAIResponses,
+		Model:      "target-model",
+		Reader:     strings.NewReader(input),
+		Writer:     &out,
+	})
+	if err != nil {
+		t.Fatalf("ConvertStream returned error: %v", err)
+	}
+	if !strings.Contains(out.String(), largeText) {
+		t.Fatalf("expected large text delta in output")
+	}
+	if !strings.Contains(out.String(), "data: [DONE]") {
+		t.Fatalf("expected done marker")
+	}
+}
+
 func TestProtocolConverterAnthropicStreamToChat(t *testing.T) {
 	converter := NewProtocolConverter()
 	input := strings.Join([]string{

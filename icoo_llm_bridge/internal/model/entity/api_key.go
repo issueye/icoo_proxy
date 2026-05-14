@@ -7,6 +7,7 @@ type APIKey struct {
 	Name          string `gorm:"index;not null"`
 	SecretHash    string `gorm:"uniqueIndex;not null"`
 	SecretPreview string
+	SecretCipher  string
 	Scopes        string
 	Enabled       bool
 	ExpiresAt     *time.Time

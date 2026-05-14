@@ -45,6 +45,7 @@ type RoutingRuleUpsertInput struct {
 }
 
 type APIKeyCreateInput struct {
+	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Secret  string `json:"secret"`
 	Scopes  string `json:"scopes"`
@@ -55,8 +56,13 @@ type APIKeyView struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	SecretPreview string `json:"secret_preview"`
+	CanReveal     bool   `json:"can_reveal"`
 	Scopes        string `json:"scopes"`
 	Enabled       bool   `json:"enabled"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+}
+
+type APIKeySecretView struct {
+	Secret string `json:"secret"`
 }

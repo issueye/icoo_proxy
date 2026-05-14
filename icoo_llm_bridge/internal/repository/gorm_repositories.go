@@ -127,6 +127,11 @@ func (r *gormAPIKeyRepository) ListEnabled(ctx context.Context) ([]entity.APIKey
 	return items, r.db.WithContext(ctx).Where("enabled = ?", true).Find(&items).Error
 }
 
+func (r *gormAPIKeyRepository) Find(ctx context.Context, id string) (entity.APIKey, error) {
+	var item entity.APIKey
+	return item, r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+}
+
 func (r *gormAPIKeyRepository) Save(ctx context.Context, item *entity.APIKey) error {
 	return r.db.WithContext(ctx).Save(item).Error
 }

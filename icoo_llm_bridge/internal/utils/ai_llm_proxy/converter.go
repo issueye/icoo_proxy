@@ -313,7 +313,7 @@ func (c *protocolConverter) convertAnthropicStreamToChat(input StreamInput) (Str
 }
 
 func scanSSE(reader io.Reader, handle func(eventName string, data []byte) error) error {
-	scanner := bufio.NewScanner(reader)
+	bufReader := bufio.NewReader(reader)
 	eventName := ""
 	dataLines := make([]string, 0, 4)
 	flush := func() error {
@@ -330,28 +330,30 @@ func scanSSE(reader io.Reader, handle func(eventName string, data []byte) error)
 		}
 		return handle(name, []byte(data))
 	}
-	for scanner.Scan() {
-		line := strings.TrimRight(scanner.Text(), "\r")
-		if line == "" {
-			if err := flush(); err != nil {
-				return err
+	for {
+		line, err := bufReader.ReadString('\n')
+		if len(line) > 0 {
+			line = strings.TrimSuffix(line, "\n")
+			line = strings.TrimSuffix(line, "\r")
+			if line == "" {
+				if err := flush(); err != nil {
+					return err
+				}
+			} else if !strings.HasPrefix(line, ":") {
+				if strings.HasPrefix(line, "event:") {
+					eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+				} else if strings.HasPrefix(line, "data:") {
+					value := strings.TrimPrefix(line, "data:")
+					dataLines = append(dataLines, strings.TrimPrefix(value, " "))
+				}
 			}
-			continue
 		}
-		if strings.HasPrefix(line, ":") {
-			continue
+		if err == io.EOF {
+			break
 		}
-		if strings.HasPrefix(line, "event:") {
-			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-			continue
+		if err != nil {
+			return err
 		}
-		if strings.HasPrefix(line, "data:") {
-			value := strings.TrimPrefix(line, "data:")
-			dataLines = append(dataLines, strings.TrimPrefix(value, " "))
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return err
 	}
 	return flush()
 }

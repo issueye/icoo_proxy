@@ -199,6 +199,10 @@ async function copyKey(item) {
   const secret = await store.copySecret(item.id);
   if (secret) {
     message.success("授权 Key 已复制。");
+    return;
+  }
+  if (store.error) {
+    message.error(store.error);
   }
 }
 

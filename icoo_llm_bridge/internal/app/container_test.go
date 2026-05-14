@@ -174,6 +174,69 @@ func TestCustomEndpointRoutesProxyRequest(t *testing.T) {
 	}
 }
 
+func TestAPIKeySecretEndpointAndMetadataUpdate(t *testing.T) {
+	container := newTestContainer(t)
+	t.Cleanup(func() {
+		if err := container.Close(); err != nil {
+			t.Errorf("Close() error = %v", err)
+		}
+	})
+
+	const adminSecret = "admin-secret"
+	if _, err := container.Services.Auth.CreateKey(context.Background(), service.APIKeyCreateInput{
+		Name:    "admin",
+		Secret:  adminSecret,
+		Scopes:  "admin",
+		Enabled: true,
+	}); err != nil {
+		t.Fatalf("create admin key: %v", err)
+	}
+
+	createResp := doJSON(t, container.Server.Handler, http.MethodPost, "/api/v1/api-keys", adminSecret, map[string]any{
+		"name":    "copyable",
+		"secret":  "copyable-secret",
+		"scopes":  "proxy",
+		"enabled": true,
+	})
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("create api key status = %d, body = %s", createResp.Code, createResp.Body.String())
+	}
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal create response: %v", err)
+	}
+	if created.Data.ID == "" {
+		t.Fatal("created key id is empty")
+	}
+
+	secretResp := doJSON(t, container.Server.Handler, http.MethodGet, "/api/v1/api-keys/"+created.Data.ID+"/secret", adminSecret, nil)
+	if secretResp.Code != http.StatusOK {
+		t.Fatalf("get secret status = %d, body = %s", secretResp.Code, secretResp.Body.String())
+	}
+	assertResponseDataField(t, secretResp.Body.Bytes(), "secret", "copyable-secret")
+
+	updateResp := doJSON(t, container.Server.Handler, http.MethodPost, "/api/v1/api-keys", adminSecret, map[string]any{
+		"id":      created.Data.ID,
+		"name":    "copyable-updated",
+		"secret":  "",
+		"scopes":  "admin,proxy",
+		"enabled": true,
+	})
+	if updateResp.Code != http.StatusOK {
+		t.Fatalf("update api key status = %d, body = %s", updateResp.Code, updateResp.Body.String())
+	}
+
+	secretResp = doJSON(t, container.Server.Handler, http.MethodGet, "/api/v1/api-keys/"+created.Data.ID+"/secret", adminSecret, nil)
+	if secretResp.Code != http.StatusOK {
+		t.Fatalf("get secret after update status = %d, body = %s", secretResp.Code, secretResp.Body.String())
+	}
+	assertResponseDataField(t, secretResp.Body.Bytes(), "secret", "copyable-secret")
+}
+
 func newTestContainer(t *testing.T) *Container {
 	t.Helper()
 

@@ -134,9 +134,10 @@ export const useAuthKeysStore = defineStore("authKeys", {
       try {
         const result = await GetAuthKeySecret(id);
         const secret = typeof result === "string" ? result : result?.secret || "";
-        if (secret) {
-          await navigator.clipboard.writeText(secret);
+        if (!secret) {
+          throw new Error("未获取到可复制的授权 Key");
         }
+        await navigator.clipboard.writeText(secret);
         return secret;
       } catch (error) {
         this.error = error?.message || String(error);

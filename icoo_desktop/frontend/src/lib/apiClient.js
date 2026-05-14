@@ -179,6 +179,7 @@ function normalizeAPIKey(raw) {
     name: raw?.name || raw?.Name || "",
     secret_preview: preview,
     secret_masked: preview,
+    can_reveal: Boolean(raw?.can_reveal ?? raw?.CanReveal ?? false),
     scopes: raw?.scopes || raw?.Scopes || "",
     enabled: Boolean(raw?.enabled ?? raw?.Enabled ?? true),
     description: "",
@@ -455,11 +456,9 @@ export async function ListAuthKeys() {
 }
 
 export async function SaveAuthKey(input) {
-  if (input.id) {
-    await DeleteAuthKey(input.id);
-  }
   return client
     .post(`${API_PREFIX}/api-keys`, {
+      id: input.id || undefined,
       name: String(input.name || "").trim(),
       secret: String(input.secret || "").trim(),
       scopes: String(input.scopes || "admin,proxy").trim(),
@@ -473,8 +472,7 @@ export function DeleteAuthKey(id) {
 }
 
 export async function GetAuthKeySecret(id) {
-  const keys = await ListAuthKeys();
-  return { secret: keys.find((item) => item.id === id)?.secret_preview || "" };
+  return client.get(`${API_PREFIX}/api-keys/${id}/secret`);
 }
 
 export function ListRoutePolicies() {

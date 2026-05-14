@@ -140,6 +140,11 @@ func (c *APIKeyController) List(ctx *gin.Context) {
 	writePagedResult(ctx, items, err)
 }
 
+func (c *APIKeyController) Secret(ctx *gin.Context) {
+	item, err := c.service.GetKeySecret(ctx.Request.Context(), ctx.Param("id"))
+	writeResult(ctx, item, err)
+}
+
 func (c *APIKeyController) Create(ctx *gin.Context) {
 	var input service.APIKeyCreateInput
 	if !bindJSON(ctx, &input) {

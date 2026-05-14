@@ -18,6 +18,7 @@ import (
 type AuthService interface {
 	Verify(ctx context.Context, secret string, scope string) bool
 	ListKeys(ctx context.Context) ([]APIKeyView, error)
+	GetKeySecret(ctx context.Context, id string) (APIKeySecretView, error)
 	CreateKey(ctx context.Context, input APIKeyCreateInput) (APIKeyView, error)
 	DeleteKey(ctx context.Context, id string) error
 }
@@ -90,37 +91,70 @@ func (s *authService) ListKeys(ctx context.Context) ([]APIKeyView, error) {
 	return views, nil
 }
 
+func (s *authService) GetKeySecret(ctx context.Context, id string) (APIKeySecretView, error) {
+	item, err := s.repo.Find(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return APIKeySecretView{}, err
+	}
+	secret := strings.TrimSpace(item.SecretCipher)
+	if secret == "" {
+		return APIKeySecretView{}, fmt.Errorf("该 Key 创建于旧版本，明文不可恢复，请重新生成后再复制")
+	}
+	return APIKeySecretView{Secret: secret}, nil
+}
+
 func (s *authService) CreateKey(ctx context.Context, input APIKeyCreateInput) (APIKeyView, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return APIKeyView{}, fmt.Errorf("name is required")
 	}
-	secret := strings.TrimSpace(input.Secret)
-	generated := false
-	if secret == "" {
-		secret = idgen.New("sk")
-		generated = true
-	}
+	id := strings.TrimSpace(input.ID)
 	scopes := strings.TrimSpace(input.Scopes)
 	if scopes == "" {
 		scopes = "proxy"
 	}
-	now := time.Now()
-	item := entity.APIKey{
-		ID:            idgen.New("key"),
-		Name:          name,
-		SecretHash:    hashSecret(secret),
-		SecretPreview: previewSecret(secret),
-		Scopes:        scopes,
-		Enabled:       input.Enabled,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+
+	var (
+		item entity.APIKey
+		err  error
+	)
+	if id != "" {
+		item, err = s.repo.Find(ctx, id)
+		if err != nil {
+			return APIKeyView{}, err
+		}
+	} else {
+		now := time.Now()
+		item = entity.APIKey{
+			ID:        idgen.New("key"),
+			CreatedAt: now,
+		}
 	}
+
+	secret := strings.TrimSpace(input.Secret)
+	generated := false
+	if secret == "" && id == "" {
+		secret = idgen.New("sk")
+		generated = true
+	}
+	if secret != "" {
+		item.SecretHash = hashSecret(secret)
+		item.SecretPreview = previewSecret(secret)
+		item.SecretCipher = secret
+	} else if item.SecretHash == "" {
+		return APIKeyView{}, fmt.Errorf("secret is required")
+	}
+
+	item.Name = name
+	item.Scopes = scopes
+	item.Enabled = input.Enabled
+	item.UpdatedAt = time.Now()
+
 	if err := s.repo.Save(ctx, &item); err != nil {
 		return APIKeyView{}, err
 	}
 	view := toAPIKeyView(item)
-	if generated {
+	if generated || secret != "" {
 		view.SecretPreview = secret
 	}
 	return view, nil
@@ -328,6 +362,7 @@ func toAPIKeyView(item entity.APIKey) APIKeyView {
 		ID:            item.ID,
 		Name:          item.Name,
 		SecretPreview: item.SecretPreview,
+		CanReveal:     strings.TrimSpace(item.SecretCipher) != "",
 		Scopes:        item.Scopes,
 		Enabled:       item.Enabled,
 		CreatedAt:     item.CreatedAt.Format(time.RFC3339),
