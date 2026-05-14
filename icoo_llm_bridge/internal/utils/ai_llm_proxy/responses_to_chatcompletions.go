@@ -68,6 +68,11 @@ func ResponsesToChatCompletions(resp *ResponsesResponse, model string) *ChatComp
 	if contentText != "" {
 		raw, _ := json.Marshal(contentText)
 		msg.Content = raw
+	} else if len(toolCalls) == 0 {
+		// OpenAI Chat Completions clients are more compatible with an explicit
+		// empty string than an omitted assistant content field.
+		raw, _ := json.Marshal("")
+		msg.Content = raw
 	}
 	if reasoningText != "" {
 		msg.ReasoningContent = reasoningText

@@ -176,6 +176,54 @@ func TestProxyServiceConvertsEventStream(t *testing.T) {
 	}
 }
 
+func TestProxyServiceNormalizesSuccessfulResponsesStatusCode(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"id":"resp_1","object":"response","model":"gpt-5.5","status":"completed","output":[]}`))
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "test",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "gpt-5.5",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false},
+		slog.Default(),
+		ai_llm_proxy.NewProtocolConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"object":"chat.completion"`) {
+		t.Fatalf("expected chat completion body, got: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"content":""`) {
+		t.Fatalf("expected explicit empty content, got: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusOK {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+}
+
 func TestProxyServiceRoutesOpenAIChatToAnthropicStream(t *testing.T) {
 	var upstreamPath string
 	var upstreamModel string

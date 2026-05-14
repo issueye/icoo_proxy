@@ -133,10 +133,10 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 	}
 
 	copySafeHeaders(w.Header(), resp.Header)
-	w.WriteHeader(resp.StatusCode)
+	w.WriteHeader(normalizeSuccessStatusCode(resp.StatusCode, route.UpstreamProtocol, respBody))
 	_, _ = w.Write(converted)
 	usage := s.converter.ExtractUsage(route.UpstreamProtocol, respBody).Normalize()
-	s.recordTraffic(r, requestID, downstream, route, resp.StatusCode, start, "", usage, requestedModel, body)
+	s.recordTraffic(r, requestID, downstream, route, normalizeSuccessStatusCode(resp.StatusCode, route.UpstreamProtocol, respBody), start, "", usage, requestedModel, body)
 }
 
 func (s *proxyService) authorize(r *http.Request) bool {
@@ -367,6 +367,27 @@ func prepareStreamHeaders(dst http.Header, src http.Header) {
 
 func isEventStream(header http.Header) bool {
 	return strings.Contains(strings.ToLower(header.Get("Content-Type")), "text/event-stream")
+}
+
+func normalizeSuccessStatusCode(statusCode int, upstream constants.Protocol, body []byte) int {
+	if statusCode < http.StatusBadRequest {
+		return statusCode
+	}
+	switch upstream {
+	case constants.ProtocolOpenAIResponses:
+		var payload struct {
+			Object string `json:"object"`
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		}
+		if err := json.Unmarshal(body, &payload); err == nil &&
+			payload.Object == "response" &&
+			strings.TrimSpace(payload.ID) != "" &&
+			strings.TrimSpace(payload.Status) != "" {
+			return http.StatusOK
+		}
+	}
+	return statusCode
 }
 
 type flushWriter struct {

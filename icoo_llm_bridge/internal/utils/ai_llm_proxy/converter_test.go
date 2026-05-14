@@ -108,6 +108,32 @@ func TestProtocolConverterResponsesResponseToChat(t *testing.T) {
 	}
 }
 
+func TestProtocolConverterResponsesResponseToChatEmptyAssistantContent(t *testing.T) {
+	converter := NewProtocolConverter()
+	body := []byte(`{"id":"resp_1","object":"response","model":"gpt-5.5","status":"completed","output":[]}`)
+
+	out, err := converter.ConvertResponse(ResponseInput{
+		Downstream: constants.ProtocolOpenAIChat,
+		Upstream:   constants.ProtocolOpenAIResponses,
+		Model:      "gpt-5.5",
+		Body:       body,
+	})
+	if err != nil {
+		t.Fatalf("ConvertResponse returned error: %v", err)
+	}
+	var payload ChatCompletionsResponse
+	if err := json.Unmarshal(out, &payload); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	var content string
+	if err := json.Unmarshal(payload.Choices[0].Message.Content, &content); err != nil {
+		t.Fatalf("unmarshal empty message content: %v", err)
+	}
+	if content != "" {
+		t.Fatalf("content = %q", content)
+	}
+}
+
 func TestProtocolConverterAnthropicResponseToChat(t *testing.T) {
 	converter := NewProtocolConverter()
 	body := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"claude","content":[{"type":"text","text":"hello"}],"stop_reason":"end_turn","usage":{"input_tokens":2,"output_tokens":3}}`)
