@@ -224,6 +224,60 @@ func TestProxyServiceNormalizesSuccessfulResponsesStatusCode(t *testing.T) {
 	}
 }
 
+func TestProxyServiceFallsBackToStreamForSuccessfulChatJSON(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"id":"chatcmpl_test","object":"chat.completion","created":1778735097,"model":"gpt-5.5","choices":[{"index":0,"message":{"role":"assistant","content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":0,"total_tokens":1}}`))
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "test",
+		UpstreamProtocol: constants.ProtocolOpenAIChat,
+		Model:            "gpt-5.5",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false},
+		slog.Default(),
+		ai_llm_proxy.NewProtocolConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","stream":true,"stream_options":{"include_usage":true},"messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
+		t.Fatalf("content-type = %q", got)
+	}
+	if !strings.Contains(rec.Body.String(), `"object":"chat.completion.chunk"`) {
+		t.Fatalf("expected chat stream body, got: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"usage":{"prompt_tokens":1,"completion_tokens":0,"total_tokens":1}`) {
+		t.Fatalf("expected usage chunk, got: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "data: [DONE]") {
+		t.Fatalf("expected done marker, got: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusOK {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+}
+
 func TestProxyServiceRoutesOpenAIChatToAnthropicStream(t *testing.T) {
 	var upstreamPath string
 	var upstreamModel string

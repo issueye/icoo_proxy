@@ -119,6 +119,8 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
 		return
 	}
+	wantsStream, includeUsage := downstreamStreamPreference(downstream, body)
+	statusCode := normalizeSuccessStatusCode(resp.StatusCode, route.UpstreamProtocol, respBody)
 
 	converted, err := s.converter.ConvertResponse(ai_llm_proxy.ResponseInput{
 		Downstream: downstream,
@@ -132,11 +134,25 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		return
 	}
 
-	copySafeHeaders(w.Header(), resp.Header)
-	w.WriteHeader(normalizeSuccessStatusCode(resp.StatusCode, route.UpstreamProtocol, respBody))
-	_, _ = w.Write(converted)
 	usage := s.converter.ExtractUsage(route.UpstreamProtocol, respBody).Normalize()
-	s.recordTraffic(r, requestID, downstream, route, normalizeSuccessStatusCode(resp.StatusCode, route.UpstreamProtocol, respBody), start, "", usage, requestedModel, body)
+	if wantsStream && downstream == constants.ProtocolOpenAIChat && statusCode < http.StatusBadRequest {
+		prepareStreamHeaders(w.Header(), resp.Header)
+		w.WriteHeader(statusCode)
+		if err := writeChatCompletionAsStream(converted, includeUsage, flushWriter{writer: w}); err != nil {
+			s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), usage, requestedModel, body)
+			if s.logger != nil {
+				s.logger.Warn("non-stream chat fallback conversion failed", "request_id", requestID, "error", err)
+			}
+			return
+		}
+		s.recordTraffic(r, requestID, downstream, route, statusCode, start, "", usage, requestedModel, body)
+		return
+	}
+
+	copySafeHeaders(w.Header(), resp.Header)
+	w.WriteHeader(statusCode)
+	_, _ = w.Write(converted)
+	s.recordTraffic(r, requestID, downstream, route, statusCode, start, "", usage, requestedModel, body)
 }
 
 func (s *proxyService) authorize(r *http.Request) bool {
@@ -386,8 +402,136 @@ func normalizeSuccessStatusCode(statusCode int, upstream constants.Protocol, bod
 			strings.TrimSpace(payload.Status) != "" {
 			return http.StatusOK
 		}
+	case constants.ProtocolOpenAIChat:
+		var payload struct {
+			Object  string `json:"object"`
+			ID      string `json:"id"`
+			Choices []any  `json:"choices"`
+		}
+		if err := json.Unmarshal(body, &payload); err == nil &&
+			payload.Object == "chat.completion" &&
+			strings.TrimSpace(payload.ID) != "" &&
+			len(payload.Choices) > 0 {
+			return http.StatusOK
+		}
 	}
 	return statusCode
+}
+
+func downstreamStreamPreference(protocol constants.Protocol, body []byte) (bool, bool) {
+	switch protocol {
+	case constants.ProtocolOpenAIChat:
+		var req ai_llm_proxy.ChatCompletionsRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			return false, false
+		}
+		return req.Stream, req.StreamOptions != nil && req.StreamOptions.IncludeUsage
+	default:
+		return false, false
+	}
+}
+
+func writeChatCompletionAsStream(body []byte, includeUsage bool, writer io.Writer) error {
+	var resp ai_llm_proxy.ChatCompletionsResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return err
+	}
+	if len(resp.Choices) == 0 {
+		return fmt.Errorf("chat completion response has no choices")
+	}
+
+	choice := resp.Choices[0]
+	roleChunk := ai_llm_proxy.ChatCompletionsChunk{
+		ID:      resp.ID,
+		Object:  "chat.completion.chunk",
+		Created: resp.Created,
+		Model:   resp.Model,
+		Choices: []ai_llm_proxy.ChatChunkChoice{{
+			Index: 0,
+			Delta: ai_llm_proxy.ChatDelta{Role: "assistant"},
+		}},
+	}
+	if text, ok, err := extractChatMessageContent(choice.Message.Content); err != nil {
+		return err
+	} else if ok {
+		contentChunk := ai_llm_proxy.ChatCompletionsChunk{
+			ID:      resp.ID,
+			Object:  "chat.completion.chunk",
+			Created: resp.Created,
+			Model:   resp.Model,
+			Choices: []ai_llm_proxy.ChatChunkChoice{{
+				Index: 0,
+				Delta: ai_llm_proxy.ChatDelta{Content: &text},
+			}},
+		}
+		if err := writeChatChunk(writer, roleChunk); err != nil {
+			return err
+		}
+		if err := writeChatChunk(writer, contentChunk); err != nil {
+			return err
+		}
+	} else {
+		if err := writeChatChunk(writer, roleChunk); err != nil {
+			return err
+		}
+	}
+
+	finishReason := choice.FinishReason
+	if finishReason == "" {
+		finishReason = "stop"
+	}
+	empty := ""
+	finishChunk := ai_llm_proxy.ChatCompletionsChunk{
+		ID:      resp.ID,
+		Object:  "chat.completion.chunk",
+		Created: resp.Created,
+		Model:   resp.Model,
+		Choices: []ai_llm_proxy.ChatChunkChoice{{
+			Index:        0,
+			Delta:        ai_llm_proxy.ChatDelta{Content: &empty},
+			FinishReason: &finishReason,
+		}},
+	}
+	if err := writeChatChunk(writer, finishChunk); err != nil {
+		return err
+	}
+
+	if includeUsage && resp.Usage != nil {
+		usageChunk := ai_llm_proxy.ChatCompletionsChunk{
+			ID:      resp.ID,
+			Object:  "chat.completion.chunk",
+			Created: resp.Created,
+			Model:   resp.Model,
+			Choices: []ai_llm_proxy.ChatChunkChoice{},
+			Usage:   resp.Usage,
+		}
+		if err := writeChatChunk(writer, usageChunk); err != nil {
+			return err
+		}
+	}
+
+	_, err := io.WriteString(writer, "data: [DONE]\n\n")
+	return err
+}
+
+func writeChatChunk(writer io.Writer, chunk ai_llm_proxy.ChatCompletionsChunk) error {
+	text, err := ai_llm_proxy.ChatChunkToSSE(chunk)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(writer, text)
+	return err
+}
+
+func extractChatMessageContent(raw json.RawMessage) (string, bool, error) {
+	if len(raw) == 0 {
+		return "", false, nil
+	}
+	var content string
+	if err := json.Unmarshal(raw, &content); err == nil {
+		return content, true, nil
+	}
+	return "", false, nil
 }
 
 type flushWriter struct {
