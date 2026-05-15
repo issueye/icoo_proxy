@@ -28,15 +28,16 @@ type Deps struct {
 }
 
 func NewServices(deps Deps) Services {
+	tracker := NewRequestTracker()
 	auth := NewAuthService(deps.Repos.APIKey)
 	endpoints := NewEndpointService(deps.Repos.Endpoint)
 	providers := NewProviderService(deps.Repos.Provider)
 	providerModels := NewProviderModelService(deps.Repos.ProviderModel)
-	rules := NewRoutingRuleService(deps.Repos.RoutingRule)
+	rules := NewRoutingRuleService(deps.Repos.RoutingRule, tracker)
 	routing := NewRouteResolver(deps.Repos.Provider, deps.Repos.ProviderModel, deps.Repos.RoutingRule)
 	traffic := NewTrafficService(deps.Repos.Traffic)
 	runtime := NewRuntimeService(deps.Config, endpoints)
-	proxy := NewProxyService(deps.Config, deps.Logger, deps.Converter, auth, routing, traffic)
+	proxy := NewProxyService(deps.Config, deps.Logger, deps.Converter, auth, routing, traffic, tracker)
 	return Services{
 		Auth:          auth,
 		Runtime:       runtime,

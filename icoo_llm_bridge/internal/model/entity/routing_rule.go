@@ -12,6 +12,7 @@ type RoutingRule struct {
 	Priority          int    `gorm:"index"`
 	MatchProtocol     constants.Protocol
 	MatchModelPattern string
+	UpstreamProtocol  constants.Protocol
 	TargetProviderID  string `gorm:"index"`
 	TargetModel       string
 	Enabled           bool

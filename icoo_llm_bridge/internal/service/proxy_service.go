@@ -28,6 +28,7 @@ type proxyService struct {
 	auth      proxyAuth
 	routes    RouteResolver
 	traffic   TrafficService
+	tracker   RequestTracker
 	client    *http.Client
 }
 
@@ -42,6 +43,7 @@ func NewProxyService(
 	auth proxyAuth,
 	routes RouteResolver,
 	traffic TrafficService,
+	tracker RequestTracker,
 ) ProxyService {
 	return &proxyService{
 		cfg:       cfg,
@@ -50,6 +52,7 @@ func NewProxyService(
 		auth:      auth,
 		routes:    routes,
 		traffic:   traffic,
+		tracker:   tracker,
 		client:    &http.Client{Timeout: cfg.WriteTimeout},
 	}
 }
@@ -87,6 +90,10 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		s.writeProxyError(w, downstream, http.StatusBadRequest, err.Error())
 		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusBadRequest, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
 		return
+	}
+	if ruleID := extractRuleID(route.Source); ruleID != "" && s.tracker != nil {
+		s.tracker.Acquire(ruleID)
+		defer s.tracker.Release(ruleID)
 	}
 	upstreamBody, err := s.converter.ConvertRequest(ai_llm_proxy.RequestInput{
 		Downstream: downstream,
@@ -587,4 +594,12 @@ func newProxyRequestID() string {
 		return fmt.Sprintf("req-%d", time.Now().UnixNano())
 	}
 	return "req-" + hex.EncodeToString(data[:])
+}
+
+func extractRuleID(source string) string {
+	const prefix = "routing_rule:"
+	if strings.HasPrefix(source, prefix) {
+		return source[len(prefix):]
+	}
+	return ""
 }

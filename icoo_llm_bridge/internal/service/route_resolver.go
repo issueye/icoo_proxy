@@ -97,7 +97,7 @@ func (r *routeResolver) resolveDirect(providers []domain.ProviderSnapshot, reque
 	if !ok {
 		return domain.Route{}, true, fmt.Errorf("direct route model %q was not found or is disabled for provider %q", modelName, providerName)
 	}
-	return buildRoute(provider.Name+"/"+model.Name, provider, model.Name, model.MaxTokens, "direct"), true, nil
+	return buildRoute(provider.Name+"/"+model.Name, provider, provider.Protocol, model.Name, model.MaxTokens, "direct"), true, nil
 }
 
 func (r *routeResolver) routeFromRule(providers []domain.ProviderSnapshot, rule entity.RoutingRule, requestedModel string) (domain.Route, error) {
@@ -119,7 +119,12 @@ func (r *routeResolver) routeFromRule(providers []domain.ProviderSnapshot, rule 
 		return domain.Route{}, fmt.Errorf("routing rule %q targets missing or disabled model %q for provider %q", rule.Name, targetModel, provider.Name)
 	}
 
-	return buildRoute(rule.Name, provider, model.Name, model.MaxTokens, "routing_rule:"+rule.ID), nil
+	upstreamProtocol := rule.UpstreamProtocol
+	if upstreamProtocol == "" {
+		upstreamProtocol = provider.Protocol
+	}
+
+	return buildRoute(rule.Name, provider, upstreamProtocol, model.Name, model.MaxTokens, "routing_rule:"+rule.ID), nil
 }
 
 func providerSnapshot(item entity.Provider, models []entity.ProviderModel) domain.ProviderSnapshot {
@@ -192,10 +197,10 @@ func findModel(models []domain.ProviderModelSnapshot, name string) (domain.Provi
 	return domain.ProviderModelSnapshot{}, false
 }
 
-func buildRoute(name string, provider domain.ProviderSnapshot, model string, maxTokens int, source string) domain.Route {
+func buildRoute(name string, provider domain.ProviderSnapshot, upstreamProtocol constants.Protocol, model string, maxTokens int, source string) domain.Route {
 	return domain.Route{
 		Name:             name,
-		UpstreamProtocol: provider.Protocol,
+		UpstreamProtocol: upstreamProtocol,
 		Model:            model,
 		DefaultMaxTokens: maxTokens,
 		Source:           source,

@@ -38,6 +38,7 @@ type RoutingRuleUpsertInput struct {
 	Priority          int                `json:"priority"`
 	MatchProtocol     constants.Protocol `json:"match_protocol"`
 	MatchModelPattern string             `json:"match_model_pattern"`
+	UpstreamProtocol  constants.Protocol `json:"upstream_protocol"`
 	TargetProviderID  string             `json:"target_provider_id"`
 	TargetModel       string             `json:"target_model"`
 	Enabled           bool               `json:"enabled"`

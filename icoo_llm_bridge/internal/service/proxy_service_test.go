@@ -104,6 +104,7 @@ func TestProxyServiceForwardsJSONAndRewritesModel(t *testing.T) {
 		allowAuth{},
 		fixedRouteResolver{route: route},
 		traffic,
+		nil,
 	)
 
 	requestBody := `{"model":"requested-model","input":"hi"}`
@@ -188,6 +189,7 @@ func TestProxyServiceConvertsEventStream(t *testing.T) {
 		allowAuth{},
 		fixedRouteResolver{route: route},
 		traffic,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","messages":[{"role":"user","content":"hi"}]}`))
@@ -246,6 +248,7 @@ func TestProxyServiceNormalizesSuccessfulResponsesStreamStatusCode(t *testing.T)
 		allowAuth{},
 		fixedRouteResolver{route: route},
 		traffic,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","stream":true,"messages":[{"role":"user","content":"hi"}]}`))
@@ -291,6 +294,7 @@ func TestProxyServiceNormalizesSuccessfulResponsesStatusCode(t *testing.T) {
 		allowAuth{},
 		fixedRouteResolver{route: route},
 		traffic,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","messages":[{"role":"user","content":"hi"}]}`))
@@ -339,6 +343,7 @@ func TestProxyServiceFallsBackToStreamForSuccessfulChatJSON(t *testing.T) {
 		allowAuth{},
 		fixedRouteResolver{route: route},
 		traffic,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","stream":true,"stream_options":{"include_usage":true},"messages":[{"role":"user","content":"hi"}]}`))
@@ -425,6 +430,7 @@ func TestProxyServiceRoutesOpenAIChatToAnthropicStream(t *testing.T) {
 		allowAuth{},
 		fixedRouteResolver{route: route},
 		traffic,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","messages":[{"role":"user","content":"hi"}]}`))

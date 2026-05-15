@@ -270,11 +270,12 @@ func (s *providerModelService) Delete(ctx context.Context, providerID string, id
 }
 
 type routingRuleService struct {
-	repo repository.RoutingRuleRepository
+	repo    repository.RoutingRuleRepository
+	tracker RequestTracker
 }
 
-func NewRoutingRuleService(repo repository.RoutingRuleRepository) RoutingRuleService {
-	return &routingRuleService{repo: repo}
+func NewRoutingRuleService(repo repository.RoutingRuleRepository, tracker RequestTracker) RoutingRuleService {
+	return &routingRuleService{repo: repo, tracker: tracker}
 }
 
 func (s *routingRuleService) List(ctx context.Context) ([]entity.RoutingRule, error) {
@@ -285,8 +286,11 @@ func (s *routingRuleService) Upsert(ctx context.Context, input RoutingRuleUpsert
 	if strings.TrimSpace(input.Name) == "" {
 		return entity.RoutingRule{}, fmt.Errorf("name is required")
 	}
-	now := time.Now()
 	id := strings.TrimSpace(input.ID)
+	if id != "" && s.tracker != nil && s.tracker.ActiveCount(id) > 0 {
+		return entity.RoutingRule{}, fmt.Errorf("routing rule is currently handling active requests, cannot modify")
+	}
+	now := time.Now()
 	if id == "" {
 		id = idgen.New("rule")
 	}
@@ -296,6 +300,7 @@ func (s *routingRuleService) Upsert(ctx context.Context, input RoutingRuleUpsert
 		Priority:          input.Priority,
 		MatchProtocol:     input.MatchProtocol,
 		MatchModelPattern: strings.TrimSpace(input.MatchModelPattern),
+		UpstreamProtocol:  input.UpstreamProtocol,
 		TargetProviderID:  strings.TrimSpace(input.TargetProviderID),
 		TargetModel:       strings.TrimSpace(input.TargetModel),
 		Enabled:           input.Enabled,
@@ -309,7 +314,11 @@ func (s *routingRuleService) Upsert(ctx context.Context, input RoutingRuleUpsert
 }
 
 func (s *routingRuleService) Delete(ctx context.Context, id string) error {
-	return s.repo.Delete(ctx, strings.TrimSpace(id))
+	id = strings.TrimSpace(id)
+	if s.tracker != nil && s.tracker.ActiveCount(id) > 0 {
+		return fmt.Errorf("routing rule is currently handling active requests, cannot delete")
+	}
+	return s.repo.Delete(ctx, id)
 }
 
 type trafficService struct {
