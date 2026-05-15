@@ -114,7 +114,7 @@
               <p class="mt-0.5 text-[11px] text-[#8c8c8c]">下游协议</p>
             </div>
             <p class="text-sm text-[#595959]">{{ policy.supplier_name || "未分配供应商" }}</p>
-            <p class="text-xs text-[#8c8c8c]">{{ policy.upstream_protocol || "-" }} | 默认模型来自供应商</p>
+            <p class="text-xs text-[#8c8c8c]">{{ policy.upstream_protocol || "-" }} | 目标模型来自请求或别名映射</p>
             <UTag :variant="policy.enabled ? 'success' : 'error'" size="xs">
               {{ policy.enabled ? "启用中" : "已停用" }}
             </UTag>

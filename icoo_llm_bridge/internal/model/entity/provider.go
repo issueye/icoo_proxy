@@ -30,7 +30,6 @@ type ProviderModel struct {
 	ProviderID string    `json:"provider_id" gorm:"index:idx_provider_model,unique;not null"`
 	Name       string    `json:"name" gorm:"index:idx_provider_model,unique;not null"`
 	MaxTokens  int       `json:"max_tokens"`
-	IsDefault  bool      `json:"is_default"`
 	Enabled    bool      `json:"enabled"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`

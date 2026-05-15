@@ -19,6 +19,5 @@ type ProviderSnapshot struct {
 type ProviderModelSnapshot struct {
 	Name      string
 	MaxTokens int
-	IsDefault bool
 	Enabled   bool
 }

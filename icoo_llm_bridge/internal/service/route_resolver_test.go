@@ -20,15 +20,15 @@ func TestRouteResolverResolve(t *testing.T) {
 	}
 	baseModels := map[string][]entity.ProviderModel{
 		"p-openai": {
-			model("p-openai", "gpt-4o", 128000, true, true),
-			model("p-openai", "gpt-4o-mini", 64000, false, true),
-			model("p-openai", "disabled-model", 1000, false, false),
+			model("p-openai", "gpt-4o", 128000, true),
+			model("p-openai", "gpt-4o-mini", 64000, true),
+			model("p-openai", "disabled-model", 1000, false),
 		},
 		"p-anthropic": {
-			model("p-anthropic", "claude-3-5-sonnet", 200000, true, true),
+			model("p-anthropic", "claude-3-5-sonnet", 200000, true),
 		},
 		"p-disabled": {
-			model("p-disabled", "ghost", 1, true, true),
+			model("p-disabled", "ghost", 1, true),
 		},
 	}
 
@@ -80,11 +80,11 @@ func TestRouteResolverResolve(t *testing.T) {
 			},
 		},
 		{
-			name:      "empty requested model uses default rule and provider default model",
+			name:      "empty requested model uses explicit target model",
 			providers: baseProviders,
 			models:    baseModels,
 			rules: []entity.RoutingRule{
-				rule("r-default", "default", 1, constants.ProtocolOpenAIChat, "", "p-openai", "", true),
+				rule("r-default", "default", 1, constants.ProtocolOpenAIChat, "", "p-openai", "gpt-4o", true),
 			},
 			downstream: constants.ProtocolOpenAIChat,
 			want: domain.Route{
@@ -96,7 +96,7 @@ func TestRouteResolverResolve(t *testing.T) {
 			},
 		},
 		{
-			name:      "star rule can act as default rule for empty requested model",
+			name:      "star rule can act as default rule with explicit model",
 			providers: baseProviders,
 			models:    baseModels,
 			rules: []entity.RoutingRule{
@@ -137,6 +137,15 @@ func TestRouteResolverResolve(t *testing.T) {
 			downstream:     constants.ProtocolOpenAIChat,
 			requestedModel: "anything",
 			wantErr:        `routing rule "disabled model" targets missing or disabled model "disabled-model" for provider "openai"`,
+		},
+		{
+			name:           "empty requested model without target model is rejected",
+			providers:      baseProviders,
+			models:         baseModels,
+			rules:          []entity.RoutingRule{rule("r-default", "default", 1, constants.ProtocolOpenAIChat, "*", "p-openai", "", true)},
+			downstream:     constants.ProtocolOpenAIChat,
+			requestedModel: "",
+			wantErr:        `routing rule "default" did not specify a target model`,
 		},
 		{
 			name:           "disabled target provider is rejected",
@@ -193,13 +202,12 @@ func provider(id string, name string, protocol constants.Protocol, enabled bool)
 	}
 }
 
-func model(providerID string, name string, maxTokens int, isDefault bool, enabled bool) entity.ProviderModel {
+func model(providerID string, name string, maxTokens int, enabled bool) entity.ProviderModel {
 	return entity.ProviderModel{
 		ID:         providerID + "-" + name,
 		ProviderID: providerID,
 		Name:       name,
 		MaxTokens:  maxTokens,
-		IsDefault:  isDefault,
 		Enabled:    enabled,
 	}
 }

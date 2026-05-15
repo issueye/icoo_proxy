@@ -117,7 +117,6 @@ function normalizeProvider(raw) {
     created_at: valueOf(raw, "created_at", "CreatedAt"),
     updated_at: valueOf(raw, "updated_at", "UpdatedAt"),
     models: [],
-    default_model: "",
   };
 }
 
@@ -127,7 +126,6 @@ function normalizeProviderModel(raw) {
     provider_id: valueOf(raw, "provider_id", "ProviderID"),
     name: valueOf(raw, "name", "Name"),
     max_tokens: Number(valueOf(raw, "max_tokens", "MaxTokens", 32768) || 32768),
-    is_default: boolOf(raw, "is_default", "IsDefault"),
     enabled: boolOf(raw, "enabled", "Enabled", true),
     created_at: valueOf(raw, "created_at", "CreatedAt"),
     updated_at: valueOf(raw, "updated_at", "UpdatedAt"),
@@ -234,8 +232,6 @@ async function listProvidersWithModels() {
   await Promise.all(
     providers.map(async (provider) => {
       provider.models = await listProviderModels(provider.id);
-      const defaultModel = provider.models.find((item) => item.is_default);
-      provider.default_model = defaultModel?.name || "";
     }),
   );
   return providers;
@@ -270,7 +266,7 @@ function providerPayload(input) {
   };
 }
 
-async function syncProviderModels(providerID, models = [], defaultModel = "") {
+async function syncProviderModels(providerID, models = []) {
   const existing = await listProviderModels(providerID);
   const keep = new Set();
   for (const model of models) {
@@ -285,7 +281,6 @@ async function syncProviderModels(providerID, models = [], defaultModel = "") {
       id: id || undefined,
       name,
       max_tokens: Number(model?.max_tokens || 32768),
-      is_default: name === defaultModel,
       enabled: model?.enabled ?? true,
     };
     if (id) {
@@ -368,7 +363,7 @@ export async function SaveSupplier(input) {
   }
   const provider = normalizeProvider(saved);
   if (Array.isArray(input.models)) {
-    await syncProviderModels(provider.id, input.models, input.default_model || "");
+    await syncProviderModels(provider.id, input.models);
   }
   return provider;
 }
@@ -482,8 +477,6 @@ export function ListRoutePolicies() {
 }
 
 export async function SaveRoutePolicy(input) {
-  const suppliers = await ListSuppliers();
-  const provider = suppliers.find((item) => item.id === input.supplier_id);
   const payload = {
     id: input.id || undefined,
     name: `${input.downstream_protocol} default route`,
@@ -491,7 +484,7 @@ export async function SaveRoutePolicy(input) {
     match_protocol: input.downstream_protocol,
     match_model_pattern: "*",
     target_provider_id: input.supplier_id,
-    target_model: provider?.default_model || "",
+    target_model: "",
     enabled: Boolean(input.enabled),
   };
   if (payload.id) {

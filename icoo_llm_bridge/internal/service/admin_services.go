@@ -247,7 +247,6 @@ func (s *providerModelService) Upsert(ctx context.Context, input ProviderModelUp
 		ProviderID: providerID,
 		Name:       name,
 		MaxTokens:  input.MaxTokens,
-		IsDefault:  input.IsDefault,
 		Enabled:    input.Enabled,
 		CreatedAt:  now,
 		UpdatedAt:  now,

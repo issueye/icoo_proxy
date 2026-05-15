@@ -20,7 +20,6 @@ type ProviderModelUpsertInput struct {
 	ProviderID string `json:"provider_id"`
 	Name       string `json:"name"`
 	MaxTokens  int    `json:"max_tokens"`
-	IsDefault  bool   `json:"is_default"`
 	Enabled    bool   `json:"enabled"`
 }
 

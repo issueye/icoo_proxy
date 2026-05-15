@@ -64,8 +64,7 @@ export const useModelAliasesStore = defineStore("modelAliases", {
             return null;
           }
           return {
-            label:
-              name === supplier.default_model ? `${name} (默认)` : name,
+            label: name,
             value: name,
           };
         })

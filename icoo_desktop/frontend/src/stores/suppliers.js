@@ -77,21 +77,10 @@ const cloneModelsForForm = (models) => {
   return normalized.length ? normalized : [createEmptyModelItem()];
 };
 
-const normalizeDefaultModel = (models, defaultModel) => {
-  const target = String(defaultModel || "").trim();
-  if (!target) {
-    return "";
-  }
-
-  const matched = normalizeModels(models).find((item) => item.name === target);
-  return matched?.name || "";
-};
-
 const buildSupplierPayload = (form) => {
   const models = normalizeModels(form.models);
   return {
     ...form,
-    default_model: normalizeDefaultModel(models, form.default_model),
     models,
   };
 };
@@ -108,7 +97,6 @@ const emptyForm = () => ({
   enabled: true,
   description: "",
   models: [createEmptyModelItem()],
-    default_model: "",
 });
 
 const buildProviderPayload = (form) => ({
@@ -123,7 +111,6 @@ const buildProviderPayload = (form) => ({
   enabled: form.enabled,
   description: form.description,
   models: null,
-  default_model: "",
 });
 
 const emptyPolicyForm = () => ({
@@ -186,29 +173,24 @@ export const useSuppliersStore = defineStore("suppliers", {
       }));
     },
     routeManagementRows() {
-      const supplierLookup = {};
-      this.allSuppliers.forEach((item) => {
-        supplierLookup[item.id] = item;
-      });
       return this.policiesByProtocol.map((item) => {
         if (!item.policy) {
           return {
             ...item,
             supplierName: "未分配",
             upstreamProtocol: "待选择",
-            helperText: "默认模型将继承所选供应商配置。",
+            helperText: "目标模型将使用请求模型或别名映射。",
             statusText: "未配置",
             statusVariant: "warning",
           };
         }
-        const supplier = supplierLookup[item.policy.supplier_id] || null;
         return {
           ...item,
           supplierName: item.policy.supplier_name || "未分配",
           upstreamProtocol: item.policy.upstream_protocol || "待选择",
-          helperText: supplier?.default_model
-            ? `默认模型：${supplier.default_model}`
-            : "该供应商尚未配置默认模型。",
+          helperText: item.policy.model
+            ? `目标模型：${item.policy.model}`
+            : "目标模型将使用请求模型。",
           statusText: item.policy.enabled ? "已启用" : "已停用",
           statusVariant: item.policy.enabled ? "success" : "error",
         };
@@ -305,7 +287,6 @@ export const useSuppliersStore = defineStore("suppliers", {
         enabled: Boolean(item.enabled),
         description: item.description || "",
         models: cloneModelsForForm(item.models),
-        default_model: item.default_model || "",
       };
     },
     resetForm() {
@@ -324,7 +305,6 @@ export const useSuppliersStore = defineStore("suppliers", {
         enabled: Boolean(item.enabled),
         description: item.description || "",
         models: cloneModelsForForm(item.models),
-        default_model: item.default_model || "",
       };
     },
     resetModelForm() {

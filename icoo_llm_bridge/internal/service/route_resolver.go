@@ -58,7 +58,7 @@ func (r *routeResolver) Resolve(ctx context.Context, downstream constants.Protoc
 	}
 
 	if requestedModel == "" {
-		return domain.Route{}, fmt.Errorf("no route matched downstream protocol %q with default model", downstream)
+		return domain.Route{}, fmt.Errorf("no route matched downstream protocol %q", downstream)
 	}
 	return domain.Route{}, fmt.Errorf("no route matched downstream protocol %q and model %q", downstream, requestedModel)
 }
@@ -110,12 +110,12 @@ func (r *routeResolver) routeFromRule(providers []domain.ProviderSnapshot, rule 
 	if targetModel == "" {
 		targetModel = requestedModel
 	}
+	if targetModel == "" {
+		return domain.Route{}, fmt.Errorf("routing rule %q did not specify a target model", rule.Name)
+	}
 
-	model, ok := chooseModel(provider.Models, targetModel)
+	model, ok := findModel(provider.Models, targetModel)
 	if !ok {
-		if targetModel == "" {
-			return domain.Route{}, fmt.Errorf("routing rule %q did not specify a target model and provider %q has no enabled default model", rule.Name, provider.Name)
-		}
 		return domain.Route{}, fmt.Errorf("routing rule %q targets missing or disabled model %q for provider %q", rule.Name, targetModel, provider.Name)
 	}
 
@@ -143,7 +143,6 @@ func providerSnapshot(item entity.Provider, models []entity.ProviderModel) domai
 		snapshot.Models = append(snapshot.Models, domain.ProviderModelSnapshot{
 			Name:      model.Name,
 			MaxTokens: model.MaxTokens,
-			IsDefault: model.IsDefault,
 			Enabled:   model.Enabled,
 		})
 	}
@@ -187,18 +186,6 @@ func findModel(models []domain.ProviderModelSnapshot, name string) (domain.Provi
 	name = strings.TrimSpace(name)
 	for _, model := range models {
 		if model.Name == name {
-			return model, true
-		}
-	}
-	return domain.ProviderModelSnapshot{}, false
-}
-
-func chooseModel(models []domain.ProviderModelSnapshot, name string) (domain.ProviderModelSnapshot, bool) {
-	if strings.TrimSpace(name) != "" {
-		return findModel(models, name)
-	}
-	for _, model := range models {
-		if model.IsDefault {
 			return model, true
 		}
 	}

@@ -2,8 +2,10 @@ package ai_llm_proxy
 
 import (
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"icoo_llm_bridge/internal/constants"
 )
@@ -196,6 +198,66 @@ func TestProtocolConverterResponsesStreamToChat(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"object":"chat.completion.chunk"`) {
 		t.Fatalf("expected chat chunks, got: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "data: [DONE]") {
+		t.Fatalf("expected done marker, got: %s", out.String())
+	}
+}
+
+func TestProtocolConverterResponsesStreamToChatStopsAfterTerminalEventWithoutEOF(t *testing.T) {
+	converter := NewProtocolConverter()
+	reader, writer := io.Pipe()
+	done := make(chan struct{})
+	var out strings.Builder
+
+	go func() {
+		defer close(done)
+		_, err := io.WriteString(writer, strings.Join([]string{
+			`event: response.created`,
+			`data: {"type":"response.created","response":{"id":"resp_1","model":"gpt","status":"in_progress"}}`,
+			``,
+			`event: response.output_text.delta`,
+			`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"hello"}`,
+			``,
+			`event: response.completed`,
+			`data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt","status":"completed"}}`,
+			``,
+			``,
+		}, "\n"))
+		if err != nil {
+			t.Errorf("write stream: %v", err)
+			return
+		}
+		<-time.After(2 * time.Second)
+		_ = writer.Close()
+	}()
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := converter.ConvertStream(StreamInput{
+			Downstream: constants.ProtocolOpenAIChat,
+			Upstream:   constants.ProtocolOpenAIResponses,
+			Model:      "target-model",
+			Reader:     reader,
+			Writer:     &out,
+		})
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("ConvertStream returned error: %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("ConvertStream did not stop after terminal event")
+	}
+
+	_ = writer.Close()
+	<-done
+
+	if !strings.Contains(out.String(), `"content":"hello"`) {
+		t.Fatalf("expected text delta, got: %s", out.String())
 	}
 	if !strings.Contains(out.String(), "data: [DONE]") {
 		t.Fatalf("expected done marker, got: %s", out.String())

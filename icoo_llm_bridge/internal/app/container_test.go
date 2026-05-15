@@ -133,7 +133,6 @@ func TestCustomEndpointRoutesProxyRequest(t *testing.T) {
 		ProviderID: "provider-openai",
 		Name:       "gpt-5.4",
 		MaxTokens:  32768,
-		IsDefault:  true,
 		Enabled:    true,
 	}); err != nil {
 		t.Fatalf("create provider model: %v", err)

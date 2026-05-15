@@ -94,8 +94,8 @@
       <template #cell-models="{ row }">
         <div class="flex flex-wrap gap-1.5">
           <UTag v-for="model in row.models || []" :key="`${model.name}-${model.max_tokens}`"
-            :variant="row.default_model === model.name ? 'success' : 'info'" size="xs">
-            {{ row.default_model === model.name ? `${formatModelTag(model)} · 默认` : formatModelTag(model) }}
+            variant="info" size="xs">
+            {{ formatModelTag(model) }}
           </UTag>
           <span v-if="!(row.models || []).length" class="table-meta">无模型</span>
         </div>
@@ -163,7 +163,7 @@
         </FieldLabel>
 
         <p class="rounded-md border border-[#dbe7ff] bg-[#f8fbff] px-3 py-2 text-xs leading-5 text-[#3157d5]">
-          模型已拆分为独立资源。保存 Provider 后，请在列表中点击“管理模型”添加候选模型和默认模型。
+          模型已拆分为独立资源。保存 Provider 后，请在列表中点击“管理模型”添加候选模型。
         </p>
 
         <div class="grid gap-3 md:grid-cols-2">
@@ -195,7 +195,7 @@
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-sm font-medium text-[#262626]">候选模型列表</p>
-            <p class="mt-0.5 text-[11px] text-[#8c8c8c]">默认模型必须来自当前候选模型列表，未填写 max_tokens 时会回退到 32768。</p>
+            <p class="mt-0.5 text-[11px] text-[#8c8c8c]">未填写 max_tokens 时会回退到 32768。</p>
           </div>
           <button type="button" class="btn btn-secondary px-2 py-1 text-xs"
             @click="addModelRow(store.modelForm.models)">
@@ -220,9 +220,6 @@
             </button>
           </div>
         </div>
-
-        <USelect v-model="store.modelForm.default_model" label="默认模型" placeholder="不设置默认模型"
-          :options="modelEditorDefaultOptions" />
       </form>
       <template #footer>
         <div class="flex justify-end gap-2">
@@ -340,14 +337,6 @@ const supplierTableColumns = [
   { key: "status", title: "状态", width: "5%", freeze: "right" },
 ];
 
-const modelEditorDefaultOptions = computed(() => [
-  { label: "不设置默认模型", value: "" },
-  ...store.modelForm.models
-    .map((item) => getModelName(item))
-    .filter(Boolean)
-    .map((item) => ({ label: item, value: item })),
-]);
-
 function getModelName(model) {
   return String(model?.name || "").trim();
 }
@@ -437,11 +426,7 @@ function removeModelRow(form, index) {
   if (form.models.length === 1) {
     return;
   }
-  const removed = form.models[index];
   form.models.splice(index, 1);
-  if (removed?.name && form.default_model === removed.name) {
-    form.default_model = "";
-  }
 }
 
 async function submitSupplier() {
