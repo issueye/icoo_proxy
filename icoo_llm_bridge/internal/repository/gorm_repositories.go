@@ -143,7 +143,7 @@ func (r *gormAPIKeyRepository) Delete(ctx context.Context, id string) error {
 type gormTrafficRepository struct{ db *gorm.DB }
 
 func (r *gormTrafficRepository) Record(ctx context.Context, item *entity.TrafficRecord) error {
-	return r.db.WithContext(ctx).Create(item).Error
+	return r.db.Session(&gorm.Session{SkipDefaultTransaction: true}).WithContext(ctx).Create(item).Error
 }
 
 func (r *gormTrafficRepository) List(ctx context.Context, limit int) ([]entity.TrafficRecord, error) {

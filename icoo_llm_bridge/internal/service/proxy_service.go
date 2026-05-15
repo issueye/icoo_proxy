@@ -192,7 +192,8 @@ func (s *proxyService) handleStreamResponse(
 	requestBody []byte,
 ) {
 	prepareStreamHeaders(w.Header(), resp.Header)
-	w.WriteHeader(resp.StatusCode)
+	statusCode := normalizeStreamStatusCode(resp.StatusCode, downstream, route.UpstreamProtocol)
+	w.WriteHeader(statusCode)
 	writer := flushWriter{writer: w}
 	result, err := s.converter.ConvertStream(ai_llm_proxy.StreamInput{
 		Downstream: downstream,
@@ -208,7 +209,7 @@ func (s *proxyService) handleStreamResponse(
 		}
 		return
 	}
-	s.recordTraffic(r, requestID, downstream, route, resp.StatusCode, start, "", result.Usage, requestedModel, requestBody)
+	s.recordTraffic(r, requestID, downstream, route, statusCode, start, "", result.Usage, requestedModel, requestBody)
 }
 
 func (s *proxyService) recordTraffic(
@@ -250,7 +251,9 @@ func (s *proxyService) recordTraffic(
 		Error:                message,
 		CreatedAt:            time.Now(),
 	}
-	if err := s.traffic.Record(r.Context(), item); err != nil && s.logger != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.traffic.Record(ctx, item); err != nil && s.logger != nil {
 		s.logger.Warn("failed to record traffic", "error", err)
 	}
 }
@@ -416,6 +419,21 @@ func normalizeSuccessStatusCode(statusCode int, upstream constants.Protocol, bod
 		}
 	}
 	return statusCode
+}
+
+func normalizeStreamStatusCode(statusCode int, downstream constants.Protocol, upstream constants.Protocol) int {
+	if statusCode < http.StatusBadRequest {
+		return statusCode
+	}
+	if downstream == upstream {
+		return statusCode
+	}
+	switch upstream {
+	case constants.ProtocolOpenAIResponses, constants.ProtocolOpenAIChat, constants.ProtocolAnthropic:
+		return http.StatusOK
+	default:
+		return statusCode
+	}
 }
 
 func downstreamStreamPreference(protocol constants.Protocol, body []byte) (bool, bool) {
