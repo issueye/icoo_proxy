@@ -98,7 +98,7 @@ Service：
 规则：
 
 - 每个 downstream protocol 只允许一个策略。
-- 启用策略时，供应商必须启用且有默认模型。
+- 启用策略时，供应商必须启用，且策略需明确目标模型或使用请求中的模型。
 
 ### 2.7 ModelAliasController
 
@@ -188,11 +188,10 @@ type RouteResolver interface {
 
 解析顺序必须与当前行为兼容：
 
-1. 空模型走默认策略。
-2. `supplier/model` 直连供应商模型。
-3. 当前 downstream 的策略供应商模型。
-4. 模型别名。
-5. 默认策略 fallback。
+1. `supplier/model` 直连供应商模型。
+2. 当前 downstream 的策略供应商和目标模型。
+3. 模型别名。
+4. 若策略未指定目标模型，则使用请求中的 model。
 
 ### 3.3 SupplierService
 
@@ -201,7 +200,7 @@ type RouteResolver interface {
 - CRUD。
 - 模型列表标准化。
 - API Key 脱敏。
-- 默认模型校验。
+- 目标模型校验。
 
 ### 3.4 TrafficService
 

@@ -3,6 +3,7 @@ package ai_llm_proxy
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -12,6 +13,8 @@ import (
 )
 
 type protocolConverter struct{}
+
+var errStopSSEScan = errors.New("stop sse scan")
 
 func NewPassthroughConverter() Converter {
 	return NewProtocolConverter()
@@ -151,6 +154,9 @@ func (c *protocolConverter) convertResponsesStreamToAnthropic(input StreamInput)
 				return err
 			}
 		}
+		if isResponsesTerminalEvent(event.Type) {
+			return errStopSSEScan
+		}
 		return nil
 	})
 	if err != nil {
@@ -191,6 +197,9 @@ func (c *protocolConverter) convertResponsesStreamToChat(input StreamInput) (Str
 			if _, err := io.WriteString(input.Writer, text); err != nil {
 				return err
 			}
+		}
+		if isResponsesTerminalEvent(event.Type) {
+			return errStopSSEScan
 		}
 		return nil
 	})
@@ -235,6 +244,9 @@ func (c *protocolConverter) convertAnthropicStreamToResponses(input StreamInput)
 			if _, err := io.WriteString(input.Writer, text); err != nil {
 				return err
 			}
+		}
+		if isAnthropicTerminalEvent(event.Type) {
+			return errStopSSEScan
 		}
 		return nil
 	})
@@ -286,7 +298,13 @@ func (c *protocolConverter) convertAnthropicStreamToChat(input StreamInput) (Str
 		if event.Type == "" {
 			event.Type = eventName
 		}
-		return writeResponsesEvents(AnthropicEventToResponsesEvents(&event, anthropicState))
+		if err := writeResponsesEvents(AnthropicEventToResponsesEvents(&event, anthropicState)); err != nil {
+			return err
+		}
+		if isAnthropicTerminalEvent(event.Type) {
+			return errStopSSEScan
+		}
+		return nil
 	})
 	if err != nil {
 		return StreamResult{}, err
@@ -328,7 +346,11 @@ func scanSSE(reader io.Reader, handle func(eventName string, data []byte) error)
 		if data == "" || data == "[DONE]" {
 			return nil
 		}
-		return handle(name, []byte(data))
+		err := handle(name, []byte(data))
+		if errors.Is(err, errStopSSEScan) {
+			return errStopSSEScan
+		}
+		return err
 	}
 	for {
 		line, err := bufReader.ReadString('\n')
@@ -337,6 +359,9 @@ func scanSSE(reader io.Reader, handle func(eventName string, data []byte) error)
 			line = strings.TrimSuffix(line, "\r")
 			if line == "" {
 				if err := flush(); err != nil {
+					if errors.Is(err, errStopSSEScan) {
+						return nil
+					}
 					return err
 				}
 			} else if !strings.HasPrefix(line, ":") {
@@ -352,8 +377,28 @@ func scanSSE(reader io.Reader, handle func(eventName string, data []byte) error)
 			break
 		}
 		if err != nil {
+			if errors.Is(err, errStopSSEScan) {
+				return nil
+			}
 			return err
 		}
 	}
-	return flush()
+	err := flush()
+	if errors.Is(err, errStopSSEScan) {
+		return nil
+	}
+	return err
+}
+
+func isResponsesTerminalEvent(eventType string) bool {
+	switch eventType {
+	case "response.completed", "response.done", "response.incomplete", "response.failed":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAnthropicTerminalEvent(eventType string) bool {
+	return eventType == "message_stop"
 }

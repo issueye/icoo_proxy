@@ -297,7 +297,6 @@ id TEXT PRIMARY KEY
 provider_id TEXT INDEX
 name TEXT
 max_tokens INTEGER
-is_default BOOLEAN
 enabled BOOLEAN
 created_at DATETIME
 updated_at DATETIME
