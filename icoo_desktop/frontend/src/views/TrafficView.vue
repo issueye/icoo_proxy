@@ -63,6 +63,7 @@
         <template #cell-route="{ row }">
           <p class="text-sm text-[#595959] table-cell-wrap">{{ row.downstream }}</p>
           <p class="mt-0.5 table-meta table-cell-wrap">{{ row.upstream || "-" }}</p>
+          <p v-if="routeHint(row)" class="mt-0.5 table-meta table-cell-wrap">{{ routeHint(row) }}</p>
         </template>
         <template #cell-model="{ row }">
           <p class="text-sm text-[#262626] table-cell-wrap">{{ row.requested_model || "-" }}</p>
@@ -206,6 +207,19 @@ function requestBodyPreview(row) {
     return "请求体未记录，需在项目设置中开启记录 body";
   }
   return "无请求体";
+}
+
+function routeHint(row) {
+  if (row.matched_rule_name) {
+    return `命中规则：${row.matched_rule_name}`;
+  }
+  if (row.route_source === "direct") {
+    return `直连路由：${row.route_name || row.model || "-"}`;
+  }
+  if (row.route_name) {
+    return `路由：${row.route_name}`;
+  }
+  return "";
 }
 
 function openClearConfirm() {

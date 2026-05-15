@@ -154,6 +154,7 @@ function normalizeRoutingRule(raw) {
     priority: Number(valueOf(raw, "priority", "Priority", 100) || 100),
     match_protocol: valueOf(raw, "match_protocol", "MatchProtocol"),
     match_model_pattern: valueOf(raw, "match_model_pattern", "MatchModelPattern", "*"),
+    upstream_protocol: valueOf(raw, "upstream_protocol", "UpstreamProtocol"),
     target_provider_id: valueOf(raw, "target_provider_id", "TargetProviderID"),
     target_model: valueOf(raw, "target_model", "TargetModel"),
     enabled: boolOf(raw, "enabled", "Enabled", true),
@@ -165,7 +166,6 @@ function normalizeRoutingRule(raw) {
     downstream_protocol: rule.match_protocol,
     supplier_id: rule.target_provider_id,
     supplier_name: "",
-    upstream_protocol: "",
     model: rule.target_model,
   };
 }
@@ -199,6 +199,10 @@ function normalizeTraffic(raw) {
     upstream: valueOf(raw, "upstream_protocol", "UpstreamProtocol"),
     downstream_protocol: valueOf(raw, "downstream_protocol", "DownstreamProtocol"),
     upstream_protocol: valueOf(raw, "upstream_protocol", "UpstreamProtocol"),
+    route_name: valueOf(raw, "route_name", "RouteName"),
+    route_source: valueOf(raw, "route_source", "RouteSource"),
+    matched_rule_id: valueOf(raw, "matched_rule_id", "MatchedRuleID"),
+    matched_rule_name: valueOf(raw, "matched_rule_name", "MatchedRuleName"),
     requested_model: valueOf(raw, "requested_model", "RequestedModel"),
     model: valueOf(raw, "model", "Model"),
     request_body: valueOf(raw, "request_body", "RequestBody"),
@@ -247,7 +251,7 @@ async function listRoutingRules() {
   return rules.map((rule) => ({
     ...rule,
     supplier_name: lookup[rule.target_provider_id]?.name || "",
-    upstream_protocol: lookup[rule.target_provider_id]?.protocol || "",
+    upstream_protocol: rule.upstream_protocol || lookup[rule.target_provider_id]?.protocol || "",
   }));
 }
 
@@ -476,6 +480,10 @@ export function ListRoutePolicies() {
   );
 }
 
+export function ListRoutingRules() {
+  return listRoutingRules();
+}
+
 export async function SaveRoutePolicy(input) {
   const payload = {
     id: input.id || undefined,
@@ -483,6 +491,7 @@ export async function SaveRoutePolicy(input) {
     priority: 100,
     match_protocol: input.downstream_protocol,
     match_model_pattern: "*",
+    upstream_protocol: input.upstream_protocol || "",
     target_provider_id: input.supplier_id,
     target_model: "",
     enabled: Boolean(input.enabled),
@@ -519,6 +528,7 @@ export async function SaveModelAlias(input) {
     priority: 50,
     match_protocol: "openai-chat",
     match_model_pattern: String(input.name || "").trim(),
+    upstream_protocol: input.upstream_protocol || "",
     target_provider_id: String(input.supplier_id || "").trim(),
     target_model: String(input.model || "").trim(),
     enabled: Boolean(input.enabled),

@@ -3,7 +3,7 @@ import {
   CheckSupplier,
   DeleteSupplier,
   GetSuppliersPage,
-  ListRoutePolicies,
+  ListRoutingRules,
   ListSupplierHealth,
   ListSuppliers,
   SaveRoutePolicy,
@@ -116,6 +116,7 @@ const buildProviderPayload = (form) => ({
 const emptyPolicyForm = () => ({
   id: "",
   downstream_protocol: "anthropic",
+  upstream_protocol: "",
   supplier_id: "",
   enabled: true,
 });
@@ -123,6 +124,19 @@ const emptyPolicyForm = () => ({
 const emptyModelForm = () => ({
   ...emptyForm(),
 });
+
+const isCatchAllPattern = (pattern) => {
+  const value = String(pattern || "").trim();
+  return value === "" || value === "*";
+};
+
+const compareRoutingRules = (left, right) => {
+  const priorityDiff = Number(left?.priority || 0) - Number(right?.priority || 0);
+  if (priorityDiff !== 0) {
+    return priorityDiff;
+  }
+  return String(left?.name || "").localeCompare(String(right?.name || ""));
+};
 
 export const useSuppliersStore = defineStore("suppliers", {
   state: () => ({
@@ -134,6 +148,7 @@ export const useSuppliersStore = defineStore("suppliers", {
     items: [],
     allSuppliers: [],
     policies: [],
+    routingRules: [],
     health: [],
     total: 0,
     totalCount: 0,
@@ -173,6 +188,13 @@ export const useSuppliersStore = defineStore("suppliers", {
       }));
     },
     routeManagementRows() {
+      const providerLookup = Object.fromEntries(
+        this.allSuppliers.map((item) => [item.id, item]),
+      );
+      const enabledRules = [...this.routingRules]
+        .filter((item) => item.enabled)
+        .sort(compareRoutingRules);
+
       return this.policiesByProtocol.map((item) => {
         if (!item.policy) {
           return {
@@ -180,10 +202,30 @@ export const useSuppliersStore = defineStore("suppliers", {
             supplierName: "未分配",
             upstreamProtocol: "待选择",
             helperText: "目标模型将使用请求模型或别名映射。",
+            warningText: "",
             statusText: "未配置",
             statusVariant: "warning",
           };
         }
+
+        const higherPriorityRules = enabledRules.filter((rule) =>
+          rule.downstream_protocol === item.key &&
+          rule.id !== item.policy.id &&
+          Number(rule.priority || 0) < Number(item.policy.priority || 0),
+        );
+        const blockingRule = higherPriorityRules.find((rule) => isCatchAllPattern(rule.match_model_pattern));
+        const partialRules = higherPriorityRules.filter((rule) => !isCatchAllPattern(rule.match_model_pattern));
+
+        let warningText = "";
+        if (blockingRule) {
+          const providerName = providerLookup[blockingRule.target_provider_id]?.name || blockingRule.supplier_name || "未命名 Provider";
+          warningText = `默认路由当前不会生效。更高优先级规则“${blockingRule.name}”会优先转到 ${providerName}。`;
+        } else if (partialRules.length > 0) {
+          const names = partialRules.slice(0, 2).map((rule) => `“${rule.name}”`).join("、");
+          const suffix = partialRules.length > 2 ? ` 等 ${partialRules.length} 条规则` : "";
+          warningText = `存在更高优先级模型规则 ${names}${suffix}，命中这些模型时不会走默认路由。`;
+        }
+
         return {
           ...item,
           supplierName: item.policy.supplier_name || "未分配",
@@ -191,6 +233,7 @@ export const useSuppliersStore = defineStore("suppliers", {
           helperText: item.policy.model
             ? `目标模型：${item.policy.model}`
             : "目标模型将使用请求模型。",
+          warningText,
           statusText: item.policy.enabled ? "已启用" : "已停用",
           statusVariant: item.policy.enabled ? "success" : "error",
         };
@@ -211,26 +254,28 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.applySupplierPage(result, page, pageSize);
     },
     async refreshSupplierCatalog() {
-      const [allSuppliers, policies] = await Promise.all([
+      const [allSuppliers, rules] = await Promise.all([
         ListSuppliers(),
-        ListRoutePolicies(),
+        ListRoutingRules(),
       ]);
       this.allSuppliers = allSuppliers;
-      this.policies = policies;
+      this.routingRules = rules;
+      this.policies = rules.filter((item) => isCatchAllPattern(item.match_model_pattern));
     },
     async load() {
       this.loading = true;
       this.error = "";
       try {
-        const [pageResult, allSuppliers, policies, health] = await Promise.all([
+        const [pageResult, allSuppliers, rules, health] = await Promise.all([
           GetSuppliersPage(1, this.pageSize, this.keyword, this.protocol),
           ListSuppliers(),
-          ListRoutePolicies(),
+          ListRoutingRules(),
           ListSupplierHealth(),
         ]);
         this.applySupplierPage(pageResult, 1, this.pageSize);
         this.allSuppliers = allSuppliers;
-        this.policies = policies;
+        this.routingRules = rules;
+        this.policies = rules.filter((item) => isCatchAllPattern(item.match_model_pattern));
         this.health = health;
       } catch (error) {
         this.error = error?.message || String(error);
@@ -314,6 +359,7 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.policyForm = {
         id: item.id,
         downstream_protocol: item.downstream_protocol,
+        upstream_protocol: item.upstream_protocol || "",
         supplier_id: item.supplier_id,
         enabled: Boolean(item.enabled),
       };
@@ -366,7 +412,8 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.saving = true;
       this.error = "";
       try {
-        this.policies = await SaveRoutePolicy({ ...this.policyForm });
+        await SaveRoutePolicy({ ...this.policyForm });
+        await this.refreshSupplierCatalog();
         this.resetPolicyForm();
       } catch (error) {
         this.error = error?.message || String(error);

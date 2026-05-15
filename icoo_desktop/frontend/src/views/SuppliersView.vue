@@ -25,7 +25,9 @@
             <p class="route-map__name">{{ row.label }}</p>
             <UTag code size="xs">{{ row.key }}</UTag>
           </div>
-          <p class="route-map__desc">{{ row.description }}</p>
+          <p v-if="row.description" class="route-map__desc">{{ row.description }}</p>
+          <p class="route-map__helper">{{ row.helperText }}</p>
+          <p v-if="row.warningText" class="route-map__warning">{{ row.warningText }}</p>
         </template>
 
         <template #cell-supplier="{ row }">
@@ -240,6 +242,13 @@
           <USelect v-model="store.policyForm.downstream_protocol" label="下游协议" :options="store.policyOptions" />
           <USelect v-model="store.policyForm.supplier_id" label="供应商" placeholder="请选择供应商" :options="supplierOptions" />
         </div>
+
+        <USelect
+          v-model="store.policyForm.upstream_protocol"
+          label="上游协议"
+          placeholder="留空则继承供应商协议"
+          :options="protocolOptions"
+        />
 
         <label class="field-toggle">
           <input v-model="store.policyForm.enabled" type="checkbox" class="field-checkbox" />

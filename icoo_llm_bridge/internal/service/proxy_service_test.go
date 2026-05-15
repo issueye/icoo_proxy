@@ -82,7 +82,8 @@ func TestProxyServiceForwardsJSONAndRewritesModel(t *testing.T) {
 
 	traffic := &memoryTraffic{}
 	route := domain.Route{
-		Name:             "test",
+		Name:             "openai-responses default route",
+		Source:           "routing_rule:rule-default",
 		UpstreamProtocol: constants.ProtocolOpenAIResponses,
 		Model:            "target-model",
 		Provider: domain.ProviderSnapshot{
@@ -135,6 +136,12 @@ func TestProxyServiceForwardsJSONAndRewritesModel(t *testing.T) {
 	}
 	if traffic.items[0].RequestBody != `{"model":"re` || !traffic.items[0].RequestBodyTruncated {
 		t.Fatalf("traffic request body preview not recorded: %+v", traffic.items[0])
+	}
+	if traffic.items[0].MatchedRuleID != "rule-default" || traffic.items[0].MatchedRuleName != "openai-responses default route" {
+		t.Fatalf("traffic matched rule metadata not recorded: %+v", traffic.items[0])
+	}
+	if traffic.items[0].RouteSource != "routing_rule:rule-default" || traffic.items[0].RouteName != "openai-responses default route" {
+		t.Fatalf("traffic route metadata not recorded: %+v", traffic.items[0])
 	}
 }
 

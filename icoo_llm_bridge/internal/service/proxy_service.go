@@ -235,6 +235,7 @@ func (s *proxyService) recordTraffic(
 		return
 	}
 	bodyPreview, bodyBytes, bodyTruncated := s.requestBodyPreview(requestBody, r.ContentLength)
+	matchedRuleID := extractRuleID(route.Source)
 	item := entity.TrafficRecord{
 		ID:                   requestID,
 		RequestID:            requestID,
@@ -245,6 +246,10 @@ func (s *proxyService) recordTraffic(
 		ContentType:          r.Header.Get("Content-Type"),
 		DownstreamProtocol:   downstream.String(),
 		UpstreamProtocol:     route.UpstreamProtocol.String(),
+		RouteName:            route.Name,
+		RouteSource:          route.Source,
+		MatchedRuleID:        matchedRuleID,
+		MatchedRuleName:      matchedRuleName(matchedRuleID, route.Name),
 		RequestedModel:       requestedModel,
 		Model:                route.Model,
 		RequestBody:          bodyPreview,
@@ -602,4 +607,11 @@ func extractRuleID(source string) string {
 		return source[len(prefix):]
 	}
 	return ""
+}
+
+func matchedRuleName(ruleID string, routeName string) string {
+	if ruleID == "" {
+		return ""
+	}
+	return routeName
 }

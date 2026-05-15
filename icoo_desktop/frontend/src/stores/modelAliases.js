@@ -10,9 +10,16 @@ const emptyForm = () => ({
   id: "",
   name: "",
   supplier_id: "",
+  upstream_protocol: "",
   model: "",
   enabled: true,
 });
+
+const protocolOptions = [
+  { label: "Anthropic", value: "anthropic" },
+  { label: "OpenAI Chat", value: "openai-chat" },
+  { label: "OpenAI Responses", value: "openai-responses" },
+];
 
 const getModelName = (model) => String(model?.name || "").trim();
 
@@ -70,6 +77,9 @@ export const useModelAliasesStore = defineStore("modelAliases", {
         })
         .filter(Boolean);
     },
+    upstreamProtocolOptions() {
+      return protocolOptions;
+    },
   },
   actions: {
     async load() {
@@ -93,6 +103,7 @@ export const useModelAliasesStore = defineStore("modelAliases", {
         id: item.id,
         name: item.name,
         supplier_id: item.supplier_id || "",
+        upstream_protocol: item.upstream_protocol || "",
         model: item.model,
         enabled: Boolean(item.enabled),
       };
@@ -108,6 +119,7 @@ export const useModelAliasesStore = defineStore("modelAliases", {
           id: this.form.id,
           name: String(this.form.name || "").trim(),
           supplier_id: String(this.form.supplier_id || "").trim(),
+          upstream_protocol: String(this.form.upstream_protocol || "").trim(),
           model: String(this.form.model || "").trim(),
           enabled: this.form.enabled,
         });

@@ -95,13 +95,12 @@
           :options="store.supplierOptions"
         />
 
-        <FieldLabel label="上游协议" hint="根据所选供应商自动确定">
-          <input
-            :value="store.selectedSupplier?.protocol || '请先选择供应商'"
-            class="field-input"
-            disabled
-          />
-        </FieldLabel>
+        <USelect
+          v-model="store.form.upstream_protocol"
+          label="上游协议"
+          placeholder="选择上游协议（留空则继承供应商协议）"
+          :options="store.upstreamProtocolOptions"
+        />
 
         <USelect
           v-model="store.form.model"

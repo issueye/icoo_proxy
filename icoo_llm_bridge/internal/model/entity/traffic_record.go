@@ -12,6 +12,10 @@ type TrafficRecord struct {
 	ContentType          string
 	DownstreamProtocol   string
 	UpstreamProtocol     string
+	RouteName            string
+	RouteSource          string
+	MatchedRuleID        string
+	MatchedRuleName      string
 	RequestedModel       string
 	Model                string
 	RequestBody          string
