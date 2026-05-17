@@ -67,6 +67,10 @@ func (c *protocolConverter) ConvertResponse(input ResponseInput) ([]byte, error)
 		return TransformResponsesResponseJSONToAnthropic(input.Body, input.Model)
 	case input.Upstream == constants.ProtocolOpenAIResponses && input.Downstream == constants.ProtocolOpenAIChat:
 		return TransformResponsesResponseJSONToChatCompletions(input.Body, input.Model)
+	case input.Upstream == constants.ProtocolOpenAIChat && input.Downstream == constants.ProtocolAnthropic:
+		return TransformChatCompletionsResponseJSONToAnthropic(input.Body, input.Model)
+	case input.Upstream == constants.ProtocolOpenAIChat && input.Downstream == constants.ProtocolOpenAIResponses:
+		return TransformChatCompletionsResponseJSONToResponses(input.Body, input.Model)
 	default:
 		return nil, fmt.Errorf("response conversion from %s to %s is not implemented", input.Upstream, input.Downstream)
 	}
@@ -89,6 +93,10 @@ func (c *protocolConverter) ConvertStream(input StreamInput) (StreamResult, erro
 		return c.convertAnthropicStreamToResponses(input)
 	case input.Upstream == constants.ProtocolAnthropic && input.Downstream == constants.ProtocolOpenAIChat:
 		return c.convertAnthropicStreamToChat(input)
+	case input.Upstream == constants.ProtocolOpenAIChat && input.Downstream == constants.ProtocolOpenAIResponses:
+		return c.convertChatStreamToResponses(input)
+	case input.Upstream == constants.ProtocolOpenAIChat && input.Downstream == constants.ProtocolAnthropic:
+		return c.convertChatStreamToAnthropic(input)
 	default:
 		return StreamResult{}, fmt.Errorf("stream conversion from %s to %s is not implemented", input.Upstream, input.Downstream)
 	}
@@ -328,6 +336,93 @@ func (c *protocolConverter) convertAnthropicStreamToChat(input StreamInput) (Str
 		OutputTokens: anthropicState.OutputTokens,
 		TotalTokens:  anthropicState.InputTokens + anthropicState.OutputTokens,
 	}}, nil
+}
+
+func (c *protocolConverter) convertChatStreamToResponses(input StreamInput) (StreamResult, error) {
+	state := NewChatEventToResponsesState()
+	state.Model = input.Model
+
+	writeEvents := func(events []ResponsesStreamEvent) error {
+		for _, out := range events {
+			text, err := ResponsesEventToSSE(out)
+			if err != nil {
+				return err
+			}
+			if _, err := io.WriteString(input.Writer, text); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	err := scanChatCompletionsSSE(input.Reader, func(chunk *ChatCompletionsChunk) error {
+		return writeEvents(ChatChunkToResponsesEvents(chunk, state))
+	}, func() error {
+		return writeEvents(FinalizeChatResponsesStream(state))
+	})
+	if err != nil {
+		return StreamResult{}, err
+	}
+	return StreamResult{Usage: chatStreamResultUsage(state)}, nil
+}
+
+func (c *protocolConverter) convertChatStreamToAnthropic(input StreamInput) (StreamResult, error) {
+	chatState := NewChatEventToResponsesState()
+	chatState.Model = input.Model
+	anthropicState := NewResponsesEventToAnthropicState()
+	anthropicState.Model = input.Model
+
+	writeResponsesEvents := func(events []ResponsesStreamEvent) error {
+		for i := range events {
+			for _, out := range ResponsesEventToAnthropicEvents(&events[i], anthropicState) {
+				text, err := ResponsesAnthropicEventToSSE(out)
+				if err != nil {
+					return err
+				}
+				if _, err := io.WriteString(input.Writer, text); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+
+	err := scanChatCompletionsSSE(input.Reader, func(chunk *ChatCompletionsChunk) error {
+		return writeResponsesEvents(ChatChunkToResponsesEvents(chunk, chatState))
+	}, func() error {
+		return writeResponsesEvents(FinalizeChatResponsesStream(chatState))
+	})
+	if err != nil {
+		return StreamResult{}, err
+	}
+	if err := writeAnthropicEvents(input.Writer, FinalizeResponsesAnthropicStream(anthropicState)); err != nil {
+		return StreamResult{}, err
+	}
+	return StreamResult{Usage: chatStreamResultUsage(chatState)}, nil
+}
+
+func writeAnthropicEvents(writer io.Writer, events []AnthropicStreamEvent) error {
+	for _, out := range events {
+		text, err := ResponsesAnthropicEventToSSE(out)
+		if err != nil {
+			return err
+		}
+		if _, err := io.WriteString(writer, text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func chatStreamResultUsage(state *ChatEventToResponsesState) domain.TokenUsage {
+	if state.Usage == nil {
+		return domain.TokenUsage{}
+	}
+	return domain.TokenUsage{
+		InputTokens:  state.Usage.InputTokens,
+		OutputTokens: state.Usage.OutputTokens,
+		TotalTokens:  state.Usage.TotalTokens,
+	}.Normalize()
 }
 
 func scanSSE(reader io.Reader, handle func(eventName string, data []byte) error) error {

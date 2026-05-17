@@ -215,6 +215,87 @@ func TestRouteResolverResolve(t *testing.T) {
 	}
 }
 
+func TestRouteResolverResolvePlan(t *testing.T) {
+	ctx := context.Background()
+	providers := []entity.Provider{
+		providerWithRuntime("p-openai", "openai", constants.ProtocolOpenAIChat, "https://openai.example", "openai-key", true),
+		providerWithRuntime("p-anthropic", "anthropic", constants.ProtocolAnthropic, "https://anthropic.example", "anthropic-key", true),
+		providerWithRuntime("p-responses", "responses", constants.ProtocolOpenAIResponses, "https://responses.example", "responses-key", true),
+	}
+	models := map[string][]entity.ProviderModel{
+		"p-openai": {
+			model("p-openai", "gpt-4o", 128000, true),
+			model("p-openai", "gpt-4o-mini", 64000, true),
+		},
+		"p-anthropic": {
+			model("p-anthropic", "claude-3-5-sonnet", 200000, true),
+		},
+		"p-responses": {
+			model("p-responses", "gpt-5", 200000, true),
+		},
+	}
+
+	t.Run("direct route produces a single direct candidate", func(t *testing.T) {
+		resolver := newConcreteRouteResolver(providers, models, []entity.RoutingRule{
+			rule("r-catch", "catch all", 1, constants.ProtocolOpenAIChat, "*", "", "p-anthropic", "claude-3-5-sonnet", true),
+		})
+
+		plan, err := resolver.ResolvePlan(ctx, constants.ProtocolOpenAIChat, "openai/gpt-4o")
+		if err != nil {
+			t.Fatalf("ResolvePlan() unexpected error: %v", err)
+		}
+		if plan.DownstreamProtocol != constants.ProtocolOpenAIChat || plan.RequestedModel != "openai/gpt-4o" {
+			t.Fatalf("plan request metadata = %#v", plan)
+		}
+		if len(plan.Candidates) != 1 {
+			t.Fatalf("candidates = %d, want 1", len(plan.Candidates))
+		}
+
+		candidate := plan.Candidates[0]
+		if candidate.Source != "direct" || candidate.Priority != 0 || candidate.Model != "gpt-4o" {
+			t.Fatalf("candidate = %#v", candidate)
+		}
+		if candidate.Endpoint.BaseURL != "https://openai.example" || !candidate.Endpoint.Enabled {
+			t.Fatalf("endpoint snapshot = %#v", candidate.Endpoint)
+		}
+		if candidate.Credential.APIKey != "openai-key" || !candidate.Credential.Enabled {
+			t.Fatalf("credential snapshot = %#v", candidate.Credential)
+		}
+		if got := candidate.Route(); got.Provider.BaseURL != "https://openai.example" || got.Provider.APIKey != "openai-key" {
+			t.Fatalf("candidate Route() provider = %#v", got.Provider)
+		}
+	})
+
+	t.Run("routing rule candidates are ordered by priority", func(t *testing.T) {
+		resolver := newConcreteRouteResolver(providers, models, []entity.RoutingRule{
+			rule("r-low", "low priority", 20, constants.ProtocolOpenAIChat, "claude*", "", "p-openai", "gpt-4o-mini", true),
+			rule("r-high", "high priority", 10, constants.ProtocolOpenAIChat, "claude*", "", "p-anthropic", "claude-3-5-sonnet", true),
+			rule("r-same-a", "same priority a", 15, constants.ProtocolOpenAIChat, "claude*", constants.ProtocolAnthropic, "p-responses", "gpt-5", true),
+			rule("r-same-b", "same priority b", 15, constants.ProtocolOpenAIChat, "claude*", "", "p-openai", "gpt-4o", true),
+			rule("r-other-protocol", "other protocol", 1, constants.ProtocolAnthropic, "claude*", "", "p-openai", "gpt-4o", true),
+		})
+
+		plan, err := resolver.ResolvePlan(ctx, constants.ProtocolOpenAIChat, "claude-3-opus")
+		if err != nil {
+			t.Fatalf("ResolvePlan() unexpected error: %v", err)
+		}
+		if len(plan.Candidates) != 4 {
+			t.Fatalf("candidates = %d, want 4", len(plan.Candidates))
+		}
+
+		wantNames := []string{"high priority", "same priority a", "same priority b", "low priority"}
+		wantPriorities := []int{10, 15, 15, 20}
+		for i, candidate := range plan.Candidates {
+			if candidate.Name != wantNames[i] || candidate.Priority != wantPriorities[i] {
+				t.Fatalf("candidate[%d] = %q/%d, want %q/%d", i, candidate.Name, candidate.Priority, wantNames[i], wantPriorities[i])
+			}
+		}
+		if plan.Candidates[1].UpstreamProtocol != constants.ProtocolAnthropic {
+			t.Fatalf("upstream protocol override = %q", plan.Candidates[1].UpstreamProtocol)
+		}
+	})
+}
+
 func assertRoute(t *testing.T, got domain.Route, want domain.Route) {
 	t.Helper()
 	if got.Name != want.Name ||
@@ -227,12 +308,30 @@ func assertRoute(t *testing.T, got domain.Route, want domain.Route) {
 }
 
 func provider(id string, name string, protocol constants.Protocol, enabled bool) entity.Provider {
+	return providerWithRuntime(id, name, protocol, "", "", enabled)
+}
+
+func providerWithRuntime(id string, name string, protocol constants.Protocol, baseURL string, apiKey string, enabled bool) entity.Provider {
 	return entity.Provider{
-		ID:       id,
-		Name:     name,
-		Protocol: protocol,
-		Vendor:   constants.VendorCustom,
-		Enabled:  enabled,
+		ID:           id,
+		Name:         name,
+		Protocol:     protocol,
+		Vendor:       constants.VendorCustom,
+		BaseURL:      baseURL,
+		APIKeyCipher: apiKey,
+		Enabled:      enabled,
+	}
+}
+
+func newConcreteRouteResolver(
+	providers []entity.Provider,
+	models map[string][]entity.ProviderModel,
+	rules []entity.RoutingRule,
+) *routeResolver {
+	return &routeResolver{
+		providers: &fakeProviderRepository{items: providers},
+		models:    &fakeProviderModelRepository{items: models},
+		rules:     &fakeRoutingRuleRepository{items: rules},
 	}
 }
 

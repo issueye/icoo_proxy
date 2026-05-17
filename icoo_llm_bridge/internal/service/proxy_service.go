@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -22,14 +23,15 @@ import (
 )
 
 type proxyService struct {
-	cfg       config.Config
-	logger    *slog.Logger
-	converter ai_llm_proxy.Converter
-	auth      proxyAuth
-	routes    RouteResolver
-	traffic   TrafficService
-	tracker   RequestTracker
-	client    *http.Client
+	cfg          config.Config
+	logger       *slog.Logger
+	converter    ai_llm_proxy.Converter
+	auth         proxyAuth
+	routes       RouteResolver
+	traffic      TrafficService
+	tracker      RequestTracker
+	client       *http.Client
+	streamClient *http.Client
 }
 
 type proxyAuth interface {
@@ -46,14 +48,15 @@ func NewProxyService(
 	tracker RequestTracker,
 ) ProxyService {
 	return &proxyService{
-		cfg:       cfg,
-		logger:    logger,
-		converter: converter,
-		auth:      auth,
-		routes:    routes,
-		traffic:   traffic,
-		tracker:   tracker,
-		client:    &http.Client{Timeout: cfg.WriteTimeout},
+		cfg:          cfg,
+		logger:       logger,
+		converter:    converter,
+		auth:         auth,
+		routes:       routes,
+		traffic:      traffic,
+		tracker:      tracker,
+		client:       &http.Client{Timeout: cfg.WriteTimeout},
+		streamClient: &http.Client{},
 	}
 }
 
@@ -107,13 +110,19 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		return
 	}
 
-	resp, err := s.sendUpstream(r, route, upstreamBody)
+	upstreamWantsStream := requestWantsStream(upstreamBody)
+	resp, err := s.sendUpstream(r, route, upstreamBody, upstreamWantsStream)
 	if err != nil {
 		s.writeProxyError(w, downstream, http.StatusBadGateway, err.Error())
 		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
 		return
 	}
 	defer resp.Body.Close()
+
+	if !isHTTPSuccess(resp.StatusCode) {
+		s.handleUpstreamErrorResponse(w, r, resp, requestID, downstream, route, start, requestedModel, body)
+		return
+	}
 
 	if isEventStream(resp.Header) {
 		s.handleStreamResponse(w, r, resp, requestID, downstream, route, start, requestedModel, body)
@@ -127,7 +136,7 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		return
 	}
 	wantsStream, includeUsage := downstreamStreamPreference(downstream, body)
-	statusCode := normalizeSuccessStatusCode(resp.StatusCode, route.UpstreamProtocol, respBody)
+	statusCode := resp.StatusCode
 
 	converted, err := s.converter.ConvertResponse(ai_llm_proxy.ResponseInput{
 		Downstream: downstream,
@@ -170,7 +179,7 @@ func (s *proxyService) authorize(r *http.Request) bool {
 	return key != "" && s.auth != nil && s.auth.Verify(r.Context(), key, "proxy")
 }
 
-func (s *proxyService) sendUpstream(r *http.Request, route domain.Route, body []byte) (*http.Response, error) {
+func (s *proxyService) sendUpstream(r *http.Request, route domain.Route, body []byte, streaming bool) (*http.Response, error) {
 	url := joinUpstreamURL(route.Provider.BaseURL, route.UpstreamProtocol)
 	if strings.TrimSpace(url) == "" {
 		return nil, fmt.Errorf("upstream base_url is required")
@@ -180,11 +189,39 @@ func (s *proxyService) sendUpstream(r *http.Request, route domain.Route, body []
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
 	applyUpstreamHeaders(req, r, route)
-	resp, err := s.client.Do(req)
+	client := s.client
+	if streaming {
+		client = s.streamClient
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request failed: %w", err)
 	}
 	return resp, nil
+}
+
+func (s *proxyService) handleUpstreamErrorResponse(
+	w http.ResponseWriter,
+	r *http.Request,
+	resp *http.Response,
+	requestID string,
+	downstream constants.Protocol,
+	route domain.Route,
+	start time.Time,
+	requestedModel string,
+	requestBody []byte,
+) {
+	respBody, err := readLimitedBody(resp.Body, maxUpstreamErrorBodyBytes)
+	statusCode := downstreamErrorStatus(resp.StatusCode)
+	message := upstreamErrorMessage(resp.StatusCode, respBody)
+	if err != nil {
+		message = "read upstream error response failed"
+	}
+	s.writeProxyError(w, downstream, statusCode, message)
+	s.recordTraffic(r, requestID, downstream, route, statusCode, start, message, domain.TokenUsage{}, requestedModel, requestBody)
 }
 
 func (s *proxyService) handleStreamResponse(
@@ -198,15 +235,27 @@ func (s *proxyService) handleStreamResponse(
 	requestedModel string,
 	requestBody []byte,
 ) {
+	reader, err := preflightStream(resp.Body)
+	if err != nil {
+		statusCode := http.StatusBadGateway
+		message := err.Error()
+		s.writeProxyError(w, downstream, statusCode, message)
+		s.recordTraffic(r, requestID, downstream, route, statusCode, start, message, domain.TokenUsage{}, requestedModel, requestBody)
+		if s.logger != nil {
+			s.logger.Warn("stream preflight failed", "request_id", requestID, "error", err)
+		}
+		return
+	}
+
 	prepareStreamHeaders(w.Header(), resp.Header)
-	statusCode := normalizeStreamStatusCode(resp.StatusCode, downstream, route.UpstreamProtocol)
+	statusCode := resp.StatusCode
 	w.WriteHeader(statusCode)
 	writer := flushWriter{writer: w}
 	result, err := s.converter.ConvertStream(ai_llm_proxy.StreamInput{
 		Downstream: downstream,
 		Upstream:   route.UpstreamProtocol,
 		Model:      route.Model,
-		Reader:     resp.Body,
+		Reader:     reader,
 		Writer:     writer,
 	})
 	if err != nil {
@@ -377,7 +426,7 @@ func applyUpstreamHeaders(req *http.Request, source *http.Request, route domain.
 func copySafeHeaders(dst http.Header, src http.Header) {
 	for key, values := range src {
 		switch strings.ToLower(key) {
-		case "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade", "content-length":
+		case "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "trailers", "transfer-encoding", "upgrade", "content-encoding", "content-length", "content-range":
 			continue
 		}
 		for _, value := range values {
@@ -398,54 +447,6 @@ func prepareStreamHeaders(dst http.Header, src http.Header) {
 
 func isEventStream(header http.Header) bool {
 	return strings.Contains(strings.ToLower(header.Get("Content-Type")), "text/event-stream")
-}
-
-func normalizeSuccessStatusCode(statusCode int, upstream constants.Protocol, body []byte) int {
-	if statusCode < http.StatusBadRequest {
-		return statusCode
-	}
-	switch upstream {
-	case constants.ProtocolOpenAIResponses:
-		var payload struct {
-			Object string `json:"object"`
-			ID     string `json:"id"`
-			Status string `json:"status"`
-		}
-		if err := json.Unmarshal(body, &payload); err == nil &&
-			payload.Object == "response" &&
-			strings.TrimSpace(payload.ID) != "" &&
-			strings.TrimSpace(payload.Status) != "" {
-			return http.StatusOK
-		}
-	case constants.ProtocolOpenAIChat:
-		var payload struct {
-			Object  string `json:"object"`
-			ID      string `json:"id"`
-			Choices []any  `json:"choices"`
-		}
-		if err := json.Unmarshal(body, &payload); err == nil &&
-			payload.Object == "chat.completion" &&
-			strings.TrimSpace(payload.ID) != "" &&
-			len(payload.Choices) > 0 {
-			return http.StatusOK
-		}
-	}
-	return statusCode
-}
-
-func normalizeStreamStatusCode(statusCode int, downstream constants.Protocol, upstream constants.Protocol) int {
-	if statusCode < http.StatusBadRequest {
-		return statusCode
-	}
-	if downstream == upstream {
-		return statusCode
-	}
-	switch upstream {
-	case constants.ProtocolOpenAIResponses, constants.ProtocolOpenAIChat, constants.ProtocolAnthropic:
-		return http.StatusOK
-	default:
-		return statusCode
-	}
 }
 
 func downstreamStreamPreference(protocol constants.Protocol, body []byte) (bool, bool) {
@@ -614,4 +615,198 @@ func matchedRuleName(ruleID string, routeName string) string {
 		return ""
 	}
 	return routeName
+}
+
+const (
+	maxUpstreamErrorBodyBytes = 1 << 20
+	streamPreflightMaxBytes   = 64 << 10
+	streamPreflightMaxEvents  = 3
+	streamPreflightTimeout    = 2 * time.Second
+)
+
+func isHTTPSuccess(statusCode int) bool {
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
+}
+
+func downstreamErrorStatus(upstreamStatus int) int {
+	if upstreamStatus >= http.StatusBadRequest {
+		return upstreamStatus
+	}
+	return http.StatusBadGateway
+}
+
+func readLimitedBody(reader io.Reader, limit int64) ([]byte, error) {
+	if reader == nil {
+		return nil, nil
+	}
+	return io.ReadAll(io.LimitReader(reader, limit+1))
+}
+
+func upstreamErrorMessage(statusCode int, body []byte) string {
+	fallback := fmt.Sprintf("upstream returned status %d", statusCode)
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return fallback
+	}
+	if len(body) > maxUpstreamErrorBodyBytes {
+		body = body[:maxUpstreamErrorBodyBytes]
+	}
+	if message := extractErrorMessage(body); message != "" {
+		return fallback + ": " + message
+	}
+	return fallback
+}
+
+func extractErrorMessage(body []byte) string {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	if errValue, ok := payload["error"]; ok {
+		if message := errorValueMessage(errValue); message != "" {
+			return message
+		}
+	}
+	if message, _ := payload["message"].(string); strings.TrimSpace(message) != "" {
+		return strings.TrimSpace(message)
+	}
+	return ""
+}
+
+func errorValueMessage(value any) string {
+	switch item := value.(type) {
+	case string:
+		return strings.TrimSpace(item)
+	case map[string]any:
+		if message, _ := item["message"].(string); strings.TrimSpace(message) != "" {
+			return strings.TrimSpace(message)
+		}
+		if code, _ := item["code"].(string); strings.TrimSpace(code) != "" {
+			return strings.TrimSpace(code)
+		}
+		if typ, _ := item["type"].(string); strings.TrimSpace(typ) != "" {
+			return strings.TrimSpace(typ)
+		}
+	}
+	return ""
+}
+
+func requestWantsStream(body []byte) bool {
+	var payload struct {
+		Stream bool `json:"stream"`
+	}
+	return json.Unmarshal(body, &payload) == nil && payload.Stream
+}
+
+type streamPreflightResult struct {
+	reader io.Reader
+	err    error
+}
+
+func preflightStream(body io.ReadCloser) (io.Reader, error) {
+	done := make(chan streamPreflightResult, 1)
+	go func() {
+		reader, err := scanStreamPreflight(body)
+		done <- streamPreflightResult{reader: reader, err: err}
+	}()
+	select {
+	case result := <-done:
+		return result.reader, result.err
+	case <-time.After(streamPreflightTimeout):
+		_ = body.Close()
+		return nil, fmt.Errorf("upstream stream preflight timed out")
+	}
+}
+
+func scanStreamPreflight(reader io.Reader) (io.Reader, error) {
+	bufReader := bufio.NewReader(reader)
+	var prefix bytes.Buffer
+	var dataLines []string
+	eventName := ""
+	events := 0
+	seenBytes := false
+
+	evaluateFrame := func() (bool, error) {
+		data := strings.TrimSpace(strings.Join(dataLines, "\n"))
+		dataLines = nil
+		name := eventName
+		eventName = ""
+		if data == "" || data == "[DONE]" {
+			return false, nil
+		}
+		if err := detectStreamError(name, []byte(data)); err != nil {
+			return true, err
+		}
+		return true, nil
+	}
+
+	for {
+		line, err := bufReader.ReadString('\n')
+		if len(line) > 0 {
+			seenBytes = true
+			_, _ = prefix.WriteString(line)
+			trimmed := strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
+			switch {
+			case trimmed == "":
+				events++
+				found, frameErr := evaluateFrame()
+				if frameErr != nil {
+					return nil, frameErr
+				}
+				if found || prefix.Len() >= streamPreflightMaxBytes || events >= streamPreflightMaxEvents {
+					return io.MultiReader(bytes.NewReader(prefix.Bytes()), bufReader), nil
+				}
+			case strings.HasPrefix(trimmed, ":"):
+			case strings.HasPrefix(trimmed, "event:"):
+				eventName = strings.TrimSpace(strings.TrimPrefix(trimmed, "event:"))
+			case strings.HasPrefix(trimmed, "data:"):
+				value := strings.TrimPrefix(trimmed, "data:")
+				dataLines = append(dataLines, strings.TrimPrefix(value, " "))
+			}
+			if prefix.Len() >= streamPreflightMaxBytes {
+				return io.MultiReader(bytes.NewReader(prefix.Bytes()), bufReader), nil
+			}
+		}
+		if err == io.EOF {
+			if len(dataLines) > 0 {
+				found, frameErr := evaluateFrame()
+				if frameErr != nil {
+					return nil, frameErr
+				}
+				if found {
+					return io.MultiReader(bytes.NewReader(prefix.Bytes()), bufReader), nil
+				}
+			}
+			if !seenBytes {
+				return nil, fmt.Errorf("upstream stream was empty")
+			}
+			return nil, fmt.Errorf("upstream stream ended before first event")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read upstream stream preflight failed: %w", err)
+		}
+	}
+}
+
+func detectStreamError(eventName string, data []byte) error {
+	var payload map[string]any
+	_ = json.Unmarshal(data, &payload)
+	eventType, _ := payload["type"].(string)
+	if eventType == "" {
+		eventType = eventName
+	}
+	eventType = strings.ToLower(strings.TrimSpace(eventType))
+	if eventType == "error" || strings.HasSuffix(eventType, ".failed") || strings.Contains(strings.ToLower(eventName), "error") {
+		if message := errorValueMessage(payload["error"]); message != "" {
+			return fmt.Errorf("upstream stream error: %s", message)
+		}
+		if message, _ := payload["message"].(string); strings.TrimSpace(message) != "" {
+			return fmt.Errorf("upstream stream error: %s", strings.TrimSpace(message))
+		}
+		return fmt.Errorf("upstream stream error")
+	}
+	if message := errorValueMessage(payload["error"]); message != "" {
+		return fmt.Errorf("upstream stream error: %s", message)
+	}
+	return nil
 }

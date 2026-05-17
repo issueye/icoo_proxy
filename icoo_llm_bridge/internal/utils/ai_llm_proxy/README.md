@@ -25,24 +25,36 @@ service/proxy       -> service/translation
 
 当前已迁入旧项目 `internal/pkg/ai_llm_proxy` 的非测试源码，并通过 `NewProtocolConverter` 暴露给代理服务使用。
 
-已接入的非流式 JSON 转换方向：
+## 转换矩阵
 
-- Anthropic request -> OpenAI Responses request
-- OpenAI Chat Completions request -> OpenAI Responses request
-- OpenAI Chat Completions request -> Anthropic request
-- OpenAI Responses request -> Anthropic request
-- Anthropic response -> OpenAI Responses response
-- Anthropic response -> OpenAI Chat Completions response
-- OpenAI Responses response -> Anthropic response
-- OpenAI Responses response -> OpenAI Chat Completions response
+请求转换：
+
+| Downstream -> Upstream | Anthropic | OpenAI Chat | OpenAI Responses |
+| --- | --- | --- | --- |
+| Anthropic | 透传 | 未支持 | 已支持 |
+| OpenAI Chat | 已支持 | 透传 | 已支持 |
+| OpenAI Responses | 已支持 | 未支持 | 透传 |
+
+非流式响应转换：
+
+| Upstream -> Downstream | Anthropic | OpenAI Chat | OpenAI Responses |
+| --- | --- | --- | --- |
+| Anthropic | 透传 | 已支持 | 已支持 |
+| OpenAI Chat | 已支持 | 透传 | 已支持 |
+| OpenAI Responses | 已支持 | 已支持 | 透传 |
+
+SSE 流式转换：
+
+| Upstream -> Downstream | Anthropic | OpenAI Chat | OpenAI Responses |
+| --- | --- | --- | --- |
+| Anthropic | 透传 | 已支持 | 已支持 |
+| OpenAI Chat | 已支持 | 透传 | 已支持 |
+| OpenAI Responses | 已支持 | 已支持 | 透传 |
 
 暂未接入的方向会返回明确错误，避免隐式错误转换。
 
-已接入的 SSE 流式转换方向：
+当前降级规则：
 
-- OpenAI Responses stream -> Anthropic stream
-- OpenAI Responses stream -> OpenAI Chat Completions stream
-- Anthropic stream -> OpenAI Responses stream
-- Anthropic stream -> OpenAI Chat Completions stream
-
-同协议 stream 直接透传。
+- 第一版优先保证 text、usage、finish reason 的基本语义。
+- OpenAI Chat 非流式 tool calls 会转换为 Responses `function_call`，再可转换为 Anthropic `tool_use`。
+- OpenAI Chat SSE tool call 增量暂不完整转换；流式路径只保证文本、usage 和终止原因。

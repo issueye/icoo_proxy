@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -219,7 +220,7 @@ func TestProxyServiceConvertsEventStream(t *testing.T) {
 	}
 }
 
-func TestProxyServiceNormalizesSuccessfulResponsesStreamStatusCode(t *testing.T) {
+func TestProxyServiceReturnsErrorForNon2xxStreamResponse(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -264,18 +265,21 @@ func TestProxyServiceNormalizesSuccessfulResponsesStreamStatusCode(t *testing.T)
 
 	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
 
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"object":"chat.completion.chunk"`) {
-		t.Fatalf("expected chat stream body, got: %s", rec.Body.String())
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("content-type = %q", got)
 	}
-	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusOK {
+	if strings.Contains(rec.Body.String(), `"object":"chat.completion.chunk"`) {
+		t.Fatalf("non-2xx stream was converted as success: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusServiceUnavailable || traffic.items[0].Error == "" {
 		t.Fatalf("unexpected traffic records: %+v", traffic.items)
 	}
 }
 
-func TestProxyServiceNormalizesSuccessfulResponsesStatusCode(t *testing.T) {
+func TestProxyServiceReturnsErrorForNon2xxJSONResponse(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -310,16 +314,16 @@ func TestProxyServiceNormalizesSuccessfulResponsesStatusCode(t *testing.T) {
 
 	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
 
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"object":"chat.completion"`) {
-		t.Fatalf("expected chat completion body, got: %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "upstream returned status 503") {
+		t.Fatalf("expected upstream error body, got: %s", rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"content":""`) {
-		t.Fatalf("expected explicit empty content, got: %s", rec.Body.String())
+	if strings.Contains(rec.Body.String(), `"object":"chat.completion"`) {
+		t.Fatalf("non-2xx response was converted as success: %s", rec.Body.String())
 	}
-	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusOK {
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusServiceUnavailable || traffic.items[0].Error == "" {
 		t.Fatalf("unexpected traffic records: %+v", traffic.items)
 	}
 }
@@ -327,7 +331,6 @@ func TestProxyServiceNormalizesSuccessfulResponsesStatusCode(t *testing.T) {
 func TestProxyServiceFallsBackToStreamForSuccessfulChatJSON(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(`{"id":"chatcmpl_test","object":"chat.completion","created":1778735097,"model":"gpt-5.5","choices":[{"index":0,"message":{"role":"assistant","content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":0,"total_tokens":1}}`))
 	}))
 	defer upstream.Close()
@@ -462,6 +465,269 @@ func TestProxyServiceRoutesOpenAIChatToAnthropicStream(t *testing.T) {
 		t.Fatalf("expected converted text, got: %s", rec.Body.String())
 	}
 	if len(traffic.items) != 1 || traffic.items[0].InputTokens != 2 || traffic.items[0].OutputTokens != 3 {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+}
+
+func TestProxyServiceUpstreamNon2xxReturnsDownstreamErrorAndRecordsTraffic(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"type":"rate_limit_error","message":"slow down"}}`))
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "chat",
+		UpstreamProtocol: constants.ProtocolOpenAIChat,
+		Model:            "gpt-5.5",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false},
+		slog.Default(),
+		ai_llm_proxy.NewProtocolConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"error"`) || !strings.Contains(rec.Body.String(), "slow down") {
+		t.Fatalf("expected downstream error body, got: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+	if !strings.Contains(traffic.items[0].Error, "slow down") {
+		t.Fatalf("traffic error = %q", traffic.items[0].Error)
+	}
+}
+
+func TestProxyServiceDropsUnsafeHeadersAfterResponseRewrite(t *testing.T) {
+	body := []byte(`{"id":"resp_1","object":"response","model":"gpt","status":"completed","output":[]}`)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "br")
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		w.Header().Set("X-Upstream-Test", "kept")
+		_, _ = w.Write(body)
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "responses",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "gpt-5.5",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false},
+		slog.Default(),
+		ai_llm_proxy.NewProtocolConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q", got)
+	}
+	if got := rec.Header().Get("Content-Length"); got != "" {
+		t.Fatalf("Content-Length = %q", got)
+	}
+	if got := rec.Header().Get("X-Upstream-Test"); got != "kept" {
+		t.Fatalf("X-Upstream-Test = %q", got)
+	}
+	if !strings.Contains(rec.Body.String(), `"object":"chat.completion"`) {
+		t.Fatalf("expected rewritten chat body, got: %s", rec.Body.String())
+	}
+}
+
+func TestProxyServiceStreamingRequestDoesNotUseGlobalClientTimeout(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		time.Sleep(50 * time.Millisecond)
+		_, _ = w.Write([]byte(strings.Join([]string{
+			`event: response.created`,
+			`data: {"type":"response.created","response":{"id":"resp_1","model":"gpt","status":"in_progress"}}`,
+			``,
+			`event: response.output_text.delta`,
+			`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"hello"}`,
+			``,
+			`event: response.completed`,
+			`data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt","status":"completed"}}`,
+			``,
+		}, "\n")))
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "responses",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "gpt-5.5",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false, WriteTimeout: 10 * time.Millisecond},
+		slog.Default(),
+		ai_llm_proxy.NewProtocolConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","stream":true,"messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"content":"hello"`) {
+		t.Fatalf("expected delayed stream body, got: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusOK {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+}
+
+func TestProxyServiceStreamPreflightRejectsEmptyStream(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "responses",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "gpt-5.5",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false},
+		slog.Default(),
+		ai_llm_proxy.NewProtocolConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","stream":true,"messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("content-type = %q", got)
+	}
+	if !strings.Contains(rec.Body.String(), "empty") {
+		t.Fatalf("expected empty stream error, got: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusBadGateway {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+}
+
+func TestProxyServiceStreamPreflightRejectsErrorEvent(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(strings.Join([]string{
+			`event: error`,
+			`data: {"type":"error","error":{"type":"invalid_request_error","message":"bad stream"}}`,
+			``,
+		}, "\n")))
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "responses",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "gpt-5.5",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false},
+		slog.Default(),
+		ai_llm_proxy.NewProtocolConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","stream":true,"messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"object":"chat.completion.chunk"`) {
+		t.Fatalf("error stream was converted as success: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "bad stream") {
+		t.Fatalf("expected stream error message, got: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusBadGateway {
 		t.Fatalf("unexpected traffic records: %+v", traffic.items)
 	}
 }

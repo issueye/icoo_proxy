@@ -63,6 +63,54 @@ func (r *routeResolver) Resolve(ctx context.Context, downstream constants.Protoc
 	return domain.Route{}, fmt.Errorf("no route matched downstream protocol %q and model %q", downstream, requestedModel)
 }
 
+func (r *routeResolver) ResolvePlan(ctx context.Context, downstream constants.Protocol, requestedModel string) (domain.RoutePlan, error) {
+	requestedModel = strings.TrimSpace(requestedModel)
+	plan := domain.RoutePlan{
+		DownstreamProtocol: downstream,
+		RequestedModel:     requestedModel,
+	}
+
+	providers, err := r.loadProviders(ctx)
+	if err != nil {
+		return plan, err
+	}
+
+	if candidate, ok, err := r.resolveDirectCandidate(providers, requestedModel); ok || err != nil {
+		if err != nil {
+			return plan, err
+		}
+		plan.Candidates = append(plan.Candidates, candidate)
+		return plan, nil
+	}
+
+	rules, err := r.rules.ListEnabled(ctx)
+	if err != nil {
+		return plan, fmt.Errorf("list enabled routing rules: %w", err)
+	}
+	sort.SliceStable(rules, func(i, j int) bool {
+		return rules[i].Priority < rules[j].Priority
+	})
+
+	for _, rule := range rules {
+		if !ruleMatches(rule, downstream, requestedModel) {
+			continue
+		}
+		candidate, err := r.candidateFromRule(providers, rule, requestedModel)
+		if err != nil {
+			return plan, err
+		}
+		plan.Candidates = append(plan.Candidates, candidate)
+	}
+
+	if len(plan.Candidates) > 0 {
+		return plan, nil
+	}
+	if requestedModel == "" {
+		return plan, fmt.Errorf("no route matched downstream protocol %q", downstream)
+	}
+	return plan, fmt.Errorf("no route matched downstream protocol %q and model %q", downstream, requestedModel)
+}
+
 func (r *routeResolver) loadProviders(ctx context.Context) ([]domain.ProviderSnapshot, error) {
 	items, err := r.providers.List(ctx)
 	if err != nil {
@@ -84,26 +132,42 @@ func (r *routeResolver) loadProviders(ctx context.Context) ([]domain.ProviderSna
 }
 
 func (r *routeResolver) resolveDirect(providers []domain.ProviderSnapshot, requestedModel string) (domain.Route, bool, error) {
+	candidate, ok, err := r.resolveDirectCandidate(providers, requestedModel)
+	if err != nil || !ok {
+		return domain.Route{}, ok, err
+	}
+	return candidate.Route(), true, nil
+}
+
+func (r *routeResolver) resolveDirectCandidate(providers []domain.ProviderSnapshot, requestedModel string) (domain.RouteCandidate, bool, error) {
 	providerName, modelName, ok := strings.Cut(requestedModel, "/")
 	if !ok || strings.TrimSpace(providerName) == "" || strings.TrimSpace(modelName) == "" {
-		return domain.Route{}, false, nil
+		return domain.RouteCandidate{}, false, nil
 	}
 
 	provider, ok := findProvider(providers, providerName)
 	if !ok {
-		return domain.Route{}, true, fmt.Errorf("direct route provider %q was not found or is disabled", providerName)
+		return domain.RouteCandidate{}, true, fmt.Errorf("direct route provider %q was not found or is disabled", providerName)
 	}
 	model, ok := findModel(provider.Models, modelName)
 	if !ok {
-		return domain.Route{}, true, fmt.Errorf("direct route model %q was not found or is disabled for provider %q", modelName, providerName)
+		return domain.RouteCandidate{}, true, fmt.Errorf("direct route model %q was not found or is disabled for provider %q", modelName, providerName)
 	}
-	return buildRoute(provider.Name+"/"+model.Name, provider, provider.Protocol, model.Name, model.MaxTokens, "direct"), true, nil
+	return buildRouteCandidate(provider.Name+"/"+model.Name, provider, provider.Protocol, model.Name, model.MaxTokens, "direct", 0), true, nil
 }
 
 func (r *routeResolver) routeFromRule(providers []domain.ProviderSnapshot, rule entity.RoutingRule, requestedModel string) (domain.Route, error) {
+	candidate, err := r.candidateFromRule(providers, rule, requestedModel)
+	if err != nil {
+		return domain.Route{}, err
+	}
+	return candidate.Route(), nil
+}
+
+func (r *routeResolver) candidateFromRule(providers []domain.ProviderSnapshot, rule entity.RoutingRule, requestedModel string) (domain.RouteCandidate, error) {
 	provider, ok := findProvider(providers, rule.TargetProviderID)
 	if !ok {
-		return domain.Route{}, fmt.Errorf("routing rule %q targets missing or disabled provider %q", rule.Name, rule.TargetProviderID)
+		return domain.RouteCandidate{}, fmt.Errorf("routing rule %q targets missing or disabled provider %q", rule.Name, rule.TargetProviderID)
 	}
 
 	targetModel := strings.TrimSpace(rule.TargetModel)
@@ -111,12 +175,12 @@ func (r *routeResolver) routeFromRule(providers []domain.ProviderSnapshot, rule 
 		targetModel = requestedModel
 	}
 	if targetModel == "" {
-		return domain.Route{}, fmt.Errorf("routing rule %q did not specify a target model", rule.Name)
+		return domain.RouteCandidate{}, fmt.Errorf("routing rule %q did not specify a target model", rule.Name)
 	}
 
 	model, ok := findModel(provider.Models, targetModel)
 	if !ok {
-		return domain.Route{}, fmt.Errorf("routing rule %q targets missing or disabled model %q for provider %q", rule.Name, targetModel, provider.Name)
+		return domain.RouteCandidate{}, fmt.Errorf("routing rule %q targets missing or disabled model %q for provider %q", rule.Name, targetModel, provider.Name)
 	}
 
 	upstreamProtocol := rule.UpstreamProtocol
@@ -124,7 +188,7 @@ func (r *routeResolver) routeFromRule(providers []domain.ProviderSnapshot, rule 
 		upstreamProtocol = provider.Protocol
 	}
 
-	return buildRoute(rule.Name, provider, upstreamProtocol, model.Name, model.MaxTokens, "routing_rule:"+rule.ID), nil
+	return buildRouteCandidate(rule.Name, provider, upstreamProtocol, model.Name, model.MaxTokens, "routing_rule:"+rule.ID, rule.Priority), nil
 }
 
 func providerSnapshot(item entity.Provider, models []entity.ProviderModel) domain.ProviderSnapshot {
@@ -198,12 +262,42 @@ func findModel(models []domain.ProviderModelSnapshot, name string) (domain.Provi
 }
 
 func buildRoute(name string, provider domain.ProviderSnapshot, upstreamProtocol constants.Protocol, model string, maxTokens int, source string) domain.Route {
-	return domain.Route{
+	return buildRouteCandidate(name, provider, upstreamProtocol, model, maxTokens, source, 0).Route()
+}
+
+func buildRouteCandidate(name string, provider domain.ProviderSnapshot, upstreamProtocol constants.Protocol, model string, maxTokens int, source string, priority int) domain.RouteCandidate {
+	return domain.RouteCandidate{
 		Name:             name,
 		UpstreamProtocol: upstreamProtocol,
 		Model:            model,
 		DefaultMaxTokens: maxTokens,
 		Source:           source,
+		Priority:         priority,
 		Provider:         provider,
+		Endpoint: domain.ProviderEndpointSnapshot{
+			ID:         defaultResourceID(provider, "endpoint"),
+			ProviderID: provider.ID,
+			BaseURL:    provider.BaseURL,
+			Priority:   0,
+			Weight:     1,
+			Enabled:    true,
+		},
+		Credential: domain.ProviderCredentialSnapshot{
+			ID:         defaultResourceID(provider, "credential"),
+			ProviderID: provider.ID,
+			APIKey:     provider.APIKey,
+			Enabled:    true,
+		},
 	}
+}
+
+func defaultResourceID(provider domain.ProviderSnapshot, suffix string) string {
+	key := provider.ID
+	if key == "" {
+		key = provider.Name
+	}
+	if key == "" {
+		return "default-" + suffix
+	}
+	return key + ":default-" + suffix
 }
