@@ -94,7 +94,9 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusBadRequest, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
 		return
 	}
-	if ruleID := extractRuleID(route.Source); ruleID != "" && s.tracker != nil {
+
+	ruleID := extractRuleID(route.Source)
+	if ruleID != "" && s.tracker != nil {
 		s.tracker.Acquire(ruleID)
 		defer s.tracker.Release(ruleID)
 	}

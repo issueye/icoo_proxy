@@ -30,6 +30,7 @@ func NewRepositories(db *gorm.DB) Repositories {
 	}
 }
 
+// ProviderRepository 供应商仓库
 type gormProviderRepository struct{ db *gorm.DB }
 
 func (r *gormProviderRepository) List(ctx context.Context) ([]entity.Provider, error) {
@@ -50,6 +51,7 @@ func (r *gormProviderRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&entity.Provider{}, "id = ?", id).Error
 }
 
+// ProviderModelRepository 供应商模型仓库
 type gormProviderModelRepository struct{ db *gorm.DB }
 
 func (r *gormProviderModelRepository) ListByProvider(ctx context.Context, providerID string) ([]entity.ProviderModel, error) {
@@ -65,6 +67,7 @@ func (r *gormProviderModelRepository) Delete(ctx context.Context, providerID str
 	return r.db.WithContext(ctx).Delete(&entity.ProviderModel{}, "provider_id = ? AND id = ?", providerID, id).Error
 }
 
+// EndpointRepository 入口仓库
 type gormEndpointRepository struct{ db *gorm.DB }
 
 func (r *gormEndpointRepository) List(ctx context.Context) ([]entity.IngressEndpoint, error) {
@@ -90,6 +93,7 @@ func (r *gormEndpointRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&entity.IngressEndpoint{}, "id = ?", id).Error
 }
 
+// RoutingRuleRepository 路由规则仓库
 type gormRoutingRuleRepository struct{ db *gorm.DB }
 
 func (r *gormRoutingRuleRepository) List(ctx context.Context) ([]entity.RoutingRule, error) {
@@ -115,6 +119,7 @@ func (r *gormRoutingRuleRepository) Delete(ctx context.Context, id string) error
 	return r.db.WithContext(ctx).Delete(&entity.RoutingRule{}, "id = ?", id).Error
 }
 
+// APIKeyRepository API密钥仓库
 type gormAPIKeyRepository struct{ db *gorm.DB }
 
 func (r *gormAPIKeyRepository) List(ctx context.Context) ([]entity.APIKey, error) {
@@ -140,6 +145,7 @@ func (r *gormAPIKeyRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&entity.APIKey{}, "id = ?", id).Error
 }
 
+// TrafficRepository 流量记录仓库
 type gormTrafficRepository struct{ db *gorm.DB }
 
 func (r *gormTrafficRepository) Record(ctx context.Context, item *entity.TrafficRecord) error {
@@ -161,6 +167,7 @@ func (r *gormTrafficRepository) Clear(ctx context.Context) error {
 	return r.db.WithContext(ctx).Where("1 = 1").Delete(&entity.TrafficRecord{}).Error
 }
 
+// UIPreferenceRepository 用户偏好仓库
 type gormUIPreferenceRepository struct{ db *gorm.DB }
 
 func (r *gormUIPreferenceRepository) Save(ctx context.Context, item *entity.UIPreference) error {

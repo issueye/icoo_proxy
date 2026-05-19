@@ -31,6 +31,7 @@ func NewRouteResolver(
 	}
 }
 
+// Resolve 路由解析
 func (r *routeResolver) Resolve(ctx context.Context, downstream constants.Protocol, requestedModel string) (domain.Route, error) {
 	requestedModel = strings.TrimSpace(requestedModel)
 	providers, err := r.loadProviders(ctx)
@@ -38,7 +39,9 @@ func (r *routeResolver) Resolve(ctx context.Context, downstream constants.Protoc
 		return domain.Route{}, err
 	}
 
-	if route, ok, err := r.resolveDirect(providers, requestedModel); ok || err != nil {
+	// 直接解析路由
+	route, ok, err := r.resolveDirect(providers, requestedModel)
+	if ok || err != nil {
 		return route, err
 	}
 
@@ -63,6 +66,7 @@ func (r *routeResolver) Resolve(ctx context.Context, downstream constants.Protoc
 	return domain.Route{}, fmt.Errorf("no route matched downstream protocol %q and model %q", downstream, requestedModel)
 }
 
+// ResolvePlan 路由解析计划
 func (r *routeResolver) ResolvePlan(ctx context.Context, downstream constants.Protocol, requestedModel string) (domain.RoutePlan, error) {
 	requestedModel = strings.TrimSpace(requestedModel)
 	plan := domain.RoutePlan{
@@ -70,11 +74,13 @@ func (r *routeResolver) ResolvePlan(ctx context.Context, downstream constants.Pr
 		RequestedModel:     requestedModel,
 	}
 
+	// 加载供应商
 	providers, err := r.loadProviders(ctx)
 	if err != nil {
 		return plan, err
 	}
 
+	// 直接解析路由候选
 	if candidate, ok, err := r.resolveDirectCandidate(providers, requestedModel); ok || err != nil {
 		if err != nil {
 			return plan, err
@@ -83,6 +89,7 @@ func (r *routeResolver) ResolvePlan(ctx context.Context, downstream constants.Pr
 		return plan, nil
 	}
 
+	// 加载路由规则
 	rules, err := r.rules.ListEnabled(ctx)
 	if err != nil {
 		return plan, fmt.Errorf("list enabled routing rules: %w", err)
@@ -111,6 +118,7 @@ func (r *routeResolver) ResolvePlan(ctx context.Context, downstream constants.Pr
 	return plan, fmt.Errorf("no route matched downstream protocol %q and model %q", downstream, requestedModel)
 }
 
+// loadProviders 加载供应商
 func (r *routeResolver) loadProviders(ctx context.Context) ([]domain.ProviderSnapshot, error) {
 	items, err := r.providers.List(ctx)
 	if err != nil {
@@ -131,6 +139,7 @@ func (r *routeResolver) loadProviders(ctx context.Context) ([]domain.ProviderSna
 	return providers, nil
 }
 
+// resolveDirect 直接解析路由
 func (r *routeResolver) resolveDirect(providers []domain.ProviderSnapshot, requestedModel string) (domain.Route, bool, error) {
 	candidate, ok, err := r.resolveDirectCandidate(providers, requestedModel)
 	if err != nil || !ok {
@@ -139,20 +148,27 @@ func (r *routeResolver) resolveDirect(providers []domain.ProviderSnapshot, reque
 	return candidate.Route(), true, nil
 }
 
+// resolveDirectCandidate 直接解析路由候选
 func (r *routeResolver) resolveDirectCandidate(providers []domain.ProviderSnapshot, requestedModel string) (domain.RouteCandidate, bool, error) {
+	// 如果模型名称为 provider/model 格式，直接解析路由
 	providerName, modelName, ok := strings.Cut(requestedModel, "/")
 	if !ok || strings.TrimSpace(providerName) == "" || strings.TrimSpace(modelName) == "" {
 		return domain.RouteCandidate{}, false, nil
 	}
 
+	// 查找供应商
 	provider, ok := findProvider(providers, providerName)
 	if !ok {
 		return domain.RouteCandidate{}, true, fmt.Errorf("direct route provider %q was not found or is disabled", providerName)
 	}
+
+	// 查找模型
 	model, ok := findModel(provider.Models, modelName)
 	if !ok {
 		return domain.RouteCandidate{}, true, fmt.Errorf("direct route model %q was not found or is disabled for provider %q", modelName, providerName)
 	}
+
+	// 构建路由候选
 	return buildRouteCandidate(provider.Name+"/"+model.Name, provider, provider.Protocol, model.Name, model.MaxTokens, "direct", 0), true, nil
 }
 
@@ -191,6 +207,7 @@ func (r *routeResolver) candidateFromRule(providers []domain.ProviderSnapshot, r
 	return buildRouteCandidate(rule.Name, provider, upstreamProtocol, model.Name, model.MaxTokens, "routing_rule:"+rule.ID, rule.Priority), nil
 }
 
+// providerSnapshot 供应商快照
 func providerSnapshot(item entity.Provider, models []entity.ProviderModel) domain.ProviderSnapshot {
 	snapshot := domain.ProviderSnapshot{
 		ID:          item.ID,
@@ -241,6 +258,7 @@ func modelPatternMatches(pattern string, model string) bool {
 	return err == nil && matched
 }
 
+// findProvider 查找供应商
 func findProvider(providers []domain.ProviderSnapshot, key string) (domain.ProviderSnapshot, bool) {
 	key = strings.TrimSpace(key)
 	for _, provider := range providers {
@@ -251,6 +269,7 @@ func findProvider(providers []domain.ProviderSnapshot, key string) (domain.Provi
 	return domain.ProviderSnapshot{}, false
 }
 
+// findModel 查找模型
 func findModel(models []domain.ProviderModelSnapshot, name string) (domain.ProviderModelSnapshot, bool) {
 	name = strings.TrimSpace(name)
 	for _, model := range models {
@@ -261,10 +280,12 @@ func findModel(models []domain.ProviderModelSnapshot, name string) (domain.Provi
 	return domain.ProviderModelSnapshot{}, false
 }
 
+// buildRoute 构建路由
 func buildRoute(name string, provider domain.ProviderSnapshot, upstreamProtocol constants.Protocol, model string, maxTokens int, source string) domain.Route {
 	return buildRouteCandidate(name, provider, upstreamProtocol, model, maxTokens, source, 0).Route()
 }
 
+// buildRouteCandidate 构建路由候选
 func buildRouteCandidate(name string, provider domain.ProviderSnapshot, upstreamProtocol constants.Protocol, model string, maxTokens int, source string, priority int) domain.RouteCandidate {
 	return domain.RouteCandidate{
 		Name:             name,
@@ -291,6 +312,7 @@ func buildRouteCandidate(name string, provider domain.ProviderSnapshot, upstream
 	}
 }
 
+// defaultResourceID 默认资源ID
 func defaultResourceID(provider domain.ProviderSnapshot, suffix string) string {
 	key := provider.ID
 	if key == "" {
