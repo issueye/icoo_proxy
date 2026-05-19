@@ -28,6 +28,7 @@ type Container struct {
 	Config      config.Config
 	Logger      *slog.Logger
 	DB          *gorm.DB
+	TrafficDB   *gorm.DB
 	Repos       repository.Repositories
 	Services    service.Services
 	Controllers controller.Controllers
@@ -55,7 +56,15 @@ func NewContainer(options Options) (*Container, error) {
 		return nil, err
 	}
 
-	repos := repository.NewRepositories(db)
+	trafficDB, err := repository.OpenSQLite(cfg.TrafficDBPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := repository.AutoMigrateTraffic(trafficDB); err != nil {
+		return nil, err
+	}
+
+	repos := repository.NewRepositories(db, trafficDB)
 	if err := repository.SeedDefaults(context.Background(), repos); err != nil {
 		return nil, err
 	}
@@ -83,6 +92,7 @@ func NewContainer(options Options) (*Container, error) {
 		Config:      cfg,
 		Logger:      logger,
 		DB:          db,
+		TrafficDB:   trafficDB,
 		Repos:       repos,
 		Services:    services,
 		Controllers: controllers,
@@ -111,12 +121,27 @@ func (c *Container) Shutdown(ctx context.Context) error {
 }
 
 func (c *Container) Close() error {
-	if c == nil || c.DB == nil {
+	if c == nil {
 		return nil
 	}
-	sqlDB, err := c.DB.DB()
-	if err != nil {
-		return err
+	var closeErr error
+	if c.DB != nil {
+		sqlDB, err := c.DB.DB()
+		if err != nil {
+			closeErr = err
+		} else if err := sqlDB.Close(); err != nil {
+			closeErr = err
+		}
 	}
-	return sqlDB.Close()
+	if c.TrafficDB != nil && c.TrafficDB != c.DB {
+		sqlDB, err := c.TrafficDB.DB()
+		if err != nil && closeErr == nil {
+			closeErr = err
+		} else if err == nil {
+			if err := sqlDB.Close(); err != nil && closeErr == nil {
+				closeErr = err
+			}
+		}
+	}
+	return closeErr
 }

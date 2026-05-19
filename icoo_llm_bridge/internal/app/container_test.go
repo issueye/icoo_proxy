@@ -20,6 +20,18 @@ func TestContainerInitializesAndCloses(t *testing.T) {
 	if container.DB == nil {
 		t.Fatal("DB is nil")
 	}
+	if container.TrafficDB == nil {
+		t.Fatal("TrafficDB is nil")
+	}
+	if container.Config.DBPath == container.Config.TrafficDBPath {
+		t.Fatalf("traffic DB should be independent, got shared path %q", container.Config.DBPath)
+	}
+	if container.DB.Migrator().HasTable("traffic_records") {
+		t.Fatal("main DB should not contain traffic_records")
+	}
+	if !container.TrafficDB.Migrator().HasTable("traffic_records") {
+		t.Fatal("traffic DB should contain traffic_records")
+	}
 	if container.Server == nil || container.Server.Handler == nil {
 		t.Fatal("server handler is nil")
 	}

@@ -3,6 +3,7 @@ import { createRouter, createWebHashHistory } from "vue-router";
 import OverviewView from "../views/OverviewView.vue";
 import AuthKeysView from "../views/AuthKeysView.vue";
 import EndpointsView from "../views/EndpointsView.vue";
+import RoutingRulesView from "../views/RoutingRulesView.vue";
 import SuppliersView from "../views/SuppliersView.vue";
 import SettingsView from "../views/SettingsView.vue";
 import TrafficView from "../views/TrafficView.vue";
@@ -22,6 +23,11 @@ export default createRouter({
       path: "/suppliers",
       name: "suppliers",
       component: SuppliersView,
+    },
+    {
+      path: "/routing-rules",
+      name: "routing-rules",
+      component: RoutingRulesView,
     },
     {
       path: "/model-aliases",

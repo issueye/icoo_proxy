@@ -6,6 +6,8 @@ shutdown_timeout_seconds = 10
 allow_local_without_auth = true
 default_max_tokens = 32768
 data_dir = ".data"
+db_path = ".data/icoo_llm_bridge.db"
+traffic_db_path = ".data/icoo_llm_bridge_traffic.db"
 
 [log]
 chain_log_path = ".data/bridge-chain.log"

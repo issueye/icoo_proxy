@@ -18,14 +18,17 @@ type Repositories struct {
 	UIPreference  UIPreferenceRepository
 }
 
-func NewRepositories(db *gorm.DB) Repositories {
+func NewRepositories(db *gorm.DB, trafficDB *gorm.DB) Repositories {
+	if trafficDB == nil {
+		trafficDB = db
+	}
 	return Repositories{
 		Provider:      &gormProviderRepository{db: db},
 		ProviderModel: &gormProviderModelRepository{db: db},
 		Endpoint:      &gormEndpointRepository{db: db},
 		RoutingRule:   &gormRoutingRuleRepository{db: db},
 		APIKey:        &gormAPIKeyRepository{db: db},
-		Traffic:       &gormTrafficRepository{db: db},
+		Traffic:       &gormTrafficRepository{db: trafficDB},
 		UIPreference:  &gormUIPreferenceRepository{db: db},
 	}
 }

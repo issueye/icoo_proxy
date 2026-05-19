@@ -21,6 +21,7 @@ type Config struct {
 	DefaultMaxTokens      int
 	DataDir               string
 	DBPath                string
+	TrafficDBPath         string
 	Log                   LogConfig
 	Archive               ArchiveConfig
 }
@@ -48,6 +49,7 @@ func (c *Config) ApplyDataDir(dataDir string) {
 	}
 	c.DataDir = dataDir
 	c.DBPath = filepath.Join(dataDir, "icoo_llm_bridge.db")
+	c.TrafficDBPath = filepath.Join(dataDir, "icoo_llm_bridge_traffic.db")
 	if c.Log.ChainLogPath == "" {
 		c.Log.ChainLogPath = filepath.Join(dataDir, "bridge-chain.log")
 	}

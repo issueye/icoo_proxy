@@ -10,45 +10,10 @@
       {{ store.error }}
     </div>
 
-    <div class="section-grid grid-cols-2 lg:grid-cols-4">
+    <div class="section-grid grid-cols-1 md:grid-cols-3">
       <StatCard icon="server" label="供应商总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
       <StatCard icon="heart-pulse" label="已健康检查" :value="String(store.checkedCount)" />
-      <StatCard icon="layers" label="已配置协议" :value="String(store.configuredPolicyCount)" tone="info" />
-    </div>
-
-    <div class="section-grid">
-      <UTable :columns="routeManagementColumns" :rows="store.routeManagementRows" row-key="key" action-width="74px"
-        size="small" table-class="route-management-table">
-        <template #cell-protocol="{ row }">
-          <div class="route-map__protocol-main">
-            <p class="route-map__name">{{ row.label }}</p>
-            <UTag code size="xs">{{ row.key }}</UTag>
-          </div>
-          <p v-if="row.description" class="route-map__desc">{{ row.description }}</p>
-          <p class="route-map__helper">{{ row.helperText }}</p>
-          <p v-if="row.warningText" class="route-map__warning">{{ row.warningText }}</p>
-        </template>
-
-        <template #cell-supplier="{ row }">
-          <p class="route-map__value">{{ row.supplierName }}</p>
-        </template>
-
-        <template #cell-upstream="{ row }">
-          <UTag code size="xs">{{ row.upstreamProtocol }}</UTag>
-        </template>
-
-        <template #cell-status="{ row }">
-          <UTag :variant="row.statusVariant" size="xs" dot>{{ row.statusText }}</UTag>
-        </template>
-
-        <template #actions="{ row }">
-          <div class="table-actions">
-            <UIconButton icon="edit" :label="row.policy ? `编辑 ${row.label} 映射` : `配置 ${row.label} 映射`"
-              @click="row.policy ? openPolicyEdit(row.policy) : openPolicyCreate(row.key)" />
-          </div>
-        </template>
-      </UTable>
     </div>
 
     <UTable :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed fixed-field="freeze" min-width="1640px"
@@ -235,38 +200,6 @@
       </template>
     </UModal>
 
-    <UModal v-model:open="policyModalOpen" :title="store.policyForm.id ? '编辑路由策略' : '新建路由策略'" width="560px"
-      @close="store.resetPolicyForm">
-      <form id="policy-form" class="space-y-3" @submit.prevent="submitPolicy">
-        <div class="grid gap-3 md:grid-cols-2">
-          <USelect v-model="store.policyForm.downstream_protocol" label="下游协议" :options="store.policyOptions" />
-          <USelect v-model="store.policyForm.supplier_id" label="供应商" placeholder="请选择供应商" :options="supplierOptions" />
-        </div>
-
-        <USelect
-          v-model="store.policyForm.upstream_protocol"
-          label="上游协议"
-          placeholder="留空则继承供应商协议"
-          :options="protocolOptions"
-        />
-
-        <label class="field-toggle">
-          <input v-model="store.policyForm.enabled" type="checkbox" class="field-checkbox" />
-          启用该路由策略
-        </label>
-      </form>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <button type="button" class="btn btn-secondary" @click="closePolicyModal">取消</button>
-          <button form="policy-form" class="btn btn-primary" :class="{ 'is-loading': store.saving }"
-            :disabled="store.saving">
-            <span v-if="store.saving" class="btn__spinner" />
-            {{ store.saving ? "保存中..." : "保存路由策略" }}
-          </button>
-        </div>
-      </template>
-    </UModal>
-
     <UConfirmDialog v-model:open="confirmState.open" title="确认删除 Provider" :message="confirmState.message"
       description="删除后相关模型和路由策略可能需要重新调整。" confirm-text="确认删除" cancel-text="取消"
       :loading="Boolean(store.deleting)" danger @confirm="confirmDelete" />
@@ -274,7 +207,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
 
 import FieldLabel from "../components/FieldLabel.vue";
@@ -293,7 +226,6 @@ const DEFAULT_MODEL_MAX_TOKENS = 32768;
 const store = useSuppliersStore();
 const supplierModalOpen = ref(false);
 const modelModalOpen = ref(false);
-const policyModalOpen = ref(false);
 const queryForm = reactive({
   keyword: "",
   protocol: "all",
@@ -321,19 +253,7 @@ const vendorOptions = [
   { label: "anthropic", value: "anthropic" },
 ];
 
-const supplierOptions = computed(() =>
-  store.allSuppliers.map((supplier) => ({
-    label: `${supplier.name} (${supplier.protocol})`,
-    value: supplier.id,
-  })),
-);
 
-const routeManagementColumns = [
-  { key: "protocol", title: "下游协议", width: "40%" },
-  { key: "supplier", title: "供应商", width: "20%" },
-  { key: "upstream", title: "上游协议", width: "20%" },
-  { key: "status", title: "状态", width: "12%" },
-];
 
 const supplierTableColumns = [
   { key: "supplier", title: "供应商", width: "12%", freeze: "left" },
@@ -452,31 +372,6 @@ async function submitModelEditor() {
   if (!store.error) {
     modelModalOpen.value = false;
     message.success("模型设置已保存。");
-  }
-}
-
-function openPolicyCreate(protocol = "anthropic") {
-  store.resetPolicyForm();
-  store.policyForm.downstream_protocol = protocol;
-  policyModalOpen.value = true;
-}
-
-function openPolicyEdit(policy) {
-  store.selectPolicy(policy);
-  policyModalOpen.value = true;
-}
-
-function closePolicyModal() {
-  policyModalOpen.value = false;
-  store.resetPolicyForm();
-}
-
-async function submitPolicy() {
-  const isEdit = Boolean(store.policyForm.id);
-  await store.savePolicy();
-  if (!store.error) {
-    policyModalOpen.value = false;
-    message.success(isEdit ? "路由策略已更新。" : "路由策略已新增。");
   }
 }
 

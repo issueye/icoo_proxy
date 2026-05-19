@@ -19,6 +19,8 @@ type fileConfig struct {
 	AllowUnauthLocal       *bool             `toml:"allow_unauthenticated_local"`
 	DefaultMaxTokens       int               `toml:"default_max_tokens"`
 	DataDir                string            `toml:"data_dir"`
+	DBPath                 string            `toml:"db_path"`
+	TrafficDBPath          string            `toml:"traffic_db_path"`
 	Log                    fileLogConfig     `toml:"log"`
 	Archive                fileArchiveConfig `toml:"archive"`
 }
@@ -66,6 +68,7 @@ func defaults() Config {
 		DefaultMaxTokens:      DefaultMaxTokens,
 		DataDir:               dataDir,
 		DBPath:                filepath.Join(dataDir, "icoo_llm_bridge.db"),
+		TrafficDBPath:         filepath.Join(dataDir, "icoo_llm_bridge_traffic.db"),
 		Log: LogConfig{
 			ChainLogPath:         filepath.Join(dataDir, "bridge-chain.log"),
 			ChainLogBodies:       false,
@@ -105,6 +108,12 @@ func applyFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.DataDir != "" {
 		cfg.ApplyDataDir(fc.DataDir)
+	}
+	if fc.DBPath != "" {
+		cfg.DBPath = fc.DBPath
+	}
+	if fc.TrafficDBPath != "" {
+		cfg.TrafficDBPath = fc.TrafficDBPath
 	}
 	if fc.Log.ChainLogPath != "" {
 		cfg.Log.ChainLogPath = fc.Log.ChainLogPath
