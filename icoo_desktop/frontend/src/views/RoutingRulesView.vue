@@ -71,6 +71,7 @@
             label="供应商"
             placeholder="请选择供应商"
             :options="supplierOptions"
+            @change="handlePolicySupplierChange"
           />
         </div>
 
@@ -153,6 +154,11 @@ function openPolicyEdit(policy) {
 function closePolicyModal() {
   policyModalOpen.value = false;
   store.resetPolicyForm();
+}
+
+function handlePolicySupplierChange(supplierID) {
+  const supplier = store.allSuppliers.find((item) => item.id === supplierID);
+  store.policyForm.upstream_protocol = supplier?.protocol || "";
 }
 
 async function submitPolicy() {

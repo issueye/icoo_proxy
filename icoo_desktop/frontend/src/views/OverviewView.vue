@@ -67,7 +67,7 @@
         </PanelBlock>
       </div>
 
-      <div class="section-grid lg:grid-cols-2">
+      <div class="section-grid lg:grid-cols-1">
         <PanelBlock title="供应商健康汇总">
           <div class="divide-y divide-[#f0f0f0]">
             <div class="grid gap-2 py-2.5 grid-cols-[auto_1fr] items-center">
@@ -93,34 +93,7 @@
             </div>
           </div>
         </PanelBlock>
-
-        <PanelBlock title="默认路由">
-          <RouteList :items="store.data?.defaults || []" empty-text="当前尚未配置默认路由。" />
-        </PanelBlock>
       </div>
-
-      <PanelBlock title="默认路由策略">
-        <div class="mb-3 flex flex-wrap gap-1.5">
-          <UTag variant="success" size="xs">启用：{{ store.activePolicyCount }}</UTag>
-          <UTag variant="warning" size="xs">停用：{{ store.inactivePolicyCount }}</UTag>
-        </div>
-        <div v-if="!(store.data?.route_policies || []).length" class="empty-state">
-          当前尚未配置路由策略。
-        </div>
-        <div v-else class="divide-y divide-[#f0f0f0]">
-          <article v-for="policy in store.data?.route_policies || []" :key="policy.id" class="grid gap-3 py-2.5 lg:grid-cols-[1fr_1fr_1fr_auto] items-center">
-            <div>
-              <p class="text-sm font-medium text-[#262626]">{{ policy.downstream_protocol }}</p>
-              <p class="mt-0.5 text-[11px] text-[#8c8c8c]">下游协议</p>
-            </div>
-            <p class="text-sm text-[#595959]">{{ policy.supplier_name || "未分配供应商" }}</p>
-            <p class="text-xs text-[#8c8c8c]">{{ policy.upstream_protocol || "-" }} | 目标模型来自请求或别名映射</p>
-            <UTag :variant="policy.enabled ? 'success' : 'error'" size="xs">
-              {{ policy.enabled ? "启用中" : "已停用" }}
-            </UTag>
-          </article>
-        </div>
-      </PanelBlock>
     </template>
   </section>
 </template>
