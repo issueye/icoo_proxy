@@ -19,6 +19,7 @@ English documentation: [README.md](README.md)
 - 使用 SQLite 存储，主数据库和流量数据库分离。
 - 桌面端支持供应商连接测试。
 - 运行状态接口会返回数据库诊断信息，便于灰度替换。
+- 桌面端提供网关概览、供应商健康检查、路由规则、自定义端点、本地授权 Key、流量查看和运行参数配置。
 
 ## 仓库结构
 
@@ -110,6 +111,54 @@ cd icoo_desktop\frontend
 npm install
 npm run dev
 ```
+
+## 桌面管理端
+
+桌面管理端是本地运行 `icoo_proxy` 的推荐入口。它可以启动或重启打包后的网关，显示当前连接状态，并通过界面管理供应商、路由、端点、授权 Key、流量和运行参数。
+
+![网关概览](images/index.png)
+
+网关概览页会显示监听地址、访问模式、供应商数量、启用策略数量、上游就绪状态和支持的入口路径。下面截图使用的是 `127.0.0.1:18181` 的本地信任模式。
+
+### Provider 管理
+
+![Provider 管理](images/provider.png)
+
+`Provider` 页面用于搜索和筛选上游供应商，新建供应商，编辑凭据和基础地址，执行健康检查，查看已启用模型，以及删除供应商。列表会展示协议、地址、启用状态和 `only_stream` 等运行标签。
+
+### 路由规则
+
+![路由规则](images/rules.png)
+
+`规则设置` 页面用于把不同下游协议映射到指定上游供应商和上游协议。当前内置展示 Anthropic Messages、OpenAI Chat、OpenAI Responses 三类下游协议，并标明每条规则是已启用、待选择还是未配置。
+
+### 入口端点
+
+![入口端点](images/endpoint.png)
+
+`端点` 页面用于查看或新增入口路径。默认启用的端点包括：
+
+- `/v1/chat/completions`：兼容 OpenAI Chat 客户端。
+- `/v1/messages`：兼容 Anthropic Messages 客户端。
+- `/v1/responses` 和 `/responses`：兼容 OpenAI Responses 客户端。
+
+### 授权 Key
+
+![授权 Key](images/keys.png)
+
+`授权 Key` 页面用于创建本地客户端访问凭据。客户端可以通过 `Bearer` token 或 `x-api-key` 请求头鉴权。未配置 Key 且服务仅绑定本机时，本地信任模式仍可让本机管理操作生效。
+
+### 流量监控
+
+![流量监控](images/traffic.png)
+
+`流量监控` 页面用于查看最近代理请求、成功和错误数量、平均耗时、Token 汇总、端点、下游和上游协议、命中的路由规则、状态码和单次请求耗时。页面支持按协议筛选、手动刷新、自动刷新和清空请求记录。
+
+### 项目设置
+
+![项目设置](images/settings.png)
+
+`项目设置` 页面用于调整控制台外观、按钮密度，以及网关运行参数，例如监听地址、端口、读写超时、关闭超时、默认最大 Token 和链路日志参数。修改后可以通过右上角保存并重载让配置生效。
 
 ## 配置供应商
 

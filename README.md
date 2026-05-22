@@ -19,6 +19,7 @@ Chinese documentation: [README.cn.md](README.cn.md)
 - SQLite storage with separate main and traffic databases.
 - Provider health checks from the desktop console.
 - Runtime database diagnostics for gray replacement safety.
+- Desktop pages for gateway overview, provider health, routing rules, custom endpoints, local API keys, traffic inspection, and runtime settings.
 
 ## Repository Layout
 
@@ -111,6 +112,54 @@ npm install
 npm run dev
 ```
 
+## Desktop Console
+
+The desktop console is the recommended way to operate a local `icoo_proxy` instance. It can launch or restart the bundled bridge, show the current connection state, and manage the gateway without editing SQLite data by hand.
+
+![Gateway overview](images/index.png)
+
+The overview page shows the listener address, access mode, provider count, enabled routing policies, upstream readiness, and the supported ingress paths. The screenshots in this section use `127.0.0.1:18181` in local trusted mode.
+
+### Provider Management
+
+![Provider management](images/provider.png)
+
+Use `Provider` to search and filter upstream providers, create new provider entries, edit credentials and base URLs, check provider health, inspect enabled models, and delete entries. Provider rows show the protocol, base URL, enabled state, and operational tags such as `only_stream`.
+
+### Routing Rules
+
+![Routing rules](images/rules.png)
+
+Use `规则设置` to map each downstream protocol to an upstream provider and protocol. The console currently lists Anthropic Messages, OpenAI Chat, and OpenAI Responses as downstream protocols, and shows whether each mapping is enabled, pending selection, or unconfigured.
+
+### Ingress Endpoints
+
+![Ingress endpoints](images/endpoint.png)
+
+Use `端点` to view or add ingress paths. The default enabled endpoints include:
+
+- `/v1/chat/completions` for OpenAI Chat compatible clients.
+- `/v1/messages` for Anthropic Messages compatible clients.
+- `/v1/responses` and `/responses` for OpenAI Responses compatible clients.
+
+### API Keys
+
+![API keys](images/keys.png)
+
+Use `授权 Key` to create local client keys when you need authenticated access. Clients can authenticate with either `Bearer` tokens or the `x-api-key` header. When no key is configured and the bridge is bound to localhost, local trusted mode can still allow local admin usage.
+
+### Traffic Monitor
+
+![Traffic monitor](images/traffic.png)
+
+Use `流量监控` to inspect recent proxy requests, success and error counts, average latency, token totals, endpoints, downstream/upstream protocols, hit routing rules, status codes, and per-request timing. The page supports protocol filtering, manual refresh, auto refresh, and clearing recorded requests.
+
+### Runtime Settings
+
+![Runtime settings](images/settings.png)
+
+Use `项目设置` to adjust console appearance, button density, and bridge runtime settings such as host, port, read/write timeouts, shutdown timeout, default max tokens, and chain-log parameters. Save settings and restart the bridge from the top-right action to apply runtime changes.
+
 ## Configure Providers
 
 In the desktop app, open `Provider` and create a provider with:
@@ -130,7 +179,7 @@ The bridge resolves routes in this order:
 1. Direct provider/model routing, for example `provider-name/model-name`.
 2. Enabled routing rules ordered by priority.
 
-Default routing rules can be edited in the desktop `规则设置` page. Model-specific aliases can be configured in `模型路由`.
+Default protocol routing can be edited in the desktop `规则设置` page. Model-specific aliases can be configured in `模型路由`.
 
 ## Main APIs
 
