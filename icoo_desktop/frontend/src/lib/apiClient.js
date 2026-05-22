@@ -30,7 +30,15 @@ client.interceptors.response.use(
 const protocols = ["anthropic", "openai-chat", "openai-responses"];
 
 function valueOf(raw, snake, pascal, fallback = "") {
-  return raw?.[snake] ?? raw?.[pascal] ?? fallback;
+  return raw?.[snake] ?? raw?.[pascal] ?? raw?.[snakeToPascal(snake)] ?? fallback;
+}
+
+function snakeToPascal(value) {
+  return String(value || "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
 }
 
 function boolOf(raw, snake, pascal, fallback = false) {
@@ -218,6 +226,17 @@ function normalizeTraffic(raw) {
   };
 }
 
+function normalizeSupplierHealth(raw) {
+  return {
+    supplier_id: valueOf(raw, "supplier_id", "SupplierID"),
+    status: valueOf(raw, "status", "Status", "unreachable"),
+    status_code: Number(valueOf(raw, "status_code", "StatusCode", 0) || 0),
+    duration_ms: Number(valueOf(raw, "duration_ms", "DurationMS", 0) || 0),
+    message: valueOf(raw, "message", "Message"),
+    checked_at: valueOf(raw, "checked_at", "CheckedAt"),
+  };
+}
+
 async function listProviderModels(providerID) {
   if (!providerID) {
     return [];
@@ -380,8 +399,8 @@ export function ListSupplierHealth() {
   return Promise.resolve([]);
 }
 
-export function CheckSupplier() {
-  return Promise.resolve([]);
+export async function CheckSupplier(id) {
+  return client.post(`${API_PREFIX}/providers/${id}/check`).then(normalizeSupplierHealth);
 }
 
 export async function GetEndpointsPage(page, pageSize, keyword, protocol) {

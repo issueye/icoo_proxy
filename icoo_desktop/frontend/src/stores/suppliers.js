@@ -447,7 +447,11 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.checking = id;
       this.error = "";
       try {
-        this.health = await CheckSupplier(id);
+        const record = await CheckSupplier(id);
+        this.health = [
+          ...this.health.filter((item) => item.supplier_id !== id),
+          record,
+        ];
       } catch (error) {
         this.error = error?.message || String(error);
       } finally {

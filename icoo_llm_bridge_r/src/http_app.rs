@@ -98,6 +98,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/providers/:id",
             put(admin::update_provider).delete(admin::delete_provider),
         )
+        .route("/api/v1/providers/:id/check", post(admin::check_provider))
         .route(
             "/api/v1/providers/:provider_id/models",
             get(admin::provider_models).post(admin::create_model),

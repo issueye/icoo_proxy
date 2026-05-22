@@ -5,7 +5,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Instant};
 
 use crate::{
     auth::{new_id, APIKeyCreateInput},
@@ -170,6 +170,21 @@ pub async fn delete_provider(
     }
     match state.repo.delete_provider(id.trim()) {
         Ok(_) => ok(json!({"deleted": true})),
+        Err(e) => bad(e),
+    }
+}
+
+pub async fn check_provider(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Path(id): Path<String>,
+) -> ApiResult {
+    if let Err(resp) = require_admin(&state, &headers, addr) {
+        return resp;
+    }
+    match run_provider_check(&state, id.trim()).await {
+        Ok(item) => ok(item),
         Err(e) => bad(e),
     }
 }
@@ -513,6 +528,204 @@ fn upsert_provider(state: &AppState, id: String, input: ProviderInput) -> anyhow
     };
     state.repo.save_provider(&item)?;
     Ok(item)
+}
+
+async fn run_provider_check(state: &AppState, provider_id: &str) -> anyhow::Result<Value> {
+    let provider = state.repo.find_provider(provider_id)?;
+    let selected_model = state
+        .repo
+        .list_models_by_provider(&provider.id)?
+        .into_iter()
+        .find(|item| item.enabled && !item.name.trim().is_empty());
+    let checked_at = model::now_string();
+
+    if !provider.enabled {
+        return Ok(provider_health(
+            &provider.id,
+            "warning",
+            0,
+            0,
+            "供应商未启用。",
+            &checked_at,
+        ));
+    }
+    if provider.base_url.trim().is_empty() {
+        return Ok(provider_health(
+            &provider.id,
+            "unreachable",
+            0,
+            0,
+            "基础地址为空。",
+            &checked_at,
+        ));
+    }
+    if provider.api_key_cipher.trim().is_empty() {
+        return Ok(provider_health(
+            &provider.id,
+            "unreachable",
+            0,
+            0,
+            "API Key 为空。",
+            &checked_at,
+        ));
+    }
+
+    let Some(selected_model) = selected_model else {
+        return Ok(provider_health(
+            &provider.id,
+            "warning",
+            0,
+            0,
+            "暂无已启用模型，无法发送真实检查请求。",
+            &checked_at,
+        ));
+    };
+
+    let url = join_upstream_url(&provider.base_url, &provider.protocol);
+    if url.trim().is_empty() {
+        return Ok(provider_health(
+            &provider.id,
+            "unreachable",
+            0,
+            0,
+            "上游协议或基础地址无效。",
+            &checked_at,
+        ));
+    }
+
+    let body = provider_check_body(&provider.protocol, &selected_model.name)?;
+    let start = Instant::now();
+    let mut req = state
+        .client
+        .post(url)
+        .header("content-type", "application/json")
+        .body(body);
+    match provider.protocol.as_str() {
+        model::PROTOCOL_ANTHROPIC => {
+            req = req
+                .header("x-api-key", provider.api_key_cipher.trim())
+                .header("anthropic-version", "2023-06-01");
+        }
+        model::PROTOCOL_OPENAI_CHAT | model::PROTOCOL_OPENAI_RESPONSES => {
+            req = req.header(
+                "authorization",
+                format!("Bearer {}", provider.api_key_cipher.trim()),
+            );
+        }
+        _ => {}
+    }
+    if !provider.user_agent.trim().is_empty() {
+        req = req.header("user-agent", provider.user_agent.trim());
+    }
+
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status().as_u16();
+            let ok = resp.status().is_success();
+            let body = resp.bytes().await.unwrap_or_default();
+            let message = if ok {
+                format!("连接成功，模型 {} 可用。", selected_model.name)
+            } else {
+                let detail = upstream_error_message(status, &body);
+                format!("连接失败：{}", detail)
+            };
+            Ok(provider_health(
+                &provider.id,
+                if ok { "reachable" } else { "unreachable" },
+                status,
+                start.elapsed().as_millis() as i64,
+                &message,
+                &checked_at,
+            ))
+        }
+        Err(err) => Ok(provider_health(
+            &provider.id,
+            "unreachable",
+            0,
+            start.elapsed().as_millis() as i64,
+            &format!("连接失败：{}", err),
+            &checked_at,
+        )),
+    }
+}
+
+fn provider_check_body(protocol: &str, model_name: &str) -> anyhow::Result<String> {
+    let body = match protocol {
+        model::PROTOCOL_ANTHROPIC => json!({
+            "model": model_name,
+            "messages": [{"role": "user", "content": "Reply with exactly: ok"}],
+            "max_tokens": 8,
+            "stream": false
+        }),
+        model::PROTOCOL_OPENAI_CHAT => json!({
+            "model": model_name,
+            "messages": [{"role": "user", "content": "Reply with exactly: ok"}],
+            "max_tokens": 8,
+            "stream": false
+        }),
+        model::PROTOCOL_OPENAI_RESPONSES => json!({
+            "model": model_name,
+            "input": "Reply with exactly: ok",
+            "max_output_tokens": 8,
+            "stream": false
+        }),
+        _ => anyhow::bail!("protocol is invalid"),
+    };
+    Ok(body.to_string())
+}
+
+fn provider_health(
+    supplier_id: &str,
+    status: &str,
+    status_code: u16,
+    duration_ms: i64,
+    message: &str,
+    checked_at: &str,
+) -> Value {
+    json!({
+        "supplier_id": supplier_id,
+        "status": status,
+        "status_code": status_code,
+        "duration_ms": duration_ms,
+        "message": message,
+        "checked_at": checked_at,
+    })
+}
+
+fn join_upstream_url(base_url: &str, protocol_name: &str) -> String {
+    let base = base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return String::new();
+    }
+    let endpoint = match protocol_name {
+        model::PROTOCOL_ANTHROPIC => "/v1/messages",
+        model::PROTOCOL_OPENAI_CHAT => "/v1/chat/completions",
+        model::PROTOCOL_OPENAI_RESPONSES => "/v1/responses",
+        _ => "",
+    };
+    if base.ends_with(endpoint) {
+        base.to_string()
+    } else if base.ends_with("/v1") {
+        format!("{}{}", base, endpoint.trim_start_matches("/v1"))
+    } else {
+        format!("{}{}", base, endpoint)
+    }
+}
+
+fn upstream_error_message(status: u16, body: &[u8]) -> String {
+    let fallback = format!("上游返回 HTTP {}", status);
+    if body.iter().all(|b| b.is_ascii_whitespace()) {
+        return fallback;
+    }
+    if let Ok(payload) = serde_json::from_slice::<Value>(body) {
+        if let Some(message) = payload.pointer("/error/message").and_then(Value::as_str) {
+            return format!("{}：{}", fallback, message.trim());
+        }
+        if let Some(message) = payload.get("message").and_then(Value::as_str) {
+            return format!("{}：{}", fallback, message.trim());
+        }
+    }
+    fallback
 }
 
 fn upsert_model(state: &AppState, input: ModelInput) -> anyhow::Result<ProviderModel> {

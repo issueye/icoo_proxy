@@ -1,5 +1,6 @@
 param(
-  [switch]$SkipTests
+  [switch]$SkipTests,
+  [string]$CargoHome = ""
 )
 
 Set-StrictMode -Version Latest
@@ -26,8 +27,11 @@ if (-not (Test-Path $OutputDir)) {
 }
 
 Push-Location $ProjectRoot
+$PreviousCargoHome = $env:CARGO_HOME
 try {
-  $env:CARGO_HOME = Join-Path $ProjectRoot ".cargo-home"
+  if (-not [string]::IsNullOrWhiteSpace($CargoHome)) {
+    $env:CARGO_HOME = $CargoHome
+  }
   if (-not $SkipTests) {
     Invoke-Checked { cargo test }
   }
@@ -38,6 +42,11 @@ try {
   }
   Copy-Item -LiteralPath $BuiltBinary -Destination $OutputFile -Force
 } finally {
+  if ($null -eq $PreviousCargoHome) {
+    Remove-Item Env:\CARGO_HOME -ErrorAction SilentlyContinue
+  } else {
+    $env:CARGO_HOME = $PreviousCargoHome
+  }
   Pop-Location
 }
 

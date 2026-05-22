@@ -150,6 +150,84 @@ async fn dynamic_endpoint_proxies_and_records_traffic() {
 }
 
 #[tokio::test]
+async fn provider_check_sends_minimal_real_request() {
+    let upstream_capture = CapturedUpstream::default();
+    let upstream_addr = spawn_upstream(upstream_capture.clone()).await;
+
+    let temp = tempfile::tempdir().unwrap();
+    let mut cfg = config::defaults();
+    cfg.allow_local_without_auth = false;
+    cfg.apply_data_dir(temp.path().to_str().unwrap());
+    let db = Database::open(&cfg).unwrap();
+    db.seed_defaults().unwrap();
+    let state = AppState::new(cfg, db);
+    state
+        .auth
+        .create_key(APIKeyCreateInput {
+            name: "admin".into(),
+            secret: "admin-secret".into(),
+            scopes: "admin".into(),
+            enabled: true,
+            id: String::new(),
+        })
+        .unwrap();
+    let bridge_addr = spawn_bridge(state).await;
+    let base = format!("http://{}", bridge_addr);
+    let client = reqwest::Client::new();
+    let admin = |req: reqwest::RequestBuilder| req.header("x-api-key", "admin-secret");
+
+    assert_ok(
+        admin(client.post(format!("{}/api/v1/providers", base)))
+            .json(&json!({
+                "id": "provider-check",
+                "name": "checkable",
+                "protocol": model::PROTOCOL_OPENAI_RESPONSES,
+                "vendor": "openai",
+                "base_url": format!("http://{}", upstream_addr),
+                "api_key": "upstream-secret",
+                "enabled": true
+            }))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_ok(
+        admin(client.post(format!("{}/api/v1/providers/provider-check/models", base)))
+            .json(&json!({"name":"gpt-check","max_tokens":32768,"enabled":true}))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let body: Value = admin(client.post(format!(
+        "{}/api/v1/providers/provider-check/check",
+        base
+    )))
+    .send()
+    .await
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(body["data"]["supplier_id"], "provider-check");
+    assert_eq!(body["data"]["status"], "reachable");
+    assert_eq!(body["data"]["status_code"], 200);
+    assert!(
+        body["data"]["duration_ms"].as_i64().unwrap() >= 0,
+        "{}",
+        body
+    );
+    assert_eq!(&*upstream_capture.path.lock().unwrap(), "/v1/responses");
+    assert_eq!(
+        &*upstream_capture.authorization.lock().unwrap(),
+        "Bearer upstream-secret"
+    );
+    assert_eq!(&*upstream_capture.model.lock().unwrap(), "gpt-check");
+}
+
+#[tokio::test]
 async fn streaming_passthrough_returns_first_event_before_upstream_finishes() {
     let (first_sent_tx, first_sent_rx) = oneshot::channel::<()>();
     let (finish_tx, finish_rx) = oneshot::channel::<()>();
