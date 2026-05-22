@@ -1,0 +1,8 @@
+build/
+.data/
+target/
+.cargo-home/
+*.exe
+*.db
+*.log
+*.tmp
