@@ -2,27 +2,27 @@
   <section class="page-section traffic-page">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <button class="btn btn-primary" :class="{ 'is-loading': store.refreshing }"
-          :disabled="store.refreshing || store.clearing" @click="store.refresh">
-          <span v-if="store.refreshing" class="btn__spinner" />
+        <UButton
+          variant="primary"
+          :loading="store.refreshing"
+          :disabled="store.refreshing || store.clearing"
+          @click="store.refresh"
+        >
           {{ store.refreshing ? "刷新中..." : "刷新流量" }}
-        </button>
-        <button class="btn btn-danger" :class="{ 'is-loading': store.clearing }"
-          :disabled="store.refreshing || store.clearing || !store.totalRequests" @click="openClearConfirm">
-          <span v-if="store.clearing" class="btn__spinner" />
+        </UButton>
+        <UButton
+          variant="error"
+          :loading="store.clearing"
+          :disabled="store.refreshing || store.clearing || !store.totalRequests"
+          @click="openClearConfirm"
+        >
           {{ store.clearing ? "清空中..." : "清空请求" }}
-        </button>
-        <label class="field-toggle rounded-md">
-          <input :checked="store.autoRefresh" type="checkbox" class="field-checkbox"
-            @change="store.toggleAutoRefresh" />
-          自动刷新
-        </label>
+        </UButton>
+        <USwitch v-model="store.autoRefresh" label="自动刷新" />
       </div>
     </Teleport>
 
-    <div v-if="store.error" class="notice-error">
-      {{ store.error }}
-    </div>
+    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
 
     <div class="traffic-stats">
       <StatCard icon="activity" label="最近请求数" :value="String(store.totalRequests)" tone="info" />
@@ -38,7 +38,7 @@
 
     <div class="traffic-layout">
       <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed fixed-field="freeze" stripe
-        size="small" table-class="traffic-table" max-height="100%" min-width="1680px" pagination
+        size="sm" table-class="traffic-table" max-height="100%" min-width="1680px" pagination
         pagination-mode="server" :page="store.page" :page-size="store.pageSize" :total="store.total"
         :page-size-options="[8, 20, 50]" @page-change="store.changePage">
         <template #empty>
@@ -51,26 +51,26 @@
           </div>
         </template>
         <template #cell-requestId="{ row }">
-          <p class="font-medium text-[#262626] table-cell-wrap">{{ row.request_id }}</p>
+          <p class="font-medium text-strong table-cell-wrap">{{ row.request_id }}</p>
         </template>
         <template #cell-endpoint="{ row }">
           <UTag code size="xs">{{ row.endpoint || "-" }}</UTag>
         </template>
         <template #cell-requestInfo="{ row }">
-          <p class="text-sm text-[#262626] table-cell-wrap">{{ row.method || "-" }} · {{ row.client_ip || "-" }}</p>
+          <p class="text-sm text-strong table-cell-wrap">{{ row.method || "-" }} · {{ row.client_ip || "-" }}</p>
           <p class="mt-0.5 table-meta table-cell-wrap">{{ row.user_agent || "无 User-Agent" }}</p>
         </template>
         <template #cell-route="{ row }">
-          <p class="text-sm text-[#595959] table-cell-wrap">{{ row.downstream }}</p>
+          <p class="text-sm text-secondary table-cell-wrap">{{ row.downstream }}</p>
           <p class="mt-0.5 table-meta table-cell-wrap">{{ row.upstream || "-" }}</p>
           <p v-if="routeHint(row)" class="mt-0.5 table-meta table-cell-wrap">{{ routeHint(row) }}</p>
         </template>
         <template #cell-model="{ row }">
-          <p class="text-sm text-[#262626] table-cell-wrap">{{ row.requested_model || "-" }}</p>
+          <p class="text-sm text-strong table-cell-wrap">{{ row.requested_model || "-" }}</p>
           <p class="mt-0.5 table-meta table-cell-wrap">路由到 {{ row.model || "-" }}</p>
         </template>
         <template #cell-requestBody="{ row }">
-          <p class="text-sm text-[#595959] table-cell-wrap">{{ requestBodyPreview(row) }}</p>
+          <p class="text-sm text-secondary table-cell-wrap">{{ requestBodyPreview(row) }}</p>
           <p class="mt-0.5 table-meta">
             {{ formatBytes(row.request_body_bytes) }}{{ row.request_body_truncated ? "，已截断" : "" }}
           </p>
@@ -103,7 +103,7 @@
           <span class="table-meta">{{ formatDateTime(row.created_at) }}</span>
         </template>
         <template #cell-error="{ row }">
-          <p v-if="row.error" class="text-sm text-[#cf1322] table-cell-wrap">{{ row.error }}</p>
+          <p v-if="row.error" class="text-sm text-error table-cell-wrap">{{ row.error }}</p>
           <span v-else class="table-meta">无</span>
         </template>
       </UTable>
@@ -120,8 +120,11 @@ import { computed, onBeforeUnmount, onMounted, reactive, watch } from "vue";
 import { useTrafficStore } from "../stores/traffic";
 
 import StatCard from "../components/StatCard.vue";
+import UAlert from "../components/ued/UAlert.vue";
+import UButton from "../components/ued/UButton.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import USelect from "../components/ued/USelect.vue";
+import USwitch from "../components/ued/USwitch.vue";
 import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
@@ -281,7 +284,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   height: 24px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--ued-radius-pill);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
@@ -298,14 +301,14 @@ onBeforeUnmount(() => {
 }
 
 .traffic-header-badge {
-  border: 1px solid #dbe7ff;
-  background: #f8fbff;
-  color: #2448bd;
+  border: 1px solid var(--ued-color-primary-soft);
+  background: var(--ued-color-primary-soft);
+  color: var(--ued-color-primary);
 }
 
 .traffic-header-note {
   font-size: 12px;
-  color: #6b7a90;
+  color: var(--ued-color-text-muted);
   white-space: nowrap;
 }
 
@@ -356,10 +359,10 @@ onBeforeUnmount(() => {
   align-items: center;
   height: 24px;
   padding: 0 10px;
-  border: 1px solid #dbe7ff;
-  border-radius: 999px;
-  background: #f8fbff;
-  color: #2448bd;
+  border: 1px solid var(--ued-color-primary-soft);
+  border-radius: var(--ued-radius-pill);
+  background: var(--ued-color-primary-soft);
+  color: var(--ued-color-primary);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
@@ -370,9 +373,9 @@ onBeforeUnmount(() => {
   gap: 4px;
   min-width: 92px;
   padding: 6px 8px;
-  border: 1px solid #e6ecfb;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+  border: 1px solid var(--ued-color-primary-soft);
+  border-radius: var(--ued-radius-token);
+  background: linear-gradient(180deg, var(--ued-color-bg-card) 0%, var(--ued-color-primary-soft) 100%);
 }
 
 .token-cell__row {
@@ -386,16 +389,16 @@ onBeforeUnmount(() => {
 
 .token-cell__row--total {
   padding-top: 4px;
-  border-top: 1px dashed #d7e3ff;
+  border-top: 1px dashed var(--ued-color-primary-soft);
 }
 
 .token-cell__label {
-  color: #8c8c8c;
+  color: var(--ued-color-text-muted);
 }
 
 .token-cell__value {
   font-weight: 600;
-  color: #1f1f1f;
+  color: var(--ued-color-text);
 }
 
 @media (max-width: 1180px) {

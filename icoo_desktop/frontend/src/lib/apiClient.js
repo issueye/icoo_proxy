@@ -566,18 +566,24 @@ export async function DeleteModelAlias(id) {
 }
 
 export async function GetProjectSettings() {
+  // IMPORTANT: Wails v2 exposes Go struct fields to JS using their exported
+  // (PascalCase) names when no `json:` tag is present. The generated binding
+  // (wailsjs/go/models.ts) confirms ServerConfig uses PascalCase:
+  // Host, Port, ReadTimeoutSeconds, …, ChainLogMaxBodyBytes, DefaultMaxTokens.
+  // Reading snake_case here (the old code) returned undefined for every field
+  // and silently fell back to defaults — so edits never round-tripped.
   if (typeof window !== "undefined" && window.go?.main?.App?.GetServerConfig) {
     const cfg = await window.go.main.App.GetServerConfig();
     return {
-      proxy_host: cfg.host || "127.0.0.1",
-      proxy_port: cfg.port || 18181,
-      proxy_read_timeout_seconds: cfg.read_timeout_seconds || 15,
-      proxy_write_timeout_seconds: cfg.write_timeout_seconds || 300,
-      proxy_shutdown_timeout_seconds: cfg.shutdown_timeout_seconds || 10,
-      default_max_tokens: cfg.default_max_tokens || 32768,
-      proxy_chain_log_path: cfg.chain_log_path || ".data/bridge-chain.log",
-      proxy_chain_log_bodies: cfg.chain_log_bodies ?? false,
-      proxy_chain_log_max_body_bytes: cfg.chain_log_max_body_bytes ?? 8192,
+      proxy_host: cfg.Host || "127.0.0.1",
+      proxy_port: cfg.Port || 18181,
+      proxy_read_timeout_seconds: cfg.ReadTimeoutSeconds || 15,
+      proxy_write_timeout_seconds: cfg.WriteTimeoutSeconds || 300,
+      proxy_shutdown_timeout_seconds: cfg.ShutdownTimeoutSeconds || 10,
+      default_max_tokens: cfg.DefaultMaxTokens || 32768,
+      proxy_chain_log_path: cfg.ChainLogPath || ".data/bridge-chain.log",
+      proxy_chain_log_bodies: cfg.ChainLogBodies ?? false,
+      proxy_chain_log_max_body_bytes: cfg.ChainLogMaxBodyBytes ?? 8192,
     };
   }
   return {
@@ -594,20 +600,22 @@ export async function GetProjectSettings() {
 }
 
 export async function SaveProjectSettings(values) {
+  // Spread the current config first so untouched fields (APIKeys,
+  // AllowUnauthenticatedLocal, …) are preserved instead of zeroed out,
+  // then overlay the edited fields using the PascalCase names Wails expects.
   if (typeof window !== "undefined" && window.go?.main?.App?.SaveServerConfig) {
     const current = await window.go.main.App.GetServerConfig();
     await window.go.main.App.SaveServerConfig({
       ...current,
-      host: values.proxy_host,
-      port: values.proxy_port,
-      read_timeout_seconds: values.proxy_read_timeout_seconds,
-      write_timeout_seconds: values.proxy_write_timeout_seconds,
-      shutdown_timeout_seconds: values.proxy_shutdown_timeout_seconds,
-      allow_unauthenticated_local: current.allow_unauthenticated_local ?? true,
-      chain_log_path: values.proxy_chain_log_path,
-      chain_log_bodies: values.proxy_chain_log_bodies,
-      chain_log_max_body_bytes: values.proxy_chain_log_max_body_bytes,
-      default_max_tokens: values.default_max_tokens,
+      Host: values.proxy_host,
+      Port: values.proxy_port,
+      ReadTimeoutSeconds: values.proxy_read_timeout_seconds,
+      WriteTimeoutSeconds: values.proxy_write_timeout_seconds,
+      ShutdownTimeoutSeconds: values.proxy_shutdown_timeout_seconds,
+      DefaultMaxTokens: values.default_max_tokens,
+      ChainLogPath: values.proxy_chain_log_path,
+      ChainLogBodies: values.proxy_chain_log_bodies,
+      ChainLogMaxBodyBytes: values.proxy_chain_log_max_body_bytes,
     });
   }
 }
@@ -667,20 +675,22 @@ export function ClearTrafficRequests() {
 }
 
 export async function getServerConfig() {
+  // Wails exposes ServerConfig fields as PascalCase (see generated
+  // wailsjs/go/models.ts). Reading snake_case silently returned undefined.
   if (typeof window !== "undefined" && window.go?.main?.App?.GetServerConfig) {
     const cfg = await window.go.main.App.GetServerConfig();
     return {
-      host: cfg.host || "127.0.0.1",
-      port: cfg.port || 18181,
-      read_timeout_seconds: cfg.read_timeout_seconds || 15,
-      write_timeout_seconds: cfg.write_timeout_seconds || 300,
-      shutdown_timeout_seconds: cfg.shutdown_timeout_seconds || 10,
-      api_keys: cfg.api_keys || [],
-      allow_unauthenticated_local: cfg.allow_unauthenticated_local ?? true,
-      chain_log_path: cfg.chain_log_path || "",
-      chain_log_bodies: cfg.chain_log_bodies ?? false,
-      chain_log_max_body_bytes: cfg.chain_log_max_body_bytes ?? 8192,
-      default_max_tokens: cfg.default_max_tokens || 32768,
+      host: cfg.Host || "127.0.0.1",
+      port: cfg.Port || 18181,
+      read_timeout_seconds: cfg.ReadTimeoutSeconds || 15,
+      write_timeout_seconds: cfg.WriteTimeoutSeconds || 300,
+      shutdown_timeout_seconds: cfg.ShutdownTimeoutSeconds || 10,
+      api_keys: cfg.APIKeys || [],
+      allow_unauthenticated_local: cfg.AllowUnauthenticatedLocal ?? true,
+      chain_log_path: cfg.ChainLogPath || "",
+      chain_log_bodies: cfg.ChainLogBodies ?? false,
+      chain_log_max_body_bytes: cfg.ChainLogMaxBodyBytes ?? 8192,
+      default_max_tokens: cfg.DefaultMaxTokens || 32768,
     };
   }
   return {
@@ -698,15 +708,29 @@ export async function getServerConfig() {
   };
 }
 
-export async function saveServerConfig(cfg) {
+export async function saveServerConfig(partial) {
+  // `partial` uses snake_case from the rest of the frontend; translate to the
+  // PascalCase Wails expects and merge over the current config so we don't
+  // wipe unrelated fields (APIKeys, AllowUnauthenticatedLocal, …).
   if (typeof window !== "undefined" && window.go?.main?.App?.SaveServerConfig) {
-    await window.go.main.App.SaveServerConfig(cfg);
+    const current = await window.go.main.App.GetServerConfig();
+    const next = { ...current };
+    if (partial.host !== undefined) next.Host = partial.host;
+    if (partial.port !== undefined) next.Port = partial.port;
+    if (partial.read_timeout_seconds !== undefined) next.ReadTimeoutSeconds = partial.read_timeout_seconds;
+    if (partial.write_timeout_seconds !== undefined) next.WriteTimeoutSeconds = partial.write_timeout_seconds;
+    if (partial.shutdown_timeout_seconds !== undefined) next.ShutdownTimeoutSeconds = partial.shutdown_timeout_seconds;
+    if (partial.default_max_tokens !== undefined) next.DefaultMaxTokens = partial.default_max_tokens;
+    if (partial.chain_log_path !== undefined) next.ChainLogPath = partial.chain_log_path;
+    if (partial.chain_log_bodies !== undefined) next.ChainLogBodies = partial.chain_log_bodies;
+    if (partial.chain_log_max_body_bytes !== undefined) next.ChainLogMaxBodyBytes = partial.chain_log_max_body_bytes;
+    await window.go.main.App.SaveServerConfig(next);
   }
 }
 
 export function getServerURL() {
   if (typeof window !== "undefined" && window.go?.main?.App?.GetServerConfig) {
-    return window.go.main.App.GetServerConfig().then((cfg) => `http://${cfg.host}:${cfg.port}`);
+    return window.go.main.App.GetServerConfig().then((cfg) => `http://${cfg.Host || "127.0.0.1"}:${cfg.Port || 18181}`);
   }
   return Promise.resolve("http://127.0.0.1:18181");
 }

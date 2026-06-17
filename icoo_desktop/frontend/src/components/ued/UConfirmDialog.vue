@@ -1,8 +1,8 @@
 <template>
   <UModal :open="open" :title="title" width="420px" @update:open="handleOpen">
     <div class="space-y-2">
-      <p class="text-sm leading-6 text-slate-600">{{ message }}</p>
-      <p v-if="description" class="text-xs leading-6 text-slate-500">{{ description }}</p>
+      <p class="text-sm leading-6 text-secondary">{{ message }}</p>
+      <p v-if="description" class="text-xs leading-6 text-muted">{{ description }}</p>
     </div>
     <template #footer>
       <div class="flex justify-end gap-2">
@@ -56,11 +56,10 @@ defineProps({
   },
 });
 
+// Mask/ESC dismiss only toggles open — `cancel` is reserved for an explicit
+// cancel-button click, so consumers can distinguish "abandoned" from "closed".
 function handleOpen(value) {
   emit("update:open", value);
-  if (!value) {
-    emit("cancel");
-  }
 }
 
 function handleCancel() {

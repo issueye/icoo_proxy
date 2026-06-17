@@ -14,7 +14,7 @@
         :rows="store.routeManagementRows"
         row-key="key"
         action-width="74px"
-        size="small"
+        size="sm"
         table-class="route-management-table"
       >
         <template #cell-protocol="{ row }">
@@ -71,7 +71,6 @@
             label="供应商"
             placeholder="请选择供应商"
             :options="supplierOptions"
-            @change="handlePolicySupplierChange"
           />
         </div>
 
@@ -82,23 +81,20 @@
           :options="protocolOptions"
         />
 
-        <label class="field-toggle">
-          <input v-model="store.policyForm.enabled" type="checkbox" class="field-checkbox" />
-          启用该路由策略
-        </label>
+        <USwitch v-model="store.policyForm.enabled" label="启用该路由策略" />
       </form>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <button type="button" class="btn btn-secondary" @click="closePolicyModal">取消</button>
-          <button
+          <UButton variant="secondary" @click="closePolicyModal">取消</UButton>
+          <UButton
             form="policy-form"
-            class="btn btn-primary"
-            :class="{ 'is-loading': store.saving }"
+            variant="primary"
+            native-type="submit"
+            :loading="store.saving"
             :disabled="store.saving"
           >
-            <span v-if="store.saving" class="btn__spinner" />
             {{ store.saving ? "保存中..." : "保存路由策略" }}
-          </button>
+          </UButton>
         </div>
       </template>
     </UModal>
@@ -106,13 +102,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
 
 import StatCard from "../components/StatCard.vue";
+import UButton from "../components/ued/UButton.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
 import UModal from "../components/ued/UModal.vue";
 import USelect from "../components/ued/USelect.vue";
+import USwitch from "../components/ued/USwitch.vue";
 import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
@@ -156,10 +154,24 @@ function closePolicyModal() {
   store.resetPolicyForm();
 }
 
-function handlePolicySupplierChange(supplierID) {
-  const supplier = store.allSuppliers.find((item) => item.id === supplierID);
-  store.policyForm.upstream_protocol = supplier?.protocol || "";
-}
+watch(
+  () => store.policyForm.supplier_id,
+  (newSupplierID, oldSupplierID) => {
+    if (!newSupplierID) {
+      return;
+    }
+    const newSupplier = store.allSuppliers.find((item) => item.id === newSupplierID);
+    if (!newSupplier) {
+      return;
+    }
+    const oldSupplier = store.allSuppliers.find((item) => item.id === oldSupplierID);
+    const currentUpstream = store.policyForm.upstream_protocol;
+    // 仅在未手动指定上游协议（空值）或当前值继承自旧供应商时，自动同步新供应商协议
+    if (!currentUpstream || (oldSupplier && currentUpstream === oldSupplier.protocol)) {
+      store.policyForm.upstream_protocol = newSupplier.protocol;
+    }
+  }
+);
 
 async function submitPolicy() {
   const isEdit = Boolean(store.policyForm.id);

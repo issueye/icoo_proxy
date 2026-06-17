@@ -24,7 +24,23 @@
               :style="getStickyStyle(column)"
             >
               <slot
-                v-if="!column.isAction"
+                v-if="column.isSelection"
+                name="header-selection"
+                :selected="allVisibleSelected"
+                :indeterminate="someVisibleSelected"
+                :select="onSelectAllVisible"
+              >
+                <input
+                  type="checkbox"
+                  class="table-selection__checkbox"
+                  :checked="allVisibleSelected"
+                  :indeterminate.prop="someVisibleSelected"
+                  :aria-label="allVisibleSelected ? '取消全选' : '全选当前页'"
+                  @click.prevent="onSelectAllVisible(!allVisibleSelected)"
+                />
+              </slot>
+              <slot
+                v-else-if="!column.isAction"
                 :name="`header-${column.key}`"
                 :column="column.raw"
               >
@@ -40,15 +56,29 @@
             v-for="(row, rowIndex) in visibleRows"
             :key="resolveRowKey(row, rowIndex)"
             :class="getRowClasses(row, rowIndex)"
+            :tabindex="rowClickable ? 0 : undefined"
+            @click="handleRowClick(row, rowIndex, $event)"
+            @keydown.enter.prevent="handleRowClick(row, rowIndex, $event)"
           >
             <td
               v-for="column in tableColumns"
               :key="column.uid"
               :class="getCellClasses(column, row, rowIndex)"
               :style="getStickyStyle(column)"
+              @click.stop="column.isSelection ? toggleRowSelection(row) : undefined"
             >
+              <slot v-if="column.isSelection" name="cell-selection" :row="row" :selected="isRowSelected(row)">
+                <input
+                  type="checkbox"
+                  class="table-selection__checkbox"
+                  :checked="isRowSelected(row)"
+                  :aria-label="`选择行 ${resolveRowKey(row, rowIndex)}`"
+                  readonly
+                />
+              </slot>
+
               <slot
-                v-if="column.isAction"
+                v-else-if="column.isAction"
                 name="actions"
                 :row="row"
                 :index="rowIndex"
@@ -80,12 +110,24 @@
         </tbody>
       </table>
 
-      <div v-if="!hasRows" class="table-empty-state empty-state rounded-none border-0" :style="emptyStateStyle">
+      <div v-if="!hasRows && !loading" class="table-empty-state empty-state rounded-none border-0" :style="emptyStateStyle">
         <slot name="empty">{{ emptyText }}</slot>
       </div>
     </div>
 
+    <div v-if="loading" class="table-loading" aria-live="polite">
+      <span class="table-loading__spinner" aria-hidden="true" />
+      <span class="table-loading__text">{{ loadingText }}</span>
+    </div>
+
     <div v-if="showPagination" class="table-pagination">
+      <div class="table-pagination__left">
+        <slot name="pagination-left" :selected-count="selectedCount">
+          <span v-if="selectable && selectedCount > 0" class="table-pagination__selected">
+            已选 {{ selectedCount }} 项
+          </span>
+        </slot>
+      </div>
       <div v-if="paginationSummary" class="table-pagination__summary">
         {{ paginationSummary }}
       </div>
@@ -104,36 +146,39 @@
         </div>
 
         <div class="table-pagination__pages">
-          <button
-            type="button"
-            class="btn btn-secondary table-pagination__button"
+          <UButton
+            variant="secondary"
+            size="sm"
+            class="table-pagination__button"
             :disabled="currentPage <= 1"
             @click="goToPage(currentPage - 1)"
           >
             上一页
-          </button>
+          </UButton>
 
           <template v-for="item in pageItems" :key="item.key">
             <span v-if="item.type === 'ellipsis'" class="table-pagination__ellipsis">...</span>
-            <button
+            <UButton
               v-else
-              type="button"
-              class="btn btn-secondary table-pagination__button"
+              variant="secondary"
+              size="sm"
+              class="table-pagination__button"
               :class="{ 'table-pagination__button--active': item.page === currentPage }"
               @click="goToPage(item.page)"
             >
               {{ item.page }}
-            </button>
+            </UButton>
           </template>
 
-          <button
-            type="button"
-            class="btn btn-secondary table-pagination__button"
+          <UButton
+            variant="secondary"
+            size="sm"
+            class="table-pagination__button"
             :disabled="currentPage >= pageCount"
             @click="goToPage(currentPage + 1)"
           >
             下一页
-          </button>
+          </UButton>
         </div>
       </div>
     </div>
@@ -142,10 +187,11 @@
 
 <script setup>
 import { computed, ref, useSlots, watch } from "vue";
+import UButton from "./UButton.vue";
 import USelect from "./USelect.vue";
 import UTooltip from "./UTooltip.vue";
 
-const emit = defineEmits(["update:page", "update:pageSize", "page-change"]);
+const emit = defineEmits(["update:page", "update:pageSize", "update:selectedKeys", "page-change", "row-click", "selection-change"]);
 
 const props = defineProps({
   columns: {
@@ -210,11 +256,49 @@ const props = defineProps({
   },
   size: {
     type: String,
-    default: "middle",
+    default: "md",
   },
   rowClassName: {
     type: [String, Function],
     default: "",
+  },
+  /**
+   * Show a loading overlay over the body. Distinct from empty state so a
+   * "loading" message no longer masquerades as "no data".
+   */
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  loadingText: {
+    type: String,
+    default: "加载中…",
+  },
+  /**
+   * Enable a leading checkbox column for multi-row selection.
+   * Selected keys are synced via v-model:selectedKeys.
+   */
+  selectable: {
+    type: Boolean,
+    default: false,
+  },
+  /**
+   * Which field identifies a row for selection. Defaults to `rowKey`.
+   */
+  selectionKey: {
+    type: [String, Function],
+    default: "",
+  },
+  selectedKeys: {
+    type: Array,
+    default: () => [],
+  },
+  /**
+   * Make rows clickable (cursor + Enter key) and emit `row-click`.
+   */
+  rowClickable: {
+    type: Boolean,
+    default: false,
   },
   pagination: {
     type: Boolean,
@@ -274,6 +358,7 @@ const actionColumn = computed(() => {
     ellipsis: false,
     tooltip: false,
     isAction: true,
+    isSelection: false,
     raw: {
       key: "actions",
       title: props.actionTitle,
@@ -281,8 +366,30 @@ const actionColumn = computed(() => {
   };
 });
 
+const selectionColumn = computed(() => {
+  if (!props.selectable) return null;
+  return {
+    uid: "__selection__",
+    key: "__selection__",
+    title: "",
+    width: "44px",
+    minWidth: "44px",
+    align: "center",
+    fixed: "left",
+    ellipsis: false,
+    tooltip: false,
+    isAction: false,
+    isSelection: true,
+    raw: { key: "__selection__", title: "" },
+  };
+});
+
 const tableColumns = computed(() => {
-  const columns = [...normalizedColumns.value];
+  const columns = [];
+  if (selectionColumn.value) {
+    columns.push(selectionColumn.value);
+  }
+  columns.push(...normalizedColumns.value);
   if (actionColumn.value) {
     columns.push(actionColumn.value);
   }
@@ -312,6 +419,73 @@ const visibleRows = computed(() => {
 
 const hasRows = computed(() => visibleRows.value.length > 0);
 
+// --- Selection ---------------------------------------------------------------
+// Selection keys live in parent state (v-model:selectedKeys); this component
+// is stateless aside from emitting updates, so selection survives page changes.
+const selectedKeySet = computed(() => new Set(props.selectedKeys));
+
+function resolveSelectionKey(row, rowIndex) {
+  const keySource = props.selectionKey || props.rowKey;
+  if (typeof keySource === "function") {
+    return keySource(row, rowIndex);
+  }
+  return row?.[keySource] ?? rowIndex;
+}
+
+function isRowSelected(row) {
+  const index = visibleRows.value.indexOf(row);
+  return selectedKeySet.value.has(resolveSelectionKey(row, index));
+}
+
+const visibleRowKeys = computed(() =>
+  visibleRows.value.map((row, index) => resolveSelectionKey(row, index)),
+);
+
+const allVisibleSelected = computed(
+  () => visibleRowKeys.value.length > 0 && visibleRowKeys.value.every((key) => selectedKeySet.value.has(key)),
+);
+
+const someVisibleSelected = computed(
+  () => !allVisibleSelected.value && visibleRowKeys.value.some((key) => selectedKeySet.value.has(key)),
+);
+
+const selectedCount = computed(() => selectedKeySet.value.size);
+
+function emitSelection(nextKeys) {
+  emit("update:selectedKeys", nextKeys);
+  emit("selection-change", nextKeys);
+}
+
+function toggleRowSelection(row) {
+  const index = visibleRows.value.indexOf(row);
+  const key = resolveSelectionKey(row, index);
+  const next = new Set(props.selectedKeys);
+  if (next.has(key)) {
+    next.delete(key);
+  } else {
+    next.add(key);
+  }
+  emitSelection(Array.from(next));
+}
+
+function onSelectAllVisible(select) {
+  const next = new Set(props.selectedKeys);
+  visibleRowKeys.value.forEach((key) => {
+    if (select) {
+      next.add(key);
+    } else {
+      next.delete(key);
+    }
+  });
+  emitSelection(Array.from(next));
+}
+
+function handleRowClick(row, rowIndex, event) {
+  if (!props.rowClickable) return;
+  emit("row-click", { row, index: rowIndex, event });
+}
+// -----------------------------------------------------------------------------
+
 const showPagination = computed(() => props.pagination);
 
 const hasColumnSizing = computed(() =>
@@ -324,6 +498,8 @@ const shellClasses = computed(() => ({
   "table-shell--sticky-header": props.stickyHeader,
   "table-shell--with-pagination": showPagination.value,
   "table-shell--with-query": Boolean(slots.query),
+  "table-shell--loading": props.loading,
+  "table-shell--selectable": props.selectable,
 }));
 
 const tableClasses = computed(() => [
@@ -440,6 +616,7 @@ function normalizeColumn(column, index) {
     headerClass: column.headerClass,
     cellClass: column.cellClass,
     isAction: false,
+    isSelection: false,
     raw: column,
   };
 }
@@ -596,7 +773,11 @@ function resolveColumnOption(column, customField, fallbackField) {
 }
 
 function normalizeSize(value) {
-  return ["small", "middle", "large"].includes(value) ? value : "middle";
+  // Unified UED sizing (xs/sm/md/lg). Legacy small/middle/large are kept as
+  // deprecated aliases so existing call sites keep working.
+  const aliases = { small: "sm", middle: "md", large: "lg" };
+  const resolved = aliases[value] || value;
+  return ["xs", "sm", "md", "lg"].includes(resolved) ? resolved : "md";
 }
 
 function resolveRowKey(row, rowIndex) {
@@ -676,6 +857,7 @@ function getHeaderClasses(column) {
       "is-sticky-right": column.fixed === "right",
       "is-sticky-right-first": column.isStickyRightFirst,
       "actions-header": column.isAction,
+      "selection-header": column.isSelection,
     },
   ];
 }
@@ -693,6 +875,7 @@ function getCellClasses(column, row, rowIndex) {
       "is-sticky-right-first": column.isStickyRightFirst,
       "is-ellipsis": column.ellipsis,
       "actions-header": column.isAction,
+      "selection-cell": column.isSelection,
     },
     typeof column.raw.cellClassName === "function"
       ? column.raw.cellClassName(row, rowIndex)
@@ -704,6 +887,8 @@ function getRowClasses(row, rowIndex) {
   return [
     {
       "is-striped": props.stripe,
+      "is-selected": props.selectable && isRowSelected(row),
+      "is-clickable": props.rowClickable,
     },
     typeof props.rowClassName === "function"
       ? props.rowClassName(row, rowIndex)
@@ -752,13 +937,13 @@ function handlePageSizeChange(value) {
   flex: 1 0 220px;
   width: 100%;
   place-items: center;
-  background: #f8fafc;
+  background: var(--ued-color-muted);
 }
 
 .table-query {
   padding: 14px;
-  border-bottom: 1px solid var(--ued-color-divider, #e6ebf2);
-  background: #fbfcfe;
+  border-bottom: 1px solid var(--ued-color-divider);
+  background: var(--ued-color-bg-card);
 }
 
 .table-pagination {
@@ -767,13 +952,13 @@ function handlePageSizeChange(value) {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-top: 1px solid var(--ued-color-divider, #e6ebf2);
-  background: #fbfcfe;
+  border-top: 1px solid var(--ued-color-divider);
+  background: var(--ued-color-bg-card);
 }
 
 .table-pagination__summary {
   min-width: 0;
-  color: #6b7a90;
+  color: var(--ued-color-text-muted);
   font-size: 12px;
   line-height: 18px;
 }
@@ -791,7 +976,7 @@ function handlePageSizeChange(value) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #6b7a90;
+  color: var(--ued-color-text-muted);
   font-size: 12px;
   line-height: 18px;
 }
@@ -832,15 +1017,15 @@ function handlePageSizeChange(value) {
 }
 
 .table-pagination__button--active {
-  border-color: var(--ued-color-primary, #3157d5);
-  background: var(--ued-color-primary, #3157d5);
-  color: #ffffff;
+  border-color: var(--ued-color-primary);
+  background: var(--ued-color-primary);
+  color: var(--ued-color-primary-foreground);
 }
 
 .table-pagination__button--active:hover:not(:disabled) {
-  border-color: var(--ued-color-primary-hover, #2448bd);
-  background: var(--ued-color-primary-hover, #2448bd);
-  color: #ffffff;
+  border-color: var(--ued-color-primary-hover);
+  background: var(--ued-color-primary-hover);
+  color: var(--ued-color-primary-foreground);
 }
 
 .table-pagination__ellipsis {
@@ -848,9 +1033,97 @@ function handlePageSizeChange(value) {
   align-items: center;
   justify-content: center;
   min-width: 18px;
-  color: #8b98ab;
+  color: var(--ued-color-text-muted);
   font-size: 12px;
   line-height: 18px;
+}
+
+.table-pagination__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.table-pagination__selected {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--ued-color-primary) 30%, transparent);
+  border-radius: var(--ued-radius-pill);
+  background: var(--ued-color-primary-soft);
+  color: var(--ued-color-primary);
+  font-size: var(--ued-font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Selection column — keep checkbox visually centered and stop the cell from
+   capturing the row's click handler (the td has its own stop+toggle). */
+.table-selection__checkbox {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--ued-color-primary);
+}
+
+.admin-table th.selection-header,
+.admin-table td.selection-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Clickable + selected row affordances. */
+.admin-table tbody tr.is-clickable {
+  cursor: pointer;
+}
+
+.admin-table tbody tr.is-clickable:hover td,
+.admin-table tbody tr.is-selected td {
+  background: var(--ued-color-primary-soft);
+}
+
+.admin-table tbody tr.is-selected:hover td {
+  background: color-mix(in srgb, var(--ued-color-primary) 14%, transparent);
+}
+
+/* Loading overlay — sits over the scroll area, distinct from empty state. */
+.table-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--ued-color-bg-card) 70%, transparent);
+  backdrop-filter: blur(1px);
+  color: var(--ued-color-primary);
+  font-size: var(--ued-font-size-sm);
+}
+
+.table-loading__spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--ued-radius-pill);
+  animation: table-loading-spin 0.8s linear infinite;
+}
+
+@keyframes table-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The shell needs to be a positioning context for the loading overlay and
+   needs position:relative when either feature is on. */
+.table-shell {
+  position: relative;
 }
 
 @media (max-width: 760px) {

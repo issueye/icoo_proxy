@@ -39,6 +39,7 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
+import { normalizeVariant, ALERT_TYPES } from "./variant";
 
 const emit = defineEmits(["close", "update:open"]);
 
@@ -75,16 +76,9 @@ const props = defineProps({
 
 const visible = ref(props.open);
 
-const normalizedType = computed(() => {
-  const value = String(props.type || "info").toLowerCase();
-  if (value === "danger") {
-    return "error";
-  }
-  if (value === "sucess") {
-    return "success";
-  }
-  return ["success", "info", "warning", "error"].includes(value) ? value : "info";
-});
+const normalizedType = computed(() =>
+  normalizeVariant(props.type, "info", ALERT_TYPES),
+);
 
 const iconText = computed(() => {
   const icons = {

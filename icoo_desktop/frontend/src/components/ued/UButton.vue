@@ -26,6 +26,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { normalizeVariant, normalizeSize, BUTTON_VARIANTS, CONTROL_SIZES } from "./variant";
 
 defineEmits(["click"]);
 
@@ -56,19 +57,11 @@ const props = defineProps({
   },
 });
 
-const normalizedVariant = computed(() => {
-  const value = String(props.variant || "primary").toLowerCase();
-  if (value === "danger") {
-    return "error";
-  }
-  if (value === "sucess") {
-    return "success";
-  }
-  return value;
-});
+const normalizedVariant = computed(() =>
+  normalizeVariant(props.variant, "primary", BUTTON_VARIANTS),
+);
 
-const normalizedSize = computed(() => {
-  const value = String(props.size || "md").toLowerCase();
-  return ["xs", "sm", "md", "lg"].includes(value) ? value : "md";
-});
+const normalizedSize = computed(() =>
+  normalizeSize(props.size, "md", CONTROL_SIZES),
+);
 </script>

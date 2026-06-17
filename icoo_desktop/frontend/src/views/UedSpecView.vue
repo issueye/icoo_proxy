@@ -10,22 +10,22 @@
     <PanelBlock title="设计 Token">
       <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <div class="sub-card">
-          <p class="text-sm font-medium text-slate-900">主操作</p>
+          <p class="text-sm font-medium text-strong">主操作</p>
           <div class="mt-3 flex items-center gap-2">
-            <span class="h-6 w-10 rounded bg-[#3157d5]"></span>
-            <span class="font-mono text-xs text-slate-600">#3157d5</span>
+            <span class="h-6 w-10 rounded bg-[var(--ued-color-primary)]"></span>
+            <span class="font-mono text-xs text-muted">var(--ued-color-primary)</span>
           </div>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-slate-900">圆角</p>
-          <p class="mt-3 text-sm text-slate-600">控件 6px，面板 8px，标签 4px。</p>
+          <p class="text-sm font-medium text-strong">圆角</p>
+          <p class="mt-3 text-sm text-muted">控件 6px，面板 8px，标签 4px，卡片 12px，胶囊 9999px。</p>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-slate-900">控件高度</p>
-          <p class="mt-3 text-sm text-slate-600">XS 24 / SM 28 / MD 32 / LG 40。</p>
+          <p class="text-sm font-medium text-strong">控件高度</p>
+          <p class="mt-3 text-sm text-muted">XS 24 / SM 28 / MD 32 / LG 40。</p>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-slate-900">状态色</p>
+          <p class="text-sm font-medium text-strong">状态色</p>
           <div class="mt-3 flex flex-wrap gap-2">
             <UTag variant="success" dot>Success</UTag>
             <UTag variant="warning" dot>Warning</UTag>
@@ -101,9 +101,9 @@
             <ULoading size="lg" tip="加载中" />
           </div>
           <ULoading tip="正在加载端点数据..." :spinning="true">
-            <div class="rounded-md border border-[#f0f0f0] bg-[#fafafa] p-4">
-              <p class="text-sm font-medium text-[#262626]">代理端点</p>
-              <p class="mt-2 text-sm leading-6 text-[#8c8c8c]">
+            <div class="rounded-md border border-[var(--ued-color-divider)] bg-[var(--ued-color-muted)] p-4">
+              <p class="text-sm font-medium text-strong">代理端点</p>
+              <p class="mt-2 text-sm leading-6 text-muted">
                 区域加载用于表格、详情面板或配置块刷新，不打断当前页面上下文。
               </p>
             </div>
@@ -201,7 +201,7 @@
     </PanelBlock>
 
     <PanelBlock title="现代化表格">
-      <p class="mb-3 text-xs text-zinc-500">
+      <p class="mb-3 text-xs text-muted">
         表格沿用 Ant Design 的浅表头、行 hover、高密度信息展示，并保留固定列、文字省略、Tooltip 和列对齐能力。
       </p>
       <UTable
@@ -224,19 +224,55 @@
       </UTable>
     </PanelBlock>
 
+    <PanelBlock title="交互表格（选择 / 行点击 / 加载）">
+      <p class="mb-3 text-xs text-muted">
+        UTable 支持 selectable 多选、row-click 行点击、loading 加载遮罩。选择状态通过 v-model:selectedKeys 双向绑定，支持跨页保持与全选当前页。
+      </p>
+      <UTable
+        :columns="interactiveColumns"
+        :rows="interactiveRows"
+        row-key="id"
+        selectable
+        row-clickable
+        :selected-keys="interactiveSelected"
+        :loading="interactiveLoading"
+        loading-text="正在刷新…"
+        @update:selected-keys="interactiveSelected = $event"
+        @row-click="onInteractiveRowClick"
+        @selection-change="onInteractiveSelectionChange"
+      >
+        <template #cell-status="{ value }">
+          <UTag :variant="value === '启用' ? 'success' : 'error'" dot>{{ value }}</UTag>
+        </template>
+        <template #actions="{ row }">
+          <div class="table-actions">
+            <UIconButton icon="detail" :label="`查看 ${row.name}`" />
+          </div>
+        </template>
+      </UTable>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <UButton variant="secondary" size="sm" @click="toggleInteractiveLoading">
+          {{ interactiveLoading ? "停止加载" : "模拟加载" }}
+        </UButton>
+        <UButton variant="secondary" size="sm" :disabled="!interactiveSelected.length" @click="interactiveSelected = []">
+          清除选择（{{ interactiveSelected.length }}）
+        </UButton>
+      </div>
+    </PanelBlock>
+
     <PanelBlock title="Tooltip 组件">
       <div class="flex flex-wrap items-center gap-4">
         <UTooltip content="这是一个基础的提示文本">
           <UButton size="sm" variant="secondary">悬停查看提示</UButton>
         </UTooltip>
         <UTooltip content="提示可以包含很长的说明内容，用于补充界面中无法完整展示的信息。">
-          <span class="text-sm text-zinc-600 underline decoration-dotted">长文本提示</span>
+          <span class="text-sm text-secondary underline decoration-dotted">长文本提示</span>
         </UTooltip>
       </div>
     </PanelBlock>
 
     <UModal v-model:open="showModal" title="普通弹窗">
-      <p class="text-sm leading-6 text-slate-600">
+      <p class="text-sm leading-6 text-secondary">
         用于承载说明、预览或表单内容。
       </p>
       <template #footer>
@@ -282,6 +318,36 @@ const showModal = ref(false);
 const showConfirm = ref(false);
 const fullscreenLoading = ref(false);
 const switchValue = ref(true);
+
+// Interactive table demo: selection / row-click / loading.
+const interactiveSelected = ref([]);
+const interactiveLoading = ref(false);
+
+const interactiveColumns = [
+  { key: "name", title: "名称" },
+  { key: "type", title: "类型" },
+  { key: "status", title: "状态", align: "center" },
+];
+
+const interactiveRows = [
+  { id: "i1", name: "选择示例 A", type: "展示组件", status: "启用" },
+  { id: "i2", name: "选择示例 B", type: "反馈组件", status: "停用" },
+  { id: "i3", name: "选择示例 C", type: "数据组件", status: "启用" },
+];
+
+function toggleInteractiveLoading() {
+  interactiveLoading.value = !interactiveLoading.value;
+}
+
+function onInteractiveRowClick({ row }) {
+  message.info(`点击了行：${row.name}`);
+}
+
+function onInteractiveSelectionChange(keys) {
+  if (keys.length) {
+    message.info(`已选择 ${keys.length} 项`);
+  }
+}
 
 const form = reactive({
   name: "",

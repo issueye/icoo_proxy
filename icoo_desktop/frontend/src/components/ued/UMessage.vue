@@ -7,7 +7,10 @@
         class="ued-message__notice"
         :class="`ued-message__notice--${item.type}`"
       >
-        <span class="ued-message__icon" aria-hidden="true">{{ iconMap[item.type] }}</span>
+        <span class="ued-message__icon" aria-hidden="true">
+          <span v-if="item.type === 'loading'" class="ued-message__spinner" />
+          <template v-else>{{ iconMap[item.type] }}</template>
+        </span>
         <span class="ued-message__content">{{ item.content }}</span>
         <button
           v-if="item.closable"
@@ -31,6 +34,23 @@ const iconMap = {
   info: "i",
   warning: "!",
   error: "×",
-  loading: "···",
 };
 </script>
+
+<style scoped>
+.ued-message__spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--ued-radius-pill);
+  animation: ued-message-spin 0.8s linear infinite;
+}
+
+@keyframes ued-message-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div v-if="open" class="ued-modal" role="dialog" aria-modal="true" :aria-labelledby="titleId" @keydown.esc="close">
       <div class="ued-modal__mask" @click="handleMaskClick" />
-      <div ref="panelRef" class="ued-modal__panel" :style="{ width }" tabindex="-1">
+      <div ref="panelRef" class="ued-modal__panel" :style="{ width: resolvedWidth }" tabindex="-1">
         <div class="ued-modal__header">
           <h3 :id="titleId" class="ued-modal__title">{{ title }}</h3>
           <button class="ued-modal__close" type="button" aria-label="关闭弹窗" @click="close">
@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 const emit = defineEmits(["update:open", "close"]);
 
@@ -36,12 +36,35 @@ const props = defineProps({
   },
   width: {
     type: String,
-    default: "520px",
+    default: "",
+  },
+  /**
+   * Preset sizes for common dialog widths.
+   * Ignored when `width` is set explicitly (backward compatible).
+   *   sm 400 · md 520 · lg 640 · xl 800
+   */
+  size: {
+    type: String,
+    default: "md",
   },
   closeOnMask: {
     type: Boolean,
     default: true,
   },
+});
+
+const SIZE_PRESETS = {
+  sm: "400px",
+  md: "520px",
+  lg: "640px",
+  xl: "800px",
+};
+
+const resolvedWidth = computed(() => {
+  if (props.width) {
+    return props.width;
+  }
+  return SIZE_PRESETS[props.size] || SIZE_PRESETS.md;
 });
 
 const titleId = `ued-modal-title-${Math.random().toString(36).slice(2, 9)}`;

@@ -13,6 +13,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { normalizeVariant, normalizeSize, TAG_VARIANTS, CONTROL_SIZES } from "./variant";
 
 const props = defineProps({
   variant: {
@@ -37,19 +38,11 @@ const props = defineProps({
   },
 });
 
-const normalizedVariant = computed(() => {
-  const value = String(props.variant || "neutral").toLowerCase();
-  if (value === "danger") {
-    return "error";
-  }
-  if (value === "sucess") {
-    return "success";
-  }
-  return value;
-});
+const normalizedVariant = computed(() =>
+  normalizeVariant(props.variant, "neutral", TAG_VARIANTS),
+);
 
-const normalizedSize = computed(() => {
-  const value = String(props.size || "sm").toLowerCase();
-  return ["xs", "sm", "md", "lg"].includes(value) ? value : "sm";
-});
+const normalizedSize = computed(() =>
+  normalizeSize(props.size, "sm", CONTROL_SIZES),
+);
 </script>

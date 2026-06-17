@@ -51,18 +51,20 @@ defineProps({
 .stat-card {
   @apply relative flex min-h-[84px] items-center gap-2.5 rounded border bg-white p-3 transition;
   border-color: var(--ued-color-border);
-  border-radius: 12px;
+  border-radius: var(--ued-radius-card);
   box-shadow: var(--ued-shadow-card);
 }
 .stat-card:hover {
-  border-color: #b8c7f6;
+  border-color: color-mix(in srgb, var(--ued-color-primary) 25%, transparent);
   box-shadow: var(--ued-shadow-card-hover);
   transform: translateY(-1px);
 }
 .stat-card__icon {
-  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border bg-slate-50 text-slate-500;
+  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border;
   border-color: var(--ued-color-border);
-  border-radius: 10px;
+  border-radius: var(--ued-radius-token);
+  background: var(--ued-color-muted);
+  color: var(--ued-color-text-muted);
 }
 .stat-card__body {
   @apply min-w-0 flex-1;
@@ -72,33 +74,34 @@ defineProps({
   color: var(--ued-color-text-muted);
 }
 .stat-card__value {
-  @apply mt-1.5 break-keep text-[18px] font-semibold leading-[1.1];
+  @apply mt-1.5 break-keep font-semibold leading-[1.1];
+  font-size: var(--ued-font-size-lg);
   color: var(--ued-color-text);
 }
 
 /* Tones */
 .stat-card--primary .stat-card__icon {
-  border-color: #c8d4ff;
+  border-color: color-mix(in srgb, var(--ued-color-primary) 30%, transparent);
   background: var(--ued-color-primary-soft);
   color: var(--ued-color-primary);
 }
 .stat-card--success .stat-card__icon {
-  border-color: #bde8d3;
+  border-color: color-mix(in srgb, var(--ued-color-success) 30%, transparent);
   background: var(--ued-color-success-soft);
   color: var(--ued-color-success);
 }
 .stat-card--warning .stat-card__icon {
-  border-color: #f3d498;
+  border-color: color-mix(in srgb, var(--ued-color-warning) 30%, transparent);
   background: var(--ued-color-warning-soft);
   color: var(--ued-color-warning);
 }
 .stat-card--danger .stat-card__icon {
-  border-color: #ffc5bf;
+  border-color: color-mix(in srgb, var(--ued-color-destructive) 30%, transparent);
   background: var(--ued-color-error-soft);
   color: var(--ued-color-destructive);
 }
 .stat-card--info .stat-card__icon {
-  border-color: #a6e5ef;
+  border-color: color-mix(in srgb, var(--ued-color-info) 30%, transparent);
   background: var(--ued-color-info-soft);
   color: var(--ued-color-info);
 }

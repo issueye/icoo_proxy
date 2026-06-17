@@ -25,29 +25,41 @@
         :id="listboxId"
         ref="menuRef"
         class="ued-select__menu"
-        :class="[`is-${placement}`]"
+        :class="[`is-${placement}`, { 'ued-select__menu--searchable': searchable }]"
         :style="menuStyle"
         role="listbox"
         tabindex="-1"
       >
-        <button
-          v-for="(option, index) in normalizedOptions"
-          :key="option.value"
-          type="button"
-          class="ued-select__option"
-          :class="{ 'is-selected': option.value === modelValue, 'is-active': index === activeIndex }"
-          role="option"
-          :aria-selected="option.value === modelValue"
-          @mouseenter="activeIndex = index"
-          @click="choose(option)"
-        >
-          <span>{{ option.label }}</span>
-          <span v-if="option.value === modelValue" class="ued-select__check" aria-hidden="true">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-          </span>
-        </button>
-        <div v-if="normalizedOptions.length === 0" class="ued-select__empty">
-          暂无选项
+        <div v-if="searchable" class="ued-select__search">
+          <input
+            ref="searchInputRef"
+            v-model="searchKeyword"
+            type="text"
+            class="ued-select__search-input"
+            placeholder="搜索…"
+            @keydown="handleControlKeydown"
+          />
+        </div>
+        <div class="ued-select__options">
+          <button
+            v-for="(option, index) in filteredOptions"
+            :key="option.value"
+            type="button"
+            class="ued-select__option"
+            :class="{ 'is-selected': option.value === modelValue, 'is-active': visibleOptions[index] === activeOption }"
+            role="option"
+            :aria-selected="option.value === modelValue"
+            @mouseenter="activeOption = visibleOptions[index]"
+            @click="choose(option)"
+          >
+            <span>{{ option.label }}</span>
+            <span v-if="option.value === modelValue" class="ued-select__check" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+            </span>
+          </button>
+          <div v-if="filteredOptions.length === 0" class="ued-select__empty">
+            {{ searchKeyword ? "无匹配项" : "暂无选项" }}
+          </div>
         </div>
       </div>
     </Teleport>
@@ -58,7 +70,7 @@
 import { Teleport, computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import UFormField from "./UFormField.vue";
 
-const emit = defineEmits(["update:modelValue", "change"]);
+const emit = defineEmits(["update:modelValue", "change", "search"]);
 
 const props = defineProps({
   modelValue: {
@@ -97,12 +109,18 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  searchable: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const rootRef = ref(null);
 const menuRef = ref(null);
+const searchInputRef = ref(null);
 const open = ref(false);
-const activeIndex = ref(-1);
+const activeOption = ref(null);
+const searchKeyword = ref("");
 const placement = ref("bottom");
 const menuPosition = ref({
   top: 0,
@@ -114,6 +132,7 @@ const listboxId = `ued-select-${Math.random().toString(36).slice(2, 9)}`;
 const VIEWPORT_MARGIN = 12;
 const MENU_OFFSET = 6;
 const DEFAULT_MENU_HEIGHT = 224;
+const SEARCH_ROW_HEIGHT = 40;
 
 const normalizedOptions = computed(() =>
   props.options.map((option) => {
@@ -129,12 +148,33 @@ const normalizedOptions = computed(() =>
 
 const selectedOption = computed(() => normalizedOptions.value.find((option) => option.value === props.modelValue));
 
+const filteredOptions = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase();
+  if (!keyword) {
+    return normalizedOptions.value;
+  }
+  return normalizedOptions.value.filter((option) =>
+    String(option.label).toLowerCase().includes(keyword),
+  );
+});
+
+// Track the actual visible options so keyboard navigation stays in sync
+// after filtering.
+const visibleOptions = computed(() => filteredOptions.value);
+
 const menuStyle = computed(() => ({
   top: `${menuPosition.value.top}px`,
   left: `${menuPosition.value.left}px`,
   width: `${menuPosition.value.width}px`,
   maxHeight: `${menuPosition.value.maxHeight}px`,
 }));
+
+function resetActive() {
+  const selectedIndex = visibleOptions.value.findIndex((option) => option.value === props.modelValue);
+  activeOption.value = selectedIndex >= 0
+    ? visibleOptions.value[selectedIndex]
+    : visibleOptions.value[0] ?? null;
+}
 
 watch(
   open,
@@ -143,15 +183,30 @@ watch(
       return;
     }
 
-    const selectedIndex = normalizedOptions.value.findIndex((option) => option.value === props.modelValue);
-    activeIndex.value = selectedIndex >= 0 ? selectedIndex : 0;
+    searchKeyword.value = "";
+    resetActive();
 
     await nextTick();
     updateMenuPosition();
     scrollActiveOptionIntoView();
+
+    if (props.searchable) {
+      await nextTick();
+      searchInputRef.value?.focus();
+    }
   },
   { flush: "post" },
 );
+
+watch(searchKeyword, () => {
+  if (!open.value) return;
+  resetActive();
+  nextTick(() => {
+    updateMenuPosition();
+    scrollActiveOptionIntoView();
+    emit("search", searchKeyword.value);
+  });
+});
 
 watch(
   () => props.options,
@@ -200,12 +255,15 @@ function moveActive(step) {
     open.value = true;
     return;
   }
-  const count = normalizedOptions.value.length;
+  const count = visibleOptions.value.length;
   if (count === 0) {
-    activeIndex.value = -1;
+    activeOption.value = null;
     return;
   }
-  activeIndex.value = (activeIndex.value + step + count) % count;
+  let index = visibleOptions.value.findIndex((option) => option === activeOption.value);
+  if (index < 0) index = 0;
+  index = (index + step + count) % count;
+  activeOption.value = visibleOptions.value[index];
   nextTick(() => {
     scrollActiveOptionIntoView();
   });
@@ -224,8 +282,8 @@ function handleControlKeydown(event) {
     case "Enter":
     case " ":
       event.preventDefault();
-      if (open.value && activeIndex.value >= 0) {
-        choose(normalizedOptions.value[activeIndex.value]);
+      if (open.value && activeOption.value) {
+        choose(activeOption.value);
       } else {
         open.value = true;
       }
@@ -276,16 +334,19 @@ function updateMenuPosition() {
     top,
     left,
     width,
-    maxHeight,
+    maxHeight: props.searchable ? maxHeight - SEARCH_ROW_HEIGHT : maxHeight,
   };
 }
 
 function scrollActiveOptionIntoView() {
-  if (!menuRef.value || activeIndex.value < 0) {
+  if (!menuRef.value || !activeOption.value) {
     return;
   }
 
-  const option = menuRef.value.querySelectorAll(".ued-select__option")[activeIndex.value];
+  const index = visibleOptions.value.findIndex((option) => option === activeOption.value);
+  if (index < 0) return;
+
+  const option = menuRef.value.querySelectorAll(".ued-select__option")[index];
   option?.scrollIntoView({ block: "nearest" });
 }
 
@@ -316,3 +377,41 @@ onBeforeUnmount(() => {
   window.removeEventListener("scroll", handleWindowChange, true);
 });
 </script>
+
+<style scoped>
+.ued-select__search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px;
+  border-bottom: 1px solid var(--ued-color-divider);
+  background: var(--ued-color-bg-card);
+}
+
+.ued-select__search-input {
+  width: 100%;
+  height: var(--ued-size-sm);
+  padding: 0 10px;
+  border: 1px solid var(--ued-color-input);
+  border-radius: var(--ued-radius-md);
+  background: var(--ued-color-bg-card);
+  color: var(--ued-color-text);
+  font-size: var(--ued-font-size-md);
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.ued-select__search-input:hover {
+  border-color: color-mix(in srgb, var(--ued-color-primary) 40%, transparent);
+}
+
+.ued-select__search-input:focus {
+  border-color: var(--ued-color-primary);
+  box-shadow: 0 0 0 2px var(--ued-color-focus-ring-soft);
+}
+
+.ued-select__options {
+  overflow-y: auto;
+}
+</style>
+

@@ -4,27 +4,31 @@
     class="ued-tooltip"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
+    @focus="handleMouseEnter"
+    @blur="handleMouseLeave"
   >
     <slot />
-    <Transition name="ued-tooltip">
-      <div
-        v-if="visible"
-        ref="tooltipRef"
-        class="ued-tooltip__popup"
-        :class="[`ued-tooltip__popup--${actualPlacement}`]"
-        :style="popupStyle"
-      >
-        <div class="ued-tooltip__arrow"></div>
-        <div class="ued-tooltip__inner">
-          <slot name="content">{{ content }}</slot>
+    <Teleport to="body">
+      <Transition name="ued-tooltip">
+        <div
+          v-if="visible"
+          ref="tooltipRef"
+          class="ued-tooltip__popup"
+          :class="[`ued-tooltip__popup--${actualPlacement}`]"
+          :style="popupStyle"
+        >
+          <div class="ued-tooltip__arrow"></div>
+          <div class="ued-tooltip__inner">
+            <slot name="content">{{ content }}</slot>
+          </div>
         </div>
-      </div>
-    </Transition>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 const props = defineProps({
   content: { type: String, default: "" },
@@ -32,6 +36,8 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   delay: { type: Number, default: 200 },
 });
+
+const SPACING = 8;
 
 const triggerRef = ref(null);
 const tooltipRef = ref(null);
@@ -59,9 +65,21 @@ function handleMouseLeave() {
 }
 
 watch(visible, async (val) => {
-  if (!val) return;
-  await nextTick();
-  updatePosition();
+  if (val) {
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    await nextTick();
+    updatePosition();
+  } else {
+    window.removeEventListener("scroll", updatePosition, true);
+    window.removeEventListener("resize", updatePosition);
+  }
+});
+
+onBeforeUnmount(() => {
+  clearTimeout(enterTimer);
+  window.removeEventListener("scroll", updatePosition, true);
+  window.removeEventListener("resize", updatePosition);
 });
 
 function updatePosition() {
@@ -69,45 +87,44 @@ function updatePosition() {
   const popup = tooltipRef.value;
   if (!trigger || !popup) return;
 
+  // Use viewport coordinates + position:fixed so the popup tracks the trigger
+  // correctly even when the page or an ancestor scrolls.
   const triggerRect = trigger.getBoundingClientRect();
   const popupRect = popup.getBoundingClientRect();
-  const spacing = 8;
+
+  const fitsAbove = triggerRect.top >= popupRect.height + SPACING;
+  const fitsBelow = window.innerHeight - triggerRect.bottom >= popupRect.height + SPACING;
+
+  let placement = props.placement;
+  if (placement === "top" && !fitsAbove && fitsBelow) placement = "bottom";
+  if (placement === "bottom" && !fitsBelow && fitsAbove) placement = "top";
+  actualPlacement.value = placement;
 
   let top = 0;
   let left = 0;
-  let placement = props.placement;
-
-  // Try requested placement first
-  const fitsAbove = triggerRect.top >= popupRect.height + spacing;
-  const fitsBelow =
-    window.innerHeight - triggerRect.bottom >= popupRect.height + spacing;
-  const fitsLeft = triggerRect.left >= popupRect.width + spacing;
-  const fitsRight =
-    window.innerWidth - triggerRect.right >= popupRect.width + spacing;
-
-  if (placement === "top" && !fitsAbove && fitsBelow) placement = "bottom";
-  if (placement === "bottom" && !fitsBelow && fitsAbove) placement = "top";
-
-  actualPlacement.value = placement;
 
   switch (placement) {
     case "top":
-      top = -popupRect.height - spacing;
-      left = (triggerRect.width - popupRect.width) / 2;
+      top = triggerRect.top - popupRect.height - SPACING;
+      left = triggerRect.left + (triggerRect.width - popupRect.width) / 2;
       break;
     case "bottom":
-      top = triggerRect.height + spacing;
-      left = (triggerRect.width - popupRect.width) / 2;
+      top = triggerRect.bottom + SPACING;
+      left = triggerRect.left + (triggerRect.width - popupRect.width) / 2;
       break;
     case "left":
-      top = (triggerRect.height - popupRect.height) / 2;
-      left = -popupRect.width - spacing;
+      top = triggerRect.top + (triggerRect.height - popupRect.height) / 2;
+      left = triggerRect.left - popupRect.width - SPACING;
       break;
     case "right":
-      top = (triggerRect.height - popupRect.height) / 2;
-      left = triggerRect.width + spacing;
+      top = triggerRect.top + (triggerRect.height - popupRect.height) / 2;
+      left = triggerRect.right + SPACING;
       break;
   }
+
+  // Clamp into viewport so the popup never overflows the window edges.
+  left = Math.max(SPACING, Math.min(left, window.innerWidth - popupRect.width - SPACING));
+  top = Math.max(SPACING, Math.min(top, window.innerHeight - popupRect.height - SPACING));
 
   popupOffset.value = { top, left };
 }
@@ -120,30 +137,32 @@ function updatePosition() {
   max-width: 100%;
 }
 
+/* Fixed positioning pairs with viewport coords from getBoundingClientRect,
+   keeping the popup aligned to the trigger through scroll/resize. */
 .ued-tooltip__popup {
-  position: absolute;
+  position: fixed;
   z-index: 100;
   pointer-events: none;
 }
 
 .ued-tooltip__inner {
   max-width: 320px;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  background: #172033;
-  color: #f8fafc;
-  font-size: 12px;
+  border-radius: var(--ued-radius-md);
+  background: var(--ued-color-tooltip-bg);
+  color: var(--ued-color-tooltip-fg);
+  font-size: var(--ued-font-size-sm);
   line-height: 1.5;
   word-break: break-word;
-  box-shadow: 0 14px 32px rgba(20, 31, 50, 0.22), 0 4px 10px rgba(20, 31, 50, 0.12);
+  box-shadow: var(--ued-shadow-popup);
 }
 
 .ued-tooltip__arrow {
   position: absolute;
   width: 6px;
   height: 6px;
-  background: #172033;
+  background: var(--ued-color-tooltip-bg);
   transform: rotate(45deg);
 }
 

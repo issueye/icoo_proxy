@@ -51,6 +51,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { normalizeVariant, normalizeSize, ICON_BUTTON_VARIANTS } from "./variant";
 
 defineEmits(["click"]);
 
@@ -87,18 +88,13 @@ const props = defineProps({
 
 const normalizedIcon = computed(() => String(props.icon || "detail").toLowerCase());
 
-const normalizedVariant = computed(() => {
-  const value = String(props.variant || "secondary").toLowerCase();
-  if (value === "danger") {
-    return "error";
-  }
-  return ["secondary", "primary", "info", "success", "warning", "error", "ghost"].includes(value) ? value : "secondary";
-});
+const normalizedVariant = computed(() =>
+  normalizeVariant(props.variant, "secondary", ICON_BUTTON_VARIANTS),
+);
 
-const normalizedSize = computed(() => {
-  const value = String(props.size || "sm").toLowerCase();
-  return ["xs", "sm", "md"].includes(value) ? value : "sm";
-});
+const normalizedSize = computed(() =>
+  normalizeSize(props.size, "sm", ["xs", "sm", "md"]),
+);
 </script>
 
 <style scoped>
@@ -110,7 +106,7 @@ const normalizedSize = computed(() => {
   border: 1px solid transparent;
   border-radius: var(--ued-radius-sm);
   background: transparent;
-  color: #526174;
+  color: var(--ued-color-text-muted);
   transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
@@ -160,20 +156,20 @@ const normalizedSize = computed(() => {
 .ued-icon-button__spinner {
   border: 2px solid currentColor;
   border-right-color: transparent;
-  border-radius: 999px;
+  border-radius: var(--ued-radius-pill);
   animation: ued-icon-spin 0.8s linear infinite;
 }
 
 .ued-icon-button--secondary,
 .ued-icon-button--ghost {
-  color: #526174;
+  color: var(--ued-color-text-muted);
 }
 
 .ued-icon-button--secondary:hover:not(:disabled),
 .ued-icon-button--ghost:hover:not(:disabled) {
-  border-color: #cfd8e6;
-  background: #f8fafc;
-  color: #172033;
+  border-color: var(--ued-color-border);
+  background: var(--ued-color-muted);
+  color: var(--ued-color-text);
 }
 
 .ued-icon-button--primary {
@@ -181,7 +177,7 @@ const normalizedSize = computed(() => {
 }
 
 .ued-icon-button--primary:hover:not(:disabled) {
-  border-color: #b9c8ff;
+  border-color: color-mix(in srgb, var(--ued-color-primary) 32%, transparent);
   background: var(--ued-color-primary-soft);
 }
 
@@ -190,7 +186,7 @@ const normalizedSize = computed(() => {
 }
 
 .ued-icon-button--info:hover:not(:disabled) {
-  border-color: #9fe0eb;
+  border-color: color-mix(in srgb, var(--ued-color-info) 32%, transparent);
   background: var(--ued-color-info-soft);
 }
 
@@ -199,7 +195,7 @@ const normalizedSize = computed(() => {
 }
 
 .ued-icon-button--success:hover:not(:disabled) {
-  border-color: #a9dec5;
+  border-color: color-mix(in srgb, var(--ued-color-success) 32%, transparent);
   background: var(--ued-color-success-soft);
 }
 
@@ -208,7 +204,7 @@ const normalizedSize = computed(() => {
 }
 
 .ued-icon-button--warning:hover:not(:disabled) {
-  border-color: #f0cb85;
+  border-color: color-mix(in srgb, var(--ued-color-warning) 32%, transparent);
   background: var(--ued-color-warning-soft);
 }
 
@@ -217,7 +213,7 @@ const normalizedSize = computed(() => {
 }
 
 .ued-icon-button--error:hover:not(:disabled) {
-  border-color: #ffb8b0;
+  border-color: color-mix(in srgb, var(--ued-color-destructive) 32%, transparent);
   background: var(--ued-color-error-soft);
 }
 
