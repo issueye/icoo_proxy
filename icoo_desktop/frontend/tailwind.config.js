@@ -10,20 +10,8 @@ export default {
         xl: "1024px",
       },
       colors: {
-        ant: {
-          primary: "#1677ff",
-          primaryHover: "#4096ff",
-          primaryActive: "#0958d9",
-          success: "#52c41a",
-          warning: "#faad14",
-          error: "#ff4d4f",
-          text: "#262626",
-          secondary: "#595959",
-          tertiary: "#8c8c8c",
-          border: "#d9d9d9",
-          split: "#f0f0f0",
-          layout: "#f5f5f5",
-        },
+        // UI colors are driven by CSS custom properties in main.css.
+        // Avoid adding duplicate palettes here; use token classes instead.
       },
       boxShadow: {
         panel: "0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.04)",

@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import {
   CheckSupplier,
   DeleteSupplier,
+  FetchModelsFromProvider,
   GetSuppliersPage,
   ListRoutingRules,
   ListSupplierHealth,
@@ -180,7 +181,10 @@ export const useSuppliersStore = defineStore("suppliers", {
     policiesByProtocol() {
       const lookup = {};
       this.policies.forEach((item) => {
-        lookup[item.downstream_protocol] = item;
+        // 同一协议下若存在多条默认规则，保留第一条（按优先级/名称已排序），避免后覆盖前
+        if (!lookup[item.downstream_protocol]) {
+          lookup[item.downstream_protocol] = item;
+        }
       });
       return this.routeDefinitions.map((definition) => ({
         ...definition,
@@ -456,6 +460,35 @@ export const useSuppliersStore = defineStore("suppliers", {
         this.error = error?.message || String(error);
       } finally {
         this.checking = "";
+      }
+    },
+    async fetchModels(providerID) {
+      this.fetchingModels = true;
+      this.error = "";
+      try {
+        const fetched = await FetchModelsFromProvider(providerID);
+        if (!fetched?.length) {
+          return 0;
+        }
+        // Merge fetched models into the form's model list.
+        const existingNames = new Set(
+          (this.modelForm.models || []).map((m) => String(m?.name || "").trim()),
+        );
+        const newModels = fetched
+          .filter((m) => !m.exists && !existingNames.has(m.name))
+          .map((m) => ({
+            name: m.name,
+            max_tokens: m.max_tokens || 32768,
+          }));
+        if (newModels.length) {
+          this.modelForm.models = [...(this.modelForm.models || []), ...newModels];
+        }
+        return newModels.length;
+      } catch (error) {
+        this.error = error?.message || String(error);
+        return 0;
+      } finally {
+        this.fetchingModels = false;
       }
     },
   },

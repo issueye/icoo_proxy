@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import {
   DeleteModelAlias,
+  FetchModelsFromProvider,
   ListModelAliases,
   ListSuppliers,
   SaveModelAlias,
@@ -28,6 +29,7 @@ export const useModelAliasesStore = defineStore("modelAliases", {
     loading: false,
     saving: false,
     deleting: "",
+    fetchingModels: false,
     error: "",
     items: [],
     suppliers: [],
@@ -53,9 +55,11 @@ export const useModelAliasesStore = defineStore("modelAliases", {
       }));
     },
     selectedSupplier(state) {
-      return state.suppliers.find(
-        (supplier) => supplier.id === state.form.supplier_id,
-      ) || null;
+      return (
+        state.suppliers.find(
+          (supplier) => supplier.id === state.form.supplier_id,
+        ) || null
+      );
     },
     modelOptions(state) {
       const supplier = state.suppliers.find(
@@ -142,6 +146,40 @@ export const useModelAliasesStore = defineStore("modelAliases", {
         this.error = error?.message || String(error);
       } finally {
         this.deleting = "";
+      }
+    },
+    async fetchModels(providerID) {
+      this.fetchingModels = true;
+      try {
+        const fetched = await FetchModelsFromProvider(providerID);
+        if (!fetched?.length) {
+          return 0;
+        }
+        // Merge fetched models into the supplier's local model list.
+        const supplier = this.suppliers.find((s) => s.id === providerID);
+        if (!supplier) {
+          return 0;
+        }
+        const existingNames = new Set(
+          (supplier.models || []).map((m) => getModelName(m)),
+        );
+        const newModels = fetched
+          .filter((m) => !m.exists && !existingNames.has(m.name))
+          .map((m) => ({
+            id: m.id,
+            name: m.name,
+            max_tokens: m.max_tokens || 32768,
+            enabled: true,
+          }));
+        if (newModels.length) {
+          supplier.models = [...(supplier.models || []), ...newModels];
+        }
+        return newModels.length;
+      } catch (error) {
+        this.error = error?.message || String(error);
+        return 0;
+      } finally {
+        this.fetchingModels = false;
       }
     },
   },

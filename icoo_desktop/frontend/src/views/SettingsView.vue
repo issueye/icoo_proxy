@@ -2,39 +2,33 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <button
-          class="btn btn-secondary"
-          :class="{ 'is-loading': store.loading }"
+        <UButton
+          variant="secondary"
+          :loading="store.loading"
           :disabled="store.loading || store.saving"
           @click="store.load"
         >
-          <span v-if="store.loading" class="btn__spinner" />
           {{ store.loading ? "刷新中..." : "重新读取" }}
-        </button>
-        <button
-          class="btn btn-primary"
-          :class="{ 'is-loading': store.saving }"
+        </UButton>
+        <UButton
+          variant="primary"
+          :loading="store.saving"
           :disabled="store.loading || store.saving"
           @click="submit"
         >
-          <span v-if="store.saving" class="btn__spinner" />
           {{ store.saving ? "保存中..." : "保存并重载" }}
-        </button>
+        </UButton>
       </div>
     </Teleport>
 
-    <div v-if="store.error" class="notice-error">
-      {{ store.error }}
-    </div>
-    <div v-if="store.success" class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-      {{ store.success }}
-    </div>
+    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
+    <UAlert v-if="store.success" type="success">{{ store.success }}</UAlert>
 
     <PanelBlock title="外观设置">
-      <div class="divide-y divide-[#f0f0f0]">
+      <div class="divide-y divide-[var(--ued-color-divider)]">
         <div class="py-3">
-          <p class="text-sm font-medium text-[#262626]">主题颜色</p>
-          <p class="mt-0.5 text-[11px] text-[#8c8c8c]">选择界面主色调，即时生效。</p>
+          <p class="text-sm font-medium text-strong">主题颜色</p>
+          <p class="mt-0.5 text-[11px] text-muted">选择界面主色调，即时生效。</p>
           <div class="mt-3 flex flex-wrap gap-2">
             <button
               v-for="opt in uiPrefs.themeOptions"
@@ -51,18 +45,17 @@
         </div>
 
         <div class="py-3">
-          <p class="text-sm font-medium text-[#262626]">按钮尺寸</p>
-          <p class="mt-0.5 text-[11px] text-[#8c8c8c]">调整全局按钮和输入控件的大小。</p>
+          <p class="text-sm font-medium text-strong">按钮尺寸</p>
+          <p class="mt-0.5 text-[11px] text-muted">调整全局按钮和输入控件的大小。</p>
           <div class="mt-3 flex flex-wrap gap-2">
-            <button
+            <UButton
               v-for="opt in uiPrefs.buttonSizeOptions"
               :key="opt.value"
-              class="btn"
-              :class="uiPrefs.buttonSize === opt.value ? 'btn-primary' : 'btn-secondary'"
+              :variant="uiPrefs.buttonSize === opt.value ? 'primary' : 'secondary'"
               @click="uiPrefs.setButtonSize(opt.value)"
             >
               {{ opt.label }}
-            </button>
+            </UButton>
           </div>
           <div class="mt-3">
             <UButton size="sm">示例按钮 SM</UButton>
@@ -83,41 +76,22 @@
       <form class="section-grid" @submit.prevent="submit">
         <PanelBlock title="核心运行">
           <div class="grid gap-3 md:grid-cols-2">
-            <FieldLabel label="PROXY_HOST">
-              <input v-model="store.form.proxy_host" class="field-input" placeholder="127.0.0.1" />
-            </FieldLabel>
-            <FieldLabel label="PROXY_PORT">
-              <input v-model="store.form.proxy_port" type="number" min="1" class="field-input" />
-            </FieldLabel>
-            <FieldLabel label="PROXY_READ_TIMEOUT_SECONDS">
-              <input v-model="store.form.proxy_read_timeout_seconds" type="number" min="1" class="field-input" />
-            </FieldLabel>
-            <FieldLabel label="PROXY_WRITE_TIMEOUT_SECONDS">
-              <input v-model="store.form.proxy_write_timeout_seconds" type="number" min="1" class="field-input" />
-            </FieldLabel>
-            <FieldLabel label="PROXY_SHUTDOWN_TIMEOUT_SECONDS">
-              <input v-model="store.form.proxy_shutdown_timeout_seconds" type="number" min="1" class="field-input" />
-            </FieldLabel>
-            <FieldLabel label="PROXY_DEFAULT_MAX_TOKENS">
-              <input v-model="store.form.default_max_tokens" type="number" min="1" class="field-input" />
-            </FieldLabel>
+            <UInput v-model="store.form.proxy_host" label="PROXY_HOST" placeholder="127.0.0.1" />
+            <UInput v-model="store.form.proxy_port" label="PROXY_PORT" type="number" />
+            <UInput v-model="store.form.proxy_read_timeout_seconds" label="PROXY_READ_TIMEOUT_SECONDS" type="number" />
+            <UInput v-model="store.form.proxy_write_timeout_seconds" label="PROXY_WRITE_TIMEOUT_SECONDS" type="number" />
+            <UInput v-model="store.form.proxy_shutdown_timeout_seconds" label="PROXY_SHUTDOWN_TIMEOUT_SECONDS" type="number" />
+            <UInput v-model="store.form.default_max_tokens" label="PROXY_DEFAULT_MAX_TOKENS" type="number" />
           </div>
         </PanelBlock>
 
         <PanelBlock title="日志参数">
           <div class="grid gap-3 md:grid-cols-2">
-            <FieldLabel label="PROXY_CHAIN_LOG_PATH">
-              <input v-model="store.form.proxy_chain_log_path" class="field-input" placeholder=".data/bridge-chain.log" />
-            </FieldLabel>
-            <FieldLabel label="PROXY_CHAIN_LOG_MAX_BODY_BYTES">
-              <input v-model="store.form.proxy_chain_log_max_body_bytes" type="number" min="0" class="field-input" />
-            </FieldLabel>
+            <UInput v-model="store.form.proxy_chain_log_path" label="PROXY_CHAIN_LOG_PATH" placeholder=".data/bridge-chain.log" />
+            <UInput v-model="store.form.proxy_chain_log_max_body_bytes" label="PROXY_CHAIN_LOG_MAX_BODY_BYTES" type="number" />
           </div>
           <div class="mt-3">
-            <label class="field-toggle">
-              <input v-model="store.form.proxy_chain_log_bodies" type="checkbox" class="field-checkbox" />
-              记录请求与响应体
-            </label>
+            <USwitch v-model="store.form.proxy_chain_log_bodies" label="记录请求与响应体" />
           </div>
         </PanelBlock>
       </form>
@@ -127,10 +101,12 @@
 
 <script setup>
 import { onMounted } from "vue";
-import FieldLabel from "../components/FieldLabel.vue";
 import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
+import UAlert from "../components/ued/UAlert.vue";
 import UButton from "../components/ued/UButton.vue";
+import UInput from "../components/ued/UInput.vue";
+import USwitch from "../components/ued/USwitch.vue";
 import { message } from "../components/ued/message";
 import { useSettingsStore } from "../stores/settings";
 import { useUiPrefsStore } from "../stores/uiPrefs";

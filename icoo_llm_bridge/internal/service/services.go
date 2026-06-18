@@ -32,7 +32,7 @@ func NewServices(deps Deps) Services {
 	auth := NewAuthService(deps.Repos.APIKey)
 	endpoints := NewEndpointService(deps.Repos.Endpoint)
 	providers := NewProviderService(deps.Repos.Provider)
-	providerModels := NewProviderModelService(deps.Repos.ProviderModel)
+	providerModels := NewProviderModelService(deps.Repos.ProviderModel, deps.Repos.Provider)
 	rules := NewRoutingRuleService(deps.Repos.RoutingRule, tracker)
 	routing := NewRouteResolver(deps.Repos.Provider, deps.Repos.ProviderModel, deps.Repos.RoutingRule)
 	traffic := NewTrafficService(deps.Repos.Traffic)

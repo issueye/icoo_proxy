@@ -98,14 +98,15 @@
       <span class="app-statusbar__item app-statusbar__item--state">
         <span class="app-status-dot" :class="statusDotClass" aria-hidden="true"></span>
         <span>Server {{ serverStatusLabel }}</span>
-        <button
+        <UButton
           v-if="serverStatus === 'disconnected' || serverStatus === 'error'"
-          class="app-status-wake-btn"
+          size="xs"
+          :loading="waking"
           :disabled="waking"
           @click="wake"
         >
           {{ waking ? "唤醒中..." : "唤醒" }}
-        </button>
+        </UButton>
       </span>
       <span class="app-statusbar__item" :title="serverUrl">{{ serverUrl }}</span>
       <span v-if="serverError" class="app-statusbar__item app-statusbar__item--error" :title="serverError">{{ serverError }}</span>

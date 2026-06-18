@@ -712,6 +712,16 @@ button:disabled {
     background-clip: content-box;
   }
 
+  /* Hide horizontal scroll when table has no rows so the empty state doesn't
+     create a swipeable blank area (especially with a large min-width prop). */
+  .table-scroll--empty {
+    overflow-x: hidden !important;
+  }
+
+  .table-scroll--empty .table-empty-state {
+    min-width: 0 !important;
+  }
+
 .admin-table {
   @apply min-w-full border-separate border-spacing-0 bg-white text-slate-700;
 }

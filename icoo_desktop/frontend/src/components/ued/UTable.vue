@@ -4,7 +4,7 @@
       <slot name="query" />
     </div>
 
-    <div class="table-scroll" :style="scrollStyle">
+    <div class="table-scroll" :class="{ 'table-scroll--empty': !hasRows && !loading }" :style="scrollStyle">
       <table :class="tableClasses" :style="tableStyle">
         <colgroup v-if="tableColumns.length">
           <col

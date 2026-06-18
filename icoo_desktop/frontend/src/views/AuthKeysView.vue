@@ -2,18 +2,14 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <button class="btn btn-primary" @click="openCreate">新增 Key</button>
-        <button class="btn btn-secondary" :class="{ 'is-loading': store.reloading }" :disabled="store.reloading"
-          @click="reloadProxy">
-          <span v-if="store.reloading" class="btn__spinner" />
+        <UButton variant="primary" @click="openCreate">新增 Key</UButton>
+        <UButton variant="secondary" :loading="store.reloading" :disabled="store.reloading" @click="reloadProxy">
           {{ store.reloading ? "重载中..." : "重载代理" }}
-        </button>
+        </UButton>
       </div>
     </Teleport>
 
-    <div v-if="store.error" class="notice-error">
-      {{ store.error }}
-    </div>
+    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
 
     <div class="section-grid grid-cols-3">
       <StatCard icon="key" label="Key 总数" :value="String(store.totalCount)" tone="info" />
@@ -34,20 +30,20 @@
           <USelect v-model="queryForm.status" label="状态" hide-label :options="statusOptions"
             class="table-query-form__field table-query-form__field--compact" />
           <div class="table-query-form__actions">
-            <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
-            <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
+            <UButton variant="secondary" @click="resetQuery">重置</UButton>
+            <UButton variant="primary" @click="submitQuery">查询</UButton>
           </div>
         </div>
       </template>
       <template #cell-name="{ row }">
-        <p class="font-medium text-[#262626]">{{ row.name }}</p>
+        <p class="font-medium text-strong">{{ row.name }}</p>
         <p class="mt-0.5 table-meta">更新时间：{{ formatDateTime(row.updated_at) }}</p>
       </template>
       <template #cell-secret="{ row }">
         <UTag code size="xs">{{ row.secret_masked }}</UTag>
       </template>
       <template #cell-description="{ row }">
-        <p class="max-w-xl text-sm text-[#595959]">{{ row.description || "-" }}</p>
+        <p class="max-w-xl text-sm text-secondary">{{ row.description || "-" }}</p>
       </template>
       <template #cell-enabled="{ row }">
         <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
@@ -68,32 +64,22 @@
     <UModal v-model:open="modalOpen" :title="store.form.id ? '编辑授权 Key' : '新增授权 Key'" width="560px"
       @close="store.resetForm">
       <form id="auth-key-form" class="space-y-3" @submit.prevent="submit">
-        <FieldLabel label="名称">
-          <input v-model="store.form.name" class="field-input" placeholder="本地开发 Key" />
-        </FieldLabel>
-        <FieldLabel label="Key">
-          <div class="field-row">
-            <input v-model="store.form.secret" class="field-input"
-              :placeholder="store.form.id ? '留空则保留原 Key' : '输入或生成授权 Key'" />
-            <button type="button" class="btn btn-secondary shrink-0" @click="generateSecret">生成</button>
-          </div>
-        </FieldLabel>
-        <FieldLabel label="说明">
-          <textarea v-model="store.form.description" class="field-input min-h-20" placeholder="描述该 Key 的使用方或用途" />
-        </FieldLabel>
-        <label class="field-toggle">
-          <input v-model="store.form.enabled" type="checkbox" class="field-checkbox" />
-          启用该 Key
-        </label>
+        <UInput v-model="store.form.name" label="名称" placeholder="本地开发 Key" />
+        <div class="field-row items-end">
+          <UInput v-model="store.form.secret" label="Key" class="flex-1"
+            :placeholder="store.form.id ? '留空则保留原 Key' : '输入或生成授权 Key'" />
+          <UButton variant="secondary" class="shrink-0" @click="generateSecret">生成</UButton>
+        </div>
+        <UInput v-model="store.form.description" label="说明" textarea placeholder="描述该 Key 的使用方或用途" />
+        <USwitch v-model="store.form.enabled" label="启用该 Key" />
       </form>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <button type="button" class="btn btn-secondary" @click="closeModal">取消</button>
-          <button form="auth-key-form" class="btn btn-primary" :class="{ 'is-loading': store.saving }"
+          <UButton variant="secondary" @click="closeModal">取消</UButton>
+          <UButton form="auth-key-form" variant="primary" native-type="submit" :loading="store.saving"
             :disabled="store.saving">
-            <span v-if="store.saving" class="btn__spinner" />
             {{ store.saving ? "保存中..." : "保存 Key" }}
-          </button>
+          </UButton>
         </div>
       </template>
     </UModal>
@@ -106,14 +92,15 @@
 
 <script setup>
 import { onMounted, reactive, ref } from "vue";
-import FieldLabel from "../components/FieldLabel.vue";
-import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
+import UAlert from "../components/ued/UAlert.vue";
+import UButton from "../components/ued/UButton.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
 import UInput from "../components/ued/UInput.vue";
 import UModal from "../components/ued/UModal.vue";
 import USelect from "../components/ued/USelect.vue";
+import USwitch from "../components/ued/USwitch.vue";
 import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
@@ -232,37 +219,3 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
-.table-query-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.table-query-form__field {
-  width: 220px;
-  min-width: 0;
-}
-
-.table-query-form__field--compact {
-  width: 168px;
-}
-
-.table-query-form__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-@media (max-width: 760px) {
-
-  .table-query-form__field,
-  .table-query-form__field--compact,
-  .table-query-form__actions {
-    width: 100%;
-    margin-left: 0;
-  }
-}
-</style>

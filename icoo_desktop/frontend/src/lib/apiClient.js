@@ -247,6 +247,14 @@ async function listProviderModels(providerID) {
   return normalizePage(raw, 1, 200).items.map(normalizeProviderModel);
 }
 
+export async function FetchModelsFromProvider(providerID) {
+  if (!providerID) {
+    return [];
+  }
+  const raw = await client.post(`${API_PREFIX}/providers/${providerID}/fetch-models`);
+  return raw?.data || [];
+}
+
 async function listProvidersWithModels() {
   const raw = await client.get(`${API_PREFIX}/providers`, {
     params: { page: 1, page_size: 200 },

@@ -5,7 +5,10 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -33,6 +36,7 @@ type ProviderModelService interface {
 	ListByProvider(ctx context.Context, providerID string) ([]entity.ProviderModel, error)
 	Upsert(ctx context.Context, input ProviderModelUpsertInput) (entity.ProviderModel, error)
 	Delete(ctx context.Context, providerID string, id string) error
+	FetchModels(ctx context.Context, providerID string) ([]FetchedModel, error)
 }
 
 type RoutingRuleService interface {
@@ -212,12 +216,20 @@ func (s *providerService) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, strings.TrimSpace(id))
 }
 
-type providerModelService struct {
-	repo repository.ProviderModelRepository
+type FetchedModel struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	MaxTokens int    `json:"max_tokens"`
+	Exists    bool   `json:"exists"`
 }
 
-func NewProviderModelService(repo repository.ProviderModelRepository) ProviderModelService {
-	return &providerModelService{repo: repo}
+type providerModelService struct {
+	repo         repository.ProviderModelRepository
+	providerRepo repository.ProviderRepository
+}
+
+func NewProviderModelService(repo repository.ProviderModelRepository, providerRepo repository.ProviderRepository) ProviderModelService {
+	return &providerModelService{repo: repo, providerRepo: providerRepo}
 }
 
 func (s *providerModelService) ListByProvider(ctx context.Context, providerID string) ([]entity.ProviderModel, error) {
@@ -267,6 +279,79 @@ func (s *providerModelService) Delete(ctx context.Context, providerID string, id
 		return fmt.Errorf("id is required")
 	}
 	return s.repo.Delete(ctx, providerID, id)
+}
+
+func (s *providerModelService) FetchModels(ctx context.Context, providerID string) ([]FetchedModel, error) {
+	providerID = strings.TrimSpace(providerID)
+	if providerID == "" {
+		return nil, fmt.Errorf("provider_id is required")
+	}
+
+	provider, err := s.providerRepo.Find(ctx, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("provider not found: %w", err)
+	}
+
+	existing, err := s.repo.ListByProvider(ctx, providerID)
+	if err != nil {
+		return nil, err
+	}
+	existingSet := make(map[string]bool, len(existing))
+	for _, m := range existing {
+		existingSet[m.Name] = true
+	}
+
+	// Only OpenAI-compatible providers expose /v1/models.
+	// Anthropic does not have a model list endpoint.
+	if provider.Protocol != constants.ProtocolOpenAIChat && provider.Protocol != constants.ProtocolOpenAIResponses {
+		return []FetchedModel{}, nil
+	}
+
+	baseURL := strings.TrimRight(provider.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://api.openai.com"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+provider.APIKeyCipher)
+	req.Header.Set("User-Agent", provider.UserAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("upstream request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("upstream %d: %s", resp.StatusCode, string(body))
+	}
+
+	var payload struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode upstream: %w", err)
+	}
+
+	var result []FetchedModel
+	for _, d := range payload.Data {
+		name := strings.TrimSpace(d.ID)
+		if name == "" {
+			continue
+		}
+		result = append(result, FetchedModel{
+			ID:     name,
+			Name:   name,
+			Exists: existingSet[name],
+		})
+	}
+	return result, nil
 }
 
 type routingRuleService struct {

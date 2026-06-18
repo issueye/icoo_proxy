@@ -2,13 +2,11 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <button class="btn btn-primary" @click="openSupplierCreate">新建</button>
+        <UButton variant="primary" @click="openSupplierCreate">新建</UButton>
       </div>
     </Teleport>
 
-    <div v-if="store.error" class="notice-error">
-      {{ store.error }}
-    </div>
+    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
 
     <div class="section-grid grid-cols-1 md:grid-cols-3">
       <StatCard icon="server" label="供应商总数" :value="String(store.totalCount)" tone="info" />
@@ -29,21 +27,21 @@
           <USelect v-model="queryForm.protocol" label="协议" hide-label :options="supplierFilterOptions"
             class="table-query-form__field table-query-form__field--compact" />
           <div class="table-query-form__actions">
-            <button type="button" class="btn btn-secondary" @click="resetQuery">重置</button>
-            <button type="button" class="btn btn-primary" @click="submitQuery">查询</button>
+            <UButton type="button" variant="secondary" @click="resetQuery">重置</UButton>
+            <UButton type="button" variant="primary" @click="submitQuery">查询</UButton>
           </div>
         </div>
       </template>
       <template #cell-supplier="{ row }">
         <div class="flex items-center gap-2">
-          <p class="font-medium text-[#262626]">{{ row.name }}</p>
+          <p class="font-medium text-strong">{{ row.name }}</p>
         </div>
-        <p class="mt-0.5 text-sm leading-5 text-[#595959] table-cell-wrap">
+        <p class="mt-0.5 text-sm leading-5 text-secondary table-cell-wrap">
           {{ row.description || "暂无描述。" }}
         </p>
       </template>
       <template #cell-protocol="{ row }">
-        <p class="font-medium text-[#262626]">{{ row.protocol }}</p>
+        <p class="font-medium text-strong">{{ row.protocol }}</p>
         <div class="mt-1 flex flex-wrap gap-1.5">
           <UTag v-if="row.only_stream" variant="warning" size="xs">only_stream</UTag>
         </div>
@@ -78,7 +76,7 @@
           <p class="mt-0.5 table-meta">
             HTTP {{ store.healthFor(row.id).status_code || "无状态码" }}
           </p>
-          <p class="mt-0.5 text-sm leading-5 text-[#595959] table-cell-wrap">
+          <p class="mt-0.5 text-sm leading-5 text-secondary table-cell-wrap">
             {{ store.healthFor(row.id).message }}
           </p>
         </template>
@@ -113,45 +111,27 @@
           <USelect v-model="store.form.vendor" label="类型" :options="vendorOptions" />
         </div>
 
-        <FieldLabel label="基础地址">
-          <input v-model="store.form.base_url" class="field-input" placeholder="https://api.openai.com" />
-        </FieldLabel>
+        <UInput v-model="store.form.base_url" label="基础地址" placeholder="https://api.openai.com" />
 
-        <FieldLabel label="API Key">
-          <input v-model="store.form.api_key" class="field-input" placeholder="编辑时留空则保留已有密钥" />
-        </FieldLabel>
+        <UInput v-model="store.form.api_key" label="API Key" placeholder="编辑时留空则保留已有密钥" />
 
-        <FieldLabel label="User-Agent">
-          <input v-model="store.form.user_agent" class="field-input" placeholder="留空则使用默认上游 UA" />
-        </FieldLabel>
+        <UInput v-model="store.form.user_agent" label="User-Agent" placeholder="留空则使用默认上游 UA" />
 
-        <FieldLabel label="描述">
-          <textarea v-model="store.form.description" class="field-input min-h-24" placeholder="填写该供应商配置的用途说明" />
-        </FieldLabel>
+        <UInput v-model="store.form.description" label="描述" textarea placeholder="填写该供应商配置的用途说明" />
 
-        <p class="rounded-md border border-[#dbe7ff] bg-[#f8fbff] px-3 py-2 text-xs leading-5 text-[#3157d5]">
-          模型已拆分为独立资源。保存 Provider 后，请在列表中点击“管理模型”添加候选模型。
-        </p>
+        <UAlert type="info" message="模型已拆分为独立资源。保存 Provider 后，请在列表中点击“管理模型”添加候选模型。" />
 
         <div class="grid gap-3 md:grid-cols-2">
-          <label class="field-toggle">
-            <input v-model="store.form.enabled" type="checkbox" class="field-checkbox" />
-            启用该 Provider
-          </label>
-          <label class="field-toggle">
-            <input v-model="store.form.only_stream" type="checkbox" class="field-checkbox" />
-            仅流式上游
-          </label>
+          <USwitch v-model="store.form.enabled" label="启用该 Provider" />
+          <USwitch v-model="store.form.only_stream" label="仅流式上游" />
         </div>
       </form>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <button type="button" class="btn btn-secondary" @click="closeSupplierModal">取消</button>
-          <button form="supplier-form" class="btn btn-primary" :class="{ 'is-loading': store.saving }"
-            :disabled="store.saving">
-            <span v-if="store.saving" class="btn__spinner" />
+          <UButton type="button" variant="secondary" @click="closeSupplierModal">取消</UButton>
+          <UButton form="supplier-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
             {{ store.saving ? "保存中..." : store.form.id ? "更新 Provider" : "创建 Provider" }}
-          </button>
+          </UButton>
         </div>
       </template>
     </UModal>
@@ -161,41 +141,44 @@
       <form id="model-form" class="space-y-3" @submit.prevent="submitModelEditor">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <p class="text-sm font-medium text-[#262626]">候选模型列表</p>
-            <p class="mt-0.5 text-[11px] text-[#8c8c8c]">未填写 max_tokens 时会回退到 32768。</p>
+            <p class="text-sm font-medium text-strong">候选模型列表</p>
+            <p class="mt-0.5 text-[11px] text-muted">未填写 max_tokens 时会回退到 32768。</p>
           </div>
-          <button type="button" class="btn btn-secondary px-2 py-1 text-xs"
-            @click="addModelRow(store.modelForm.models)">
-            添加模型
-          </button>
+          <div class="flex items-center gap-2">
+            <UButton type="button" variant="secondary" size="xs" :loading="store.fetchingModels" :disabled="store.fetchingModels" @click="fetchModelsForSupplier">
+              从上游获取模型
+            </UButton>
+            <UButton type="button" variant="secondary" size="xs" @click="addModelRow(store.modelForm.models)">
+              添加模型
+            </UButton>
+          </div>
         </div>
 
         <div class="space-y-2">
           <div v-for="(model, index) in store.modelForm.models" :key="index" class="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
-            <FieldLabel :label="`模型 ${index + 1}`">
-              <input :value="model.name" class="field-input" :placeholder="index === 0 ? '例如：gpt-4.1-mini' : '继续添加模型'"
-                @input="updateModelRow(store.modelForm.models, index, 'name', $event.target.value)" />
-            </FieldLabel>
-            <FieldLabel label="max_tokens">
-              <input :value="model.max_tokens" type="number" min="1" step="1" class="field-input"
-                placeholder="32768"
-                @input="updateModelRow(store.modelForm.models, index, 'max_tokens', $event.target.value)" />
-            </FieldLabel>
-            <button type="button" class="btn btn-secondary shrink-0 px-2 py-2"
-              :disabled="store.modelForm.models.length === 1" @click="removeModelRow(store.modelForm, index)">
+            <UInput
+              :model-value="model.name"
+              :label="`模型 ${index + 1}`"
+              :placeholder="index === 0 ? '例如：gpt-4.1-mini' : '继续添加模型'"
+              @update:modelValue="updateModelRow(store.modelForm.models, index, 'name', $event)" />
+            <UInput
+              :model-value="model.max_tokens"
+              label="max_tokens"
+              type="number"
+              placeholder="32768"
+              @update:modelValue="updateModelRow(store.modelForm.models, index, 'max_tokens', $event)" />
+            <UButton type="button" variant="secondary" size="sm" :disabled="store.modelForm.models.length === 1" @click="removeModelRow(store.modelForm, index)">
               删除
-            </button>
+            </UButton>
           </div>
         </div>
       </form>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <button type="button" class="btn btn-secondary" @click="closeModelModal">取消</button>
-          <button form="model-form" class="btn btn-primary" :class="{ 'is-loading': store.saving }"
-            :disabled="store.saving">
-            <span v-if="store.saving" class="btn__spinner" />
+          <UButton type="button" variant="secondary" @click="closeModelModal">取消</UButton>
+          <UButton form="model-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
             {{ store.saving ? "保存中..." : "保存模型设置" }}
-          </button>
+          </UButton>
         </div>
       </template>
     </UModal>
@@ -210,13 +193,15 @@
 import { onMounted, reactive, ref } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
 
-import FieldLabel from "../components/FieldLabel.vue";
 import StatCard from "../components/StatCard.vue";
+import UAlert from "../components/ued/UAlert.vue";
+import UButton from "../components/ued/UButton.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
 import UInput from "../components/ued/UInput.vue";
 import UModal from "../components/ued/UModal.vue";
 import USelect from "../components/ued/USelect.vue";
+import USwitch from "../components/ued/USwitch.vue";
 import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
@@ -395,6 +380,18 @@ async function checkSupplier(id) {
   }
 }
 
+async function fetchModelsForSupplier() {
+  if (!store.modelForm.id) {
+    return;
+  }
+  const count = await store.fetchModels(store.modelForm.id);
+  if (count > 0) {
+    message.success(`已从上游获取 ${count} 个新模型。`);
+  } else {
+    message.info("暂无新模型或该供应商不支持自动获取。");
+  }
+}
+
 onMounted(() => {
   queryForm.keyword = store.keyword;
   queryForm.protocol = store.protocol;
@@ -403,29 +400,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.table-query-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.table-query-form__field {
-  width: 240px;
-  min-width: 0;
-}
-
-.table-query-form__field--compact {
-  width: 180px;
-}
-
-.table-query-form__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
 .provider-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -443,16 +417,8 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
-
-  .table-query-form__field,
-  .table-query-form__field--compact,
-  .table-query-form__actions,
   .provider-form-grid {
     width: 100%;
-    margin-left: 0;
-  }
-
-  .provider-form-grid {
     grid-template-columns: 1fr;
   }
 }

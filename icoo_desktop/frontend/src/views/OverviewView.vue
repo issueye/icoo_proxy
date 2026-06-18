@@ -2,24 +2,16 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <button
-          class="btn btn-primary"
-          :class="{ 'is-loading': store.refreshing }"
-          :disabled="store.refreshing"
-          @click="reloadProxy"
-        >
-          <span v-if="store.refreshing" class="btn__spinner" />
+        <UButton variant="primary" :loading="store.refreshing" @click="reloadProxy">
           {{ store.refreshing ? "重载中..." : "重载代理" }}
-        </button>
-        <span class="badge" :class="store.data?.running ? 'badge-success' : 'badge-error'">
+        </UButton>
+        <UTag :variant="store.data?.running ? 'success' : 'error'">
           {{ store.data?.running ? "运行中" : "已停止" }}
-        </span>
+        </UTag>
       </div>
     </Teleport>
 
-    <div v-if="store.error" class="notice-error">
-      {{ store.error }}
-    </div>
+    <UAlert v-if="store.error" type="error" :message="store.error" />
 
     <div v-if="store.loading" class="empty-state">
       正在加载网关概览...
@@ -35,11 +27,11 @@
 
       <div class="section-grid lg:grid-cols-2">
         <PanelBlock title="上游就绪状态">
-          <div class="divide-y divide-[#f0f0f0]">
+          <div class="divide-y divide-[var(--ued-color-divider)]">
             <div v-for="upstream in store.data?.upstreams || []" :key="upstream.protocol" class="grid gap-2 py-2.5 grid-cols-[1fr_auto] items-center">
               <div class="min-w-0">
-                <p class="text-sm font-medium text-[#262626]">{{ upstream.protocol }}</p>
-                <p class="mt-0.5 truncate text-xs text-[#8c8c8c]">{{ upstream.base_url || "-" }}</p>
+                <p class="text-sm font-medium text-strong">{{ upstream.protocol }}</p>
+                <p class="mt-0.5 truncate text-xs text-muted">{{ upstream.base_url || "-" }}</p>
               </div>
               <UTag :variant="upstream.configured ? 'success' : 'warning'" size="xs">
                 {{ upstream.configured ? "已配置" : "缺少密钥" }}
@@ -69,26 +61,26 @@
 
       <div class="section-grid lg:grid-cols-1">
         <PanelBlock title="供应商健康汇总">
-          <div class="divide-y divide-[#f0f0f0]">
+          <div class="divide-y divide-[var(--ued-color-divider)]">
             <div class="grid gap-2 py-2.5 grid-cols-[auto_1fr] items-center">
               <UTag variant="success" size="xs">可达</UTag>
               <div class="flex items-baseline gap-2">
-                <p class="text-lg font-semibold text-[#262626]">{{ store.reachableSupplierCount }}</p>
-                <p class="text-xs text-[#8c8c8c]">最近检查结果正常的供应商数量</p>
+                <p class="text-lg font-semibold text-strong">{{ store.reachableSupplierCount }}</p>
+                <p class="text-xs text-muted">最近检查结果正常的供应商数量</p>
               </div>
             </div>
             <div class="grid gap-2 py-2.5 grid-cols-[auto_1fr] items-center">
               <UTag variant="warning" size="xs">关注</UTag>
               <div class="flex items-baseline gap-2">
-                <p class="text-lg font-semibold text-[#262626]">{{ store.warningSupplierCount }}</p>
-                <p class="text-xs text-[#8c8c8c]">返回 warning 或 unreachable 的供应商数量</p>
+                <p class="text-lg font-semibold text-strong">{{ store.warningSupplierCount }}</p>
+                <p class="text-xs text-muted">返回 warning 或 unreachable 的供应商数量</p>
               </div>
             </div>
             <div class="grid gap-2 py-2.5 grid-cols-[auto_1fr] items-center">
               <UTag variant="info" size="xs">未检查</UTag>
               <div class="flex items-baseline gap-2">
-                <p class="text-lg font-semibold text-[#262626]">{{ Math.max(store.supplierCount - store.checkedSupplierCount, 0) }}</p>
-                <p class="text-xs text-[#8c8c8c]">尚未执行健康检查的供应商数量</p>
+                <p class="text-lg font-semibold text-strong">{{ Math.max(store.supplierCount - store.checkedSupplierCount, 0) }}</p>
+                <p class="text-xs text-muted">尚未执行健康检查的供应商数量</p>
               </div>
             </div>
           </div>
@@ -103,8 +95,9 @@ import { onMounted } from "vue";
 import { useOverviewStore } from "../stores/overview";
 
 import PanelBlock from "../components/PanelBlock.vue";
-import RouteList from "../components/RouteList.vue";
 import StatCard from "../components/StatCard.vue";
+import UAlert from "../components/ued/UAlert.vue";
+import UButton from "../components/ued/UButton.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
 

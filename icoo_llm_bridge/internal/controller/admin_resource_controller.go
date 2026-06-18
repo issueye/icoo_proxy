@@ -47,6 +47,11 @@ func NewProviderModelController(service service.ProviderModelService) *ProviderM
 	return &ProviderModelController{service: service}
 }
 
+func (c *ProviderModelController) Fetch(ctx *gin.Context) {
+	items, err := c.service.FetchModels(ctx.Request.Context(), ctx.Param("provider_id"))
+	writeResult(ctx, items, err)
+}
+
 func (c *ProviderModelController) List(ctx *gin.Context) {
 	items, err := c.service.ListByProvider(ctx.Request.Context(), ctx.Param("provider_id"))
 	writePagedResult(ctx, items, err)
