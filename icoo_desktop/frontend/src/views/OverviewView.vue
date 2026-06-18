@@ -11,8 +11,6 @@
       </div>
     </Teleport>
 
-    <UAlert v-if="store.error" type="error" :message="store.error" />
-
     <div v-if="store.loading" class="empty-state">
       正在加载网关概览...
     </div>
@@ -28,9 +26,9 @@
       <div class="section-grid lg:grid-cols-2">
         <PanelBlock title="上游就绪状态">
           <div class="divide-y divide-[var(--ued-color-divider)]">
-            <div v-for="upstream in store.data?.upstreams || []" :key="upstream.protocol" class="grid gap-2 py-2.5 grid-cols-[1fr_auto] items-center">
+            <div v-for="upstream in store.data?.upstreams || []" :key="upstream.protocol" class="grid gap-2 py-2 grid-cols-[1fr_auto] items-center">
               <div class="min-w-0">
-                <p class="text-sm font-medium text-strong">{{ upstream.protocol }}</p>
+                <p class="text-[13px] font-medium text-strong">{{ upstream.protocol }}</p>
                 <p class="mt-0.5 truncate text-xs text-muted">{{ upstream.base_url || "-" }}</p>
               </div>
               <UTag :variant="upstream.configured ? 'success' : 'warning'" size="xs">
@@ -38,7 +36,7 @@
               </UTag>
             </div>
           </div>
-          <div class="mt-3 flex flex-wrap gap-1.5">
+          <div class="mt-2.5 flex flex-wrap gap-1.5">
             <UTag
               v-for="(value, key) in store.checks"
               :key="key"
@@ -62,24 +60,24 @@
       <div class="section-grid lg:grid-cols-1">
         <PanelBlock title="供应商健康汇总">
           <div class="divide-y divide-[var(--ued-color-divider)]">
-            <div class="grid gap-2 py-2.5 grid-cols-[auto_1fr] items-center">
+            <div class="grid gap-2 py-2 grid-cols-[auto_1fr] items-center">
               <UTag variant="success" size="xs">可达</UTag>
               <div class="flex items-baseline gap-2">
-                <p class="text-lg font-semibold text-strong">{{ store.reachableSupplierCount }}</p>
+                <p class="text-base font-semibold text-strong">{{ store.reachableSupplierCount }}</p>
                 <p class="text-xs text-muted">最近检查结果正常的供应商数量</p>
               </div>
             </div>
-            <div class="grid gap-2 py-2.5 grid-cols-[auto_1fr] items-center">
+            <div class="grid gap-2 py-2 grid-cols-[auto_1fr] items-center">
               <UTag variant="warning" size="xs">关注</UTag>
               <div class="flex items-baseline gap-2">
-                <p class="text-lg font-semibold text-strong">{{ store.warningSupplierCount }}</p>
+                <p class="text-base font-semibold text-strong">{{ store.warningSupplierCount }}</p>
                 <p class="text-xs text-muted">返回 warning 或 unreachable 的供应商数量</p>
               </div>
             </div>
-            <div class="grid gap-2 py-2.5 grid-cols-[auto_1fr] items-center">
+            <div class="grid gap-2 py-2 grid-cols-[auto_1fr] items-center">
               <UTag variant="info" size="xs">未检查</UTag>
               <div class="flex items-baseline gap-2">
-                <p class="text-lg font-semibold text-strong">{{ Math.max(store.supplierCount - store.checkedSupplierCount, 0) }}</p>
+                <p class="text-base font-semibold text-strong">{{ Math.max(store.supplierCount - store.checkedSupplierCount, 0) }}</p>
                 <p class="text-xs text-muted">尚未执行健康检查的供应商数量</p>
               </div>
             </div>
@@ -93,15 +91,16 @@
 <script setup>
 import { onMounted } from "vue";
 import { useOverviewStore } from "../stores/overview";
+import { useStoreError } from "../composables/useStoreError";
 
 import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
-import UAlert from "../components/ued/UAlert.vue";
 import UButton from "../components/ued/UButton.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
 
 const store = useOverviewStore();
+useStoreError(store);
 
 onMounted(() => {
   store.load();

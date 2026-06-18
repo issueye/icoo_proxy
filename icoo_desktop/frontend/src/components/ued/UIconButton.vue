@@ -51,7 +51,7 @@
 
 <script setup>
 import { computed } from "vue";
-import { normalizeVariant, normalizeSize, ICON_BUTTON_VARIANTS } from "./variant";
+import { normalizeVariant, normalizeSize, ICON_BUTTON_VARIANTS, CONTROL_SIZES } from "./variant";
 
 defineEmits(["click"]);
 
@@ -93,7 +93,7 @@ const normalizedVariant = computed(() =>
 );
 
 const normalizedSize = computed(() =>
-  normalizeSize(props.size, "sm", ["xs", "sm", "md"]),
+  normalizeSize(props.size, "sm", CONTROL_SIZES),
 );
 </script>
 
@@ -107,34 +107,39 @@ const normalizedSize = computed(() =>
   border-radius: var(--ued-radius-sm);
   background: transparent;
   color: var(--ued-color-text-muted);
-  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
 
-.ued-icon-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
+/* Flat: no lift on hover/active — feedback comes from bg/border color only. */
+.ued-icon-button:hover:not(:disabled),
 .ued-icon-button:active:not(:disabled) {
-  transform: translateY(0);
+  transform: none;
 }
 
 .ued-icon-button:disabled {
   opacity: 0.55;
 }
 
+/* Sizes track the shared --ued-size-* tokens so UIconButton stays in sync
+   with UButton when uiPrefs switches the global button size. */
 .ued-icon-button--xs {
-  width: 26px;
-  height: 26px;
+  width: var(--ued-size-xs);
+  height: var(--ued-size-xs);
 }
 
 .ued-icon-button--sm {
-  width: 30px;
-  height: 30px;
+  width: var(--ued-size-sm);
+  height: var(--ued-size-sm);
 }
 
 .ued-icon-button--md {
-  width: 34px;
-  height: 34px;
+  width: var(--ued-size-md);
+  height: var(--ued-size-md);
+}
+
+.ued-icon-button--lg {
+  width: var(--ued-size-lg);
+  height: var(--ued-size-lg);
 }
 
 .ued-icon-button__icon,

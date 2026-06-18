@@ -61,27 +61,27 @@ const themes = {
 const buttonSizes = {
   xs: {
     "--ued-size-xs": "20px",
-    "--ued-size-sm": "24px",
-    "--ued-size-md": "28px",
-    "--ued-size-lg": "36px",
+    "--ued-size-sm": "22px",
+    "--ued-size-md": "24px",
+    "--ued-size-lg": "30px",
   },
   sm: {
-    "--ued-size-xs": "22px",
-    "--ued-size-sm": "26px",
-    "--ued-size-md": "30px",
-    "--ued-size-lg": "38px",
+    "--ued-size-xs": "21px",
+    "--ued-size-sm": "24px",
+    "--ued-size-md": "26px",
+    "--ued-size-lg": "32px",
   },
   md: {
+    "--ued-size-xs": "22px",
+    "--ued-size-sm": "26px",
+    "--ued-size-md": "28px",
+    "--ued-size-lg": "34px",
+  },
+  lg: {
     "--ued-size-xs": "24px",
     "--ued-size-sm": "28px",
     "--ued-size-md": "32px",
     "--ued-size-lg": "40px",
-  },
-  lg: {
-    "--ued-size-xs": "28px",
-    "--ued-size-sm": "32px",
-    "--ued-size-md": "36px",
-    "--ued-size-lg": "44px",
   },
 };
 

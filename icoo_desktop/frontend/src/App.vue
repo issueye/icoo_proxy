@@ -177,7 +177,7 @@ const navGroups = computed(() => [
   {
     name: "配置",
     items: [
-      { to: "/suppliers", label: "Provider", description: "", icon: "supplier" },
+      { to: "/suppliers", label: "供应商", description: "", icon: "supplier" },
       { to: "/routing-rules", label: "规则设置", description: "", icon: "rules" },
       { to: "/model-aliases", label: "模型路由", description: "", icon: "model" },
       { to: "/endpoints", label: "端点", description: "", icon: "endpoint" },

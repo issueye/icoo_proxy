@@ -13,6 +13,7 @@ type Provider struct {
 	Protocol     constants.Protocol `gorm:"column:protocol;comment:协议"`
 	Vendor       constants.Vendor   `gorm:"column:vendor;comment:供应商厂商类型"`
 	BaseURL      string             `gorm:"column:base_url;comment:基础URL"`
+	ModelsURL    string             `gorm:"column:models_url;comment:模型列表地址(留空则用 BaseURL+/v1/models)"`
 	APIKeyCipher string             `gorm:"column:api_key_cipher;comment:API密钥加密"`
 	OnlyStream   bool               `gorm:"column:only_stream;comment:是否仅支持流式输出"`
 	UserAgent    string             `gorm:"column:user_agent;comment:用户代理"`

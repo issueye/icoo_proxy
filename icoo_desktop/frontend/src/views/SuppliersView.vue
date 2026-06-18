@@ -6,8 +6,6 @@
       </div>
     </Teleport>
 
-    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
-
     <div class="section-grid grid-cols-1 md:grid-cols-3">
       <StatCard icon="server" label="供应商总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
@@ -99,7 +97,7 @@
       </template>
     </UTable>
 
-    <UModal v-model:open="supplierModalOpen" :title="store.form.id ? '编辑 Provider' : '新建 Provider'" width="640px"
+    <UModal v-model:open="supplierModalOpen" :title="store.form.id ? '编辑供应商' : '新建供应商'" width="640px"
       @close="store.resetForm">
       <form id="supplier-form" class="space-y-3" @submit.prevent="submitSupplier">
         <div class="provider-form-grid">
@@ -113,16 +111,18 @@
 
         <UInput v-model="store.form.base_url" label="基础地址" placeholder="https://api.openai.com" />
 
+        <UInput v-model="store.form.models_url" label="模型列表地址" placeholder="留空则用 基础地址 + /v1/models" />
+
         <UInput v-model="store.form.api_key" label="API Key" placeholder="编辑时留空则保留已有密钥" />
 
         <UInput v-model="store.form.user_agent" label="User-Agent" placeholder="留空则使用默认上游 UA" />
 
         <UInput v-model="store.form.description" label="描述" textarea placeholder="填写该供应商配置的用途说明" />
 
-        <UAlert type="info" message="模型已拆分为独立资源。保存 Provider 后，请在列表中点击“管理模型”添加候选模型。" />
+        <UAlert type="info" message="模型已拆分为独立资源。保存供应商后，请在列表中点击“管理模型”添加候选模型；填写“模型列表地址”可自定义从上游获取模型时使用的接口。" />
 
         <div class="grid gap-3 md:grid-cols-2">
-          <USwitch v-model="store.form.enabled" label="启用该 Provider" />
+          <USwitch v-model="store.form.enabled" label="启用该供应商" />
           <USwitch v-model="store.form.only_stream" label="仅流式上游" />
         </div>
       </form>
@@ -130,7 +130,7 @@
         <div class="flex justify-end gap-2">
           <UButton type="button" variant="secondary" @click="closeSupplierModal">取消</UButton>
           <UButton form="supplier-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
-            {{ store.saving ? "保存中..." : store.form.id ? "更新 Provider" : "创建 Provider" }}
+            {{ store.saving ? "保存中..." : store.form.id ? "更新供应商" : "创建供应商" }}
           </UButton>
         </div>
       </template>
@@ -183,7 +183,7 @@
       </template>
     </UModal>
 
-    <UConfirmDialog v-model:open="confirmState.open" title="确认删除 Provider" :message="confirmState.message"
+    <UConfirmDialog v-model:open="confirmState.open" title="确认删除供应商" :message="confirmState.message"
       description="删除后相关模型和路由策略可能需要重新调整。" confirm-text="确认删除" cancel-text="取消"
       :loading="Boolean(store.deleting)" danger @confirm="confirmDelete" />
   </section>
@@ -192,6 +192,7 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
+import { useStoreError } from "../composables/useStoreError";
 
 import StatCard from "../components/StatCard.vue";
 import UAlert from "../components/ued/UAlert.vue";
@@ -209,6 +210,7 @@ import { message } from "../components/ued/message";
 const DEFAULT_MODEL_MAX_TOKENS = 32768;
 
 const store = useSuppliersStore();
+useStoreError(store);
 const supplierModalOpen = ref(false);
 const modelModalOpen = ref(false);
 const queryForm = reactive({
@@ -284,7 +286,7 @@ function healthTone(record) {
 function openDeleteConfirm(item) {
   confirmState.open = true;
   confirmState.id = item.id;
-  confirmState.message = `确定要删除 Provider "${item.name}" 吗？`;
+  confirmState.message = `确定要删除供应商 "${item.name}" 吗？`;
 }
 
 async function submitQuery() {
@@ -348,7 +350,7 @@ async function submitSupplier() {
   await store.save();
   if (!store.error) {
     supplierModalOpen.value = false;
-    message.success(isEdit ? "Provider 已更新。" : "Provider 已新增。请继续配置模型。");
+    message.success(isEdit ? "供应商已更新。" : "供应商已新增。请继续配置模型。");
   }
 }
 
@@ -369,7 +371,7 @@ async function confirmDelete() {
     confirmState.open = false;
     confirmState.id = "";
     confirmState.message = "";
-    message.success("Provider 已删除。");
+    message.success("供应商已删除。");
   }
 }
 

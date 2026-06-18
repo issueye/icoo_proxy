@@ -22,8 +22,6 @@
       </div>
     </Teleport>
 
-    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
-
     <div class="traffic-stats">
       <StatCard icon="activity" label="最近请求数" :value="String(store.totalRequests)" tone="info" />
       <StatCard icon="check" label="成功请求" :value="String(store.successCount)" tone="success" />
@@ -118,9 +116,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, watch } from "vue";
 import { useTrafficStore } from "../stores/traffic";
+import { useStoreError } from "../composables/useStoreError";
 
 import StatCard from "../components/StatCard.vue";
-import UAlert from "../components/ued/UAlert.vue";
 import UButton from "../components/ued/UButton.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import USelect from "../components/ued/USelect.vue";
@@ -130,6 +128,7 @@ import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
 
 const store = useTrafficStore();
+useStoreError(store);
 const confirmState = reactive({
   open: false,
 });
@@ -264,7 +263,7 @@ onBeforeUnmount(() => {
 .traffic-stats {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .traffic-layout {
@@ -282,10 +281,10 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 24px;
-  padding: 0 10px;
+  height: 22px;
+  padding: 0 8px;
   border-radius: var(--ued-radius-pill);
-  font-size: 12px;
+  font-size: var(--ued-font-size-sm);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -301,13 +300,13 @@ onBeforeUnmount(() => {
 }
 
 .traffic-header-badge {
-  border: 1px solid var(--ued-color-primary-soft);
+  border: 1px solid color-mix(in srgb, var(--ued-color-primary) 30%, transparent);
   background: var(--ued-color-primary-soft);
   color: var(--ued-color-primary);
 }
 
 .traffic-header-note {
-  font-size: 12px;
+  font-size: var(--ued-font-size-sm);
   color: var(--ued-color-text-muted);
   white-space: nowrap;
 }
@@ -325,7 +324,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -334,7 +333,7 @@ onBeforeUnmount(() => {
 }
 
 .traffic-query-form__field--protocol {
-  width: 180px;
+  width: 170px;
 }
 
 .traffic-query-form__field--protocol :deep(.ued-field) {
@@ -343,7 +342,7 @@ onBeforeUnmount(() => {
 }
 
 .traffic-query-form__field--protocol :deep(.ued-select__control) {
-  min-width: 160px;
+  min-width: 150px;
 }
 
 .traffic-query-form__meta {
@@ -357,25 +356,26 @@ onBeforeUnmount(() => {
 .traffic-query-form__chip {
   display: inline-flex;
   align-items: center;
-  height: 24px;
-  padding: 0 10px;
-  border: 1px solid var(--ued-color-primary-soft);
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--ued-color-primary) 30%, transparent);
   border-radius: var(--ued-radius-pill);
   background: var(--ued-color-primary-soft);
   color: var(--ued-color-primary);
-  font-size: 12px;
+  font-size: var(--ued-font-size-sm);
   font-weight: 600;
   white-space: nowrap;
 }
 
+/* Flat token cell — no gradient, hairline border + muted surface. */
 .token-cell {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   min-width: 92px;
-  padding: 6px 8px;
-  border: 1px solid var(--ued-color-primary-soft);
-  border-radius: var(--ued-radius-token);
-  background: linear-gradient(180deg, var(--ued-color-bg-card) 0%, var(--ued-color-primary-soft) 100%);
+  padding: 5px 7px;
+  border: 1px solid var(--ued-color-border);
+  border-radius: var(--ued-radius-md);
+  background: var(--ued-color-muted);
 }
 
 .token-cell__row {
@@ -383,13 +383,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--ued-font-size-sm);
   line-height: 1.2;
 }
 
 .token-cell__row--total {
-  padding-top: 4px;
-  border-top: 1px dashed var(--ued-color-primary-soft);
+  padding-top: 3px;
+  border-top: 1px solid var(--ued-color-divider);
 }
 
 .token-cell__label {

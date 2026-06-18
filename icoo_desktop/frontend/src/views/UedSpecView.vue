@@ -510,40 +510,6 @@ const advancedRows = [
 </script>
 
 <style scoped>
-.table-query-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.table-query-form__field {
-  min-width: 0;
-}
-
-.table-query-form__field--keyword {
-  width: min(240px, 100%);
-}
-
-.table-query-form__field--select {
-  width: 160px;
-}
-
-.table-query-form__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-@media (max-width: 760px) {
-  .table-query-form {
-    align-items: stretch;
-  }
-
-  .table-query-form__field--keyword,
-  .table-query-form__field--select,
-  .table-query-form__actions {
-    width: 100%;
-  }
-}
+/* Query toolbar styling is centralized in main.css (.table-query-form*).
+   No local overrides here to avoid conflicting width rules. */
 </style>

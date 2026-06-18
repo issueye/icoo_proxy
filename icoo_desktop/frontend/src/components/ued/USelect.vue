@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 8px;
+  padding: 6px;
   border-bottom: 1px solid var(--ued-color-divider);
   background: var(--ued-color-bg-card);
 }
@@ -391,7 +391,7 @@ onBeforeUnmount(() => {
 .ued-select__search-input {
   width: 100%;
   height: var(--ued-size-sm);
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--ued-color-input);
   border-radius: var(--ued-radius-md);
   background: var(--ued-color-bg-card);
@@ -402,7 +402,7 @@ onBeforeUnmount(() => {
 }
 
 .ued-select__search-input:hover {
-  border-color: color-mix(in srgb, var(--ued-color-primary) 40%, transparent);
+  border-color: var(--ued-color-text-muted);
 }
 
 .ued-select__search-input:focus {

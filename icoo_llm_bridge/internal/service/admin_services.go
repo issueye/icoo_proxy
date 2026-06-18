@@ -198,6 +198,7 @@ func (s *providerService) Upsert(ctx context.Context, input ProviderUpsertInput)
 		Protocol:     input.Protocol,
 		Vendor:       input.Vendor,
 		BaseURL:      strings.TrimSpace(input.BaseURL),
+		ModelsURL:    strings.TrimSpace(input.ModelsURL),
 		APIKeyCipher: strings.TrimSpace(input.APIKey),
 		OnlyStream:   input.OnlyStream,
 		UserAgent:    strings.TrimSpace(input.UserAgent),
@@ -307,12 +308,18 @@ func (s *providerModelService) FetchModels(ctx context.Context, providerID strin
 		return []FetchedModel{}, nil
 	}
 
-	baseURL := strings.TrimRight(provider.BaseURL, "/")
-	if baseURL == "" {
-		baseURL = "https://api.openai.com"
+	// Prefer a manually configured models endpoint when provided; otherwise
+	// fall back to the OpenAI-compatible {base_url}/v1/models convention.
+	modelsURL := strings.TrimSpace(provider.ModelsURL)
+	if modelsURL == "" {
+		baseURL := strings.TrimRight(provider.BaseURL, "/")
+		if baseURL == "" {
+			baseURL = "https://api.openai.com"
+		}
+		modelsURL = baseURL + "/v1/models"
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1/models", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}

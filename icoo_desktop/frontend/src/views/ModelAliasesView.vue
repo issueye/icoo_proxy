@@ -1,73 +1,64 @@
 <template>
-  <section class="content-panel">
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">模型别名管理</h2>
-        <p class="page-description">为常用模型名称配置上游协议与目标模型，关联供应商后自动继承协议。</p>
+  <section class="page-section">
+    <Teleport to="#app-topbar-actions">
+      <div class="app-topbar-actions__group">
+        <UButton variant="primary" @click="openCreate">新建别名</UButton>
       </div>
-      <UButton variant="primary" @click="openCreate">
-        <template #icon>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-        </template>
-        新建模型别名
-      </UButton>
-    </div>
+    </Teleport>
 
     <div class="section-grid grid-cols-2 lg:grid-cols-4">
-      <StatCard icon="💎" label="别名总数" :value="store.items.length" />
-      <StatCard icon="✓" label="已启用" :value="store.enabledCount" />
-      <StatCard icon="🏢" label="关联供应商" :value="store.supplierCount" />
-      <StatCard icon="📐" label="常用协议" value="Anthropic / OpenAI" />
+      <StatCard icon="model" label="别名总数" :value="String(store.items.length)" tone="info" />
+      <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
+      <StatCard icon="supplier" label="关联供应商" :value="String(store.supplierCount)" tone="info" />
+      <StatCard icon="layers" label="常用协议" value="Anthropic / OpenAI" tone="info" />
     </div>
 
     <div class="section-grid">
-      <PanelBlock title="模型别名列表">
-        <UTable
-          :columns="tableColumns"
-          :rows="store.items"
-          row-key="id"
-          :loading="store.loading"
-          loading-text="正在加载别名…"
-          size="md"
-          table-class="model-alias-table"
-        >
-          <template #cell-name="{ row }">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-strong">{{ row.name }}</span>
-              <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
-                {{ row.enabled ? "启用" : "停用" }}
-              </UTag>
-            </div>
-            <p class="mt-0.5 text-[11px] text-muted">{{ formatTime(row.updated_at) }}</p>
-          </template>
+      <UTable
+        :columns="tableColumns"
+        :rows="store.items"
+        row-key="id"
+        :loading="store.loading"
+        loading-text="正在加载别名…"
+        size="md"
+        table-class="model-alias-table"
+      >
+        <template #cell-name="{ row }">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-strong">{{ row.name }}</span>
+            <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
+              {{ row.enabled ? "启用" : "停用" }}
+            </UTag>
+          </div>
+          <p class="mt-0.5 text-[11px] text-muted">{{ formatTime(row.updated_at) }}</p>
+        </template>
 
-          <template #cell-supplier="{ row }">
-            {{ row.supplier_name || "未关联" }}
-          </template>
+        <template #cell-supplier="{ row }">
+          {{ row.supplier_name || "未关联" }}
+        </template>
 
-          <template #cell-protocol="{ row }">
-            {{ row.upstream_protocol || "—" }}
-          </template>
+        <template #cell-protocol="{ row }">
+          {{ row.upstream_protocol || "—" }}
+        </template>
 
-          <template #cell-model="{ row }">
-            <span class="break-all text-sm text-secondary">{{ row.model }}</span>
-          </template>
+        <template #cell-model="{ row }">
+          <span class="break-all text-sm text-secondary">{{ row.model }}</span>
+        </template>
 
-          <template #actions="{ row }">
-            <div class="table-actions">
-              <UIconButton icon="edit" label="编辑别名" @click="openEdit(row)" />
-              <UIconButton
-                icon="delete"
-                label="删除别名"
-                variant="error"
-                :loading="store.deleting === row.id"
-                :disabled="store.deleting === row.id"
-                @click="removeAlias(row.id)"
-              />
-            </div>
-          </template>
-        </UTable>
-      </PanelBlock>
+        <template #actions="{ row }">
+          <div class="table-actions">
+            <UIconButton icon="edit" label="编辑别名" @click="openEdit(row)" />
+            <UIconButton
+              icon="delete"
+              label="删除别名"
+              variant="error"
+              :loading="store.deleting === row.id"
+              :disabled="store.deleting === row.id"
+              @click="removeAlias(row.id)"
+            />
+          </div>
+        </template>
+      </UTable>
     </div>
 
     <UModal
@@ -141,6 +132,7 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useModelAliasesStore } from "../stores/modelAliases";
+import { useStoreError } from "../composables/useStoreError";
 
 import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
@@ -155,6 +147,7 @@ import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
 
 const store = useModelAliasesStore();
+useStoreError(store);
 const modalOpen = ref(false);
 
 const tableColumns = [

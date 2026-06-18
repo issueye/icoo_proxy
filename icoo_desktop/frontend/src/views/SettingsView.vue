@@ -21,9 +21,6 @@
       </div>
     </Teleport>
 
-    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
-    <UAlert v-if="store.success" type="success">{{ store.success }}</UAlert>
-
     <PanelBlock title="外观设置">
       <div class="divide-y divide-[var(--ued-color-divider)]">
         <div class="py-3">
@@ -103,15 +100,16 @@
 import { onMounted } from "vue";
 import PanelBlock from "../components/PanelBlock.vue";
 import StatCard from "../components/StatCard.vue";
-import UAlert from "../components/ued/UAlert.vue";
 import UButton from "../components/ued/UButton.vue";
 import UInput from "../components/ued/UInput.vue";
 import USwitch from "../components/ued/USwitch.vue";
 import { message } from "../components/ued/message";
 import { useSettingsStore } from "../stores/settings";
 import { useUiPrefsStore } from "../stores/uiPrefs";
+import { useStoreError } from "../composables/useStoreError";
 
 const store = useSettingsStore();
+useStoreError(store);
 const uiPrefs = useUiPrefsStore();
 
 async function submit() {

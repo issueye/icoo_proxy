@@ -9,8 +9,6 @@
       </div>
     </Teleport>
 
-    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
-
     <div class="section-grid grid-cols-3">
       <StatCard icon="key" label="Key 总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
@@ -93,7 +91,6 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
 import StatCard from "../components/StatCard.vue";
-import UAlert from "../components/ued/UAlert.vue";
 import UButton from "../components/ued/UButton.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
@@ -105,8 +102,10 @@ import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
 import { useAuthKeysStore } from "../stores/authKeys";
+import { useStoreError } from "../composables/useStoreError";
 
 const store = useAuthKeysStore();
+useStoreError(store);
 const modalOpen = ref(false);
 const queryForm = reactive({
   keyword: "",
@@ -186,11 +185,8 @@ async function copyKey(item) {
   const secret = await store.copySecret(item.id);
   if (secret) {
     message.success("授权 Key 已复制。");
-    return;
   }
-  if (store.error) {
-    message.error(store.error);
-  }
+  // Errors are surfaced globally via useStoreError(store).
 }
 
 function generateSecret() {

@@ -3,71 +3,78 @@
 @tailwind utilities;
 
 :root {
-  --ued-color-background: #f5f7fb;
-  --ued-color-foreground: #172033;
+  /* Flat, neutral desktop console palette — VS Code / Linear direction.
+     Backgrounds are neutral grey (no blue tint), borders are cool hairlines,
+     and shadows are minimal so surfaces are defined by 1px borders, not depth. */
+  --ued-color-background: #f3f4f6;
+  --ued-color-foreground: #1f2329;
   --ued-color-card: #ffffff;
-  --ued-color-card-foreground: #172033;
-  --ued-color-primary: #1677ff;
-  --ued-color-primary-hover: #4096ff;
-  --ued-color-primary-active: #0958d9;
+  --ued-color-card-foreground: #1f2329;
+  --ued-color-primary: #2563eb;
+  --ued-color-primary-hover: #3b6ef0;
+  --ued-color-primary-active: #1d4ed8;
   --ued-color-primary-foreground: #ffffff;
-  --ued-color-primary-soft: #e6f4ff;
-  --ued-color-secondary: #eef2f7;
-  --ued-color-secondary-foreground: #172033;
-  --ued-color-muted: #f8fafc;
-  --ued-color-muted-foreground: #64748b;
-  --ued-color-accent: #e8fbff;
-  --ued-color-accent-foreground: #087085;
-  --ued-color-destructive: #d92d20;
+  --ued-color-primary-soft: #eaf1ff;
+  --ued-color-secondary: #eef0f3;
+  --ued-color-secondary-foreground: #1f2329;
+  --ued-color-muted: #f4f5f7;
+  --ued-color-muted-foreground: #6b7280;
+  --ued-color-accent: #eef4ff;
+  --ued-color-accent-foreground: #2563eb;
+  --ued-color-destructive: #dc2626;
   --ued-color-destructive-foreground: #ffffff;
-  --ued-color-border: #d9e1ec;
-  --ued-color-border-light: #e8edf4;
-  --ued-color-input: #c9d4e3;
+  --ued-color-border: #d4d7dc;
+  --ued-color-border-light: #e4e6ea;
+  --ued-color-input: #c4c8cf;
   --ued-color-ring: var(--ued-color-primary);
-  --ued-color-success: #16835c;
-  --ued-color-success-soft: #eaf8f1;
-  --ued-color-warning: #b76e00;
-  --ued-color-warning-soft: #fff7e8;
-  --ued-color-info: #087085;
-  --ued-color-info-soft: #e8fbff;
-  --ued-color-error-soft: #fff0ee;
-  --ued-color-text: #172033;
-  --ued-color-text-secondary: #475569;
-  --ued-color-text-muted: #6b7a90;
-  --ued-color-divider: #e6ebf2;
-  --ued-color-bg-page: #edf1f7;
-  --ued-color-bg-shell: #e8edf5;
-  --ued-color-titlebar: #101827;
-  --ued-color-titlebar-border: #263346;
-  --ued-color-titlebar-caption: #9aa8bc;
+  --ued-color-success: #16a34a;
+  --ued-color-success-soft: #ecfaf0;
+  --ued-color-warning: #c2790a;
+  --ued-color-warning-soft: #fdf6e8;
+  --ued-color-info: #2563eb;
+  --ued-color-info-soft: #eaf1ff;
+  --ued-color-error-soft: #fdf0ef;
+  --ued-color-text: #1f2329;
+  --ued-color-text-secondary: #4b5563;
+  --ued-color-text-muted: #6b7280;
+  --ued-color-divider: #ebecef;
+  --ued-color-bg-page: #f3f4f6;
+  --ued-color-bg-shell: #eceef1;
+  --ued-color-titlebar: #1e1e1e;
+  --ued-color-titlebar-border: #2a2a2a;
+  --ued-color-titlebar-caption: #9a9a9a;
   --ued-color-bg-card: #ffffff;
-  --ued-color-mask: rgba(10, 17, 32, 0.5);
-  --ued-color-sidebar: #f7f9fc;
-  --ued-color-sidebar-active: #edf3ff;
+  --ued-color-mask: rgba(20, 22, 26, 0.45);
+  --ued-color-sidebar: #fafbfc;
+  --ued-color-sidebar-active: #eef4ff;
   --ued-color-tooltip-bg: var(--ued-color-text);
   --ued-color-tooltip-fg: var(--ued-color-bg-card);
-  --ued-shadow-card: 0 1px 2px rgba(20, 31, 50, 0.06), 0 8px 24px rgba(20, 31, 50, 0.04);
-  --ued-shadow-card-hover: 0 12px 28px rgba(20, 31, 50, 0.1);
-  --ued-shadow-popup: 0 18px 44px rgba(20, 31, 50, 0.18), 0 4px 12px rgba(20, 31, 50, 0.08);
-  --ued-radius-sm: 4px;
-  --ued-radius-md: 6px;
-  --ued-radius-lg: 8px;
-  --ued-radius-token: 10px;
-  --ued-radius-card: 12px;
+  /* Flat: a single 1px hairline shadow instead of layered elevation. */
+  --ued-shadow-card: 0 1px 1px rgba(20, 22, 26, 0.04);
+  --ued-shadow-card-hover: 0 0 0 1px color-mix(in srgb, var(--ued-color-primary) 35%, transparent);
+  --ued-shadow-popup: 0 4px 12px rgba(20, 22, 26, 0.12), 0 1px 2px rgba(20, 22, 26, 0.08);
+  /* Compact radii — desktop controls stay tight (3–6px), no 12px cards. */
+  --ued-radius-sm: 3px;
+  --ued-radius-md: 4px;
+  --ued-radius-lg: 6px;
+  --ued-radius-token: 6px;
+  --ued-radius-card: 6px;
   --ued-radius-pill: 9999px;
   --ued-font-size-xs: 11px;
   --ued-font-size-sm: 12px;
-  --ued-font-size-md: 13px;
-  --ued-font-size-base: 14px;
-  --ued-font-size-lg: 18px;
-  --ued-font-size-title: 20px;
+  --ued-font-size-md: 12px;
+  --ued-font-size-base: 13px;
+  --ued-font-size-lg: 16px;
+  --ued-font-size-title: 18px;
   /* Focus rings derive from primary so theme switches (uiPrefs) follow automatically. */
   --ued-color-focus-ring: color-mix(in srgb, var(--ued-color-primary) 45%, transparent);
-  --ued-color-focus-ring-soft: color-mix(in srgb, var(--ued-color-primary) 12%, transparent);
-  --ued-size-xs: 24px;
-  --ued-size-sm: 28px;
-  --ued-size-md: 32px;
-  --ued-size-lg: 40px;
+  --ued-color-focus-ring-soft: color-mix(in srgb, var(--ued-color-primary) 14%, transparent);
+  /* Compact control heights (default). uiPrefs applies buttonSize overrides at runtime;
+     keep these in sync with buttonSizes.md in uiPrefs.js so reloads stay compact. */
+  --ued-size-xs: 22px;
+  --ued-size-sm: 26px;
+  --ued-size-md: 28px;
+  --ued-size-lg: 34px;
 }
 
 html,
@@ -83,7 +90,7 @@ body {
   background: var(--ued-color-bg-page);
   color: var(--ued-color-text);
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
-  font-size: 14px;
+  font-size: var(--ued-font-size-base);
 }
 
 button,
@@ -117,7 +124,7 @@ button:disabled {
   }
 
   .app-titlebar {
-    @apply z-30 flex h-[30px] shrink-0 items-center justify-between border-b border-slate-300 bg-slate-950 pl-2 text-slate-100;
+    @apply z-30 flex h-[28px] shrink-0 items-center justify-between border-b border-slate-700 bg-slate-950 pl-2 text-slate-100;
     --wails-draggable: drag;
   }
 
@@ -147,7 +154,7 @@ button:disabled {
   }
 
   .app-service-info-btn {
-    @apply inline-flex h-6 items-center gap-1.5 rounded border border-slate-700 bg-slate-900 px-2 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white;
+    @apply inline-flex h-5 items-center gap-1.5 rounded border border-slate-700 bg-slate-900 px-2 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-white;
   }
 
   .app-window-controls {
@@ -156,7 +163,7 @@ button:disabled {
   }
 
   .app-window-control {
-    @apply inline-flex h-full w-11 items-center justify-center border-0 bg-transparent text-slate-300 transition hover:bg-slate-800 hover:text-white;
+    @apply inline-flex h-full w-10 items-center justify-center border-0 bg-transparent text-slate-300 transition hover:bg-slate-800 hover:text-white;
   }
 
   .app-window-control--close {
@@ -168,19 +175,19 @@ button:disabled {
   }
 
   .app-sidebar {
-    @apply flex h-full w-[180px] shrink-0 flex-col border-r border-slate-300 bg-slate-50 transition-all;
+    @apply flex h-full w-[168px] shrink-0 flex-col border-r border-slate-300 bg-slate-50 transition-all;
   }
 
   .app-shell--sidebar-collapsed .app-sidebar {
-    @apply w-[58px];
+    @apply w-[52px];
   }
 
   .app-sidebar__header {
-    @apply flex h-12 shrink-0 items-center gap-2 border-b border-slate-200 px-3;
+    @apply flex h-10 shrink-0 items-center gap-2 border-b border-slate-200 px-3;
   }
 
   .app-sidebar-toggle {
-    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 transition;
+    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 transition;
   }
 
   .app-sidebar__heading {
@@ -202,39 +209,37 @@ button:disabled {
   }
 
   .app-sidebar-nav {
-    @apply min-h-0 flex-1 space-y-3 overflow-y-auto px-2 py-3;
+    @apply min-h-0 flex-1 space-y-2 overflow-y-auto px-1.5 py-2;
   }
 
   .app-nav-group {
-    @apply space-y-1;
+    @apply space-y-0.5;
   }
 
   .app-nav-group__label {
-    @apply px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400;
+    @apply px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400;
   }
 
   .app-nav-item {
-    @apply relative flex min-h-10 items-center gap-2 rounded px-2 text-sm text-slate-600 transition hover:bg-white hover:text-slate-950;
+    @apply relative flex min-h-8 items-center gap-2 rounded px-2 text-[13px] text-slate-600 transition hover:bg-slate-100 hover:text-slate-900;
   }
 
   .app-nav-item--active {
-    background: var(--ued-color-primary-soft);
+    background: var(--ued-color-sidebar-active);
     color: var(--ued-color-primary);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ued-color-primary) 25%, transparent);
   }
 
   .app-nav-item--active::before {
     content: "";
-    @apply absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r;
+    @apply absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r;
     background: var(--ued-color-primary);
   }
 
   .app-nav-icon {
-    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-500;
+    @apply inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500;
   }
 
   .app-nav-item--active .app-nav-icon {
-    background: var(--ued-color-bg-card);
     color: var(--ued-color-primary);
   }
 
@@ -251,27 +256,27 @@ button:disabled {
   }
 
   .app-status-dot {
-    @apply inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400;
+    @apply inline-flex h-2 w-2 shrink-0 rounded-full bg-slate-400;
   }
 
   .app-status-dot--running {
     @apply bg-emerald-500;
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.16);
   }
 
   .app-status-dot--stopped {
     @apply bg-amber-500;
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16);
   }
 
   .app-status-dot--error {
     @apply bg-red-500;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.16);
   }
 
   .app-status-dot--connecting {
     @apply bg-cyan-500;
-    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.14);
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.16);
     animation: status-dot-pulse 1.2s ease-in-out infinite;
   }
 
@@ -290,7 +295,7 @@ button:disabled {
   }
 
   .app-topbar {
-    @apply z-20 flex min-h-[40px] shrink-0 items-center justify-between gap-4 border-b border-slate-300 bg-white px-5;
+    @apply z-20 flex min-h-[38px] shrink-0 items-center justify-between gap-4 border-b border-slate-300 bg-white px-4;
   }
 
   .app-page-identity {
@@ -318,15 +323,15 @@ button:disabled {
   }
 
   .app-content {
-    @apply min-h-0 flex-1 overflow-y-auto bg-[#eef1f5] px-4 py-4;
-    scrollbar-color: #cbd5e1 transparent;
+    @apply min-h-0 flex-1 overflow-y-auto bg-[var(--ued-color-bg-page)] px-3 py-3;
+    scrollbar-color: #c4c8cf transparent;
     scrollbar-width: thin;
   }
 
   .app-content::-webkit-scrollbar,
   .app-sidebar-nav::-webkit-scrollbar,
   .ued-modal__body::-webkit-scrollbar {
-    width: 10px;
+    width: 8px;
   }
 
   .app-content::-webkit-scrollbar-track,
@@ -338,14 +343,14 @@ button:disabled {
   .app-content::-webkit-scrollbar-thumb,
   .app-sidebar-nav::-webkit-scrollbar-thumb,
   .ued-modal__body::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border: 3px solid transparent;
+    background: #c4c8cf;
+    border: 2px solid transparent;
     border-radius: 999px;
     background-clip: content-box;
   }
 
   .app-statusbar {
-    @apply flex h-6 shrink-0 items-center gap-3 border-t border-slate-300 bg-slate-100 px-3 text-[11px] text-slate-500;
+    @apply flex h-5 shrink-0 items-center gap-2.5 border-t border-slate-300 bg-slate-100 px-3 text-[11px] text-slate-500;
   }
 
   .app-statusbar__item {
@@ -416,15 +421,15 @@ button:disabled {
   }
 
   .page-section {
-    @apply space-y-4;
+    @apply space-y-3;
   }
 
   .page-header {
-    @apply rounded border border-slate-200 bg-white px-4 py-3 shadow-sm;
+    @apply rounded border border-slate-200 bg-white px-4 py-3;
   }
 
   .page-title {
-    @apply text-lg font-semibold leading-tight text-slate-900;
+    @apply text-base font-semibold leading-tight text-slate-900;
   }
 
   .page-description {
@@ -436,23 +441,31 @@ button:disabled {
   }
 
   .content-panel {
-    @apply overflow-hidden rounded border border-slate-200 bg-white shadow-sm;
+    @apply overflow-hidden rounded border border-slate-200 bg-white;
   }
 
   .panel-header {
-    @apply flex min-h-10 items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2;
+    @apply flex min-h-9 items-center justify-between border-b border-slate-200 bg-white px-3 py-1.5;
   }
 
   .panel-body {
-    @apply h-full p-4;
+    @apply h-full p-3;
   }
 
   .panel-title {
     @apply text-sm font-semibold text-slate-800;
   }
 
+  .panel-header__heading {
+    @apply flex min-w-0 flex-col gap-0.5;
+  }
+
+  .panel-description {
+    @apply m-0 truncate text-xs text-slate-500;
+  }
+
   .section-grid {
-    @apply grid gap-3;
+    @apply grid gap-2.5;
   }
 
   .list-card,
@@ -461,13 +474,13 @@ button:disabled {
   }
 
   .ued-input {
-    @apply w-full rounded border bg-white px-3 py-1.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400;
+    @apply w-full rounded border bg-white px-2.5 py-1 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400;
     min-height: var(--ued-size-md);
     border-color: var(--ued-color-input);
   }
 
   .ued-input:hover {
-    border-color: color-mix(in srgb, var(--ued-color-primary) 40%, transparent);
+    border-color: var(--ued-color-text-muted);
   }
 
   .ued-input:focus {
@@ -649,28 +662,35 @@ button:disabled {
     color: var(--ued-color-destructive);
   }
 
-  /* Shared table query toolbar — previously duplicated per view */
+  /* Shared table query toolbar — previously duplicated per view.
+     Fields share a row and wrap gracefully instead of stacking one-per-row.
+     Each field has a comfortable min-width and a flex basis so multiple
+     fields plus the actions fit on one line at desktop widths. */
   .table-query-form {
-    @apply flex flex-wrap items-end gap-3;
+    @apply flex flex-wrap items-center gap-2;
   }
 
   .table-query-form__field {
-    @apply w-[220px] min-w-0;
+    @apply min-w-0 flex-1;
+    flex-basis: 200px;
+    max-width: 240px;
   }
 
   .table-query-form__field--compact {
-    @apply w-[180px];
+    flex-basis: 160px;
+    max-width: 180px;
   }
 
   .table-query-form__actions {
     @apply ml-auto flex items-center gap-2;
   }
 
+  /* On narrow widths keep fields inline by shrinking their basis rather than
+     forcing each onto its own full-width row. */
   @media (max-width: 760px) {
     .table-query-form__field,
-    .table-query-form__field--compact,
-    .table-query-form__actions {
-      @apply ml-0 w-full;
+    .table-query-form__field--compact {
+      flex-basis: 140px;
     }
   }
 
@@ -684,6 +704,10 @@ button:disabled {
 
   .table-shell {
     @apply overflow-hidden rounded border border-slate-200 bg-white flex flex-col;
+    /* Consistent outer breathing room so tables align visually with sibling
+       panels regardless of whether they sit inside .section-grid or directly
+       under .page-section. */
+    margin-block: 2px;
   }
 
   .table-scroll {
@@ -816,6 +840,9 @@ button:disabled {
 
   .table-actions .ued-button {
     @apply min-h-0 rounded border-transparent bg-transparent px-2 py-0 text-xs;
+    /* Track the global sm control height so table action buttons scale with
+       the uiPrefs button-size setting instead of staying fixed. */
+    height: var(--ued-size-sm);
     color: var(--ued-color-primary);
   }
 
@@ -927,7 +954,7 @@ button:disabled {
   }
 
   .ued-select__option {
-    @apply flex w-full items-center justify-between gap-2 rounded px-3 py-1.5 text-left text-sm text-slate-600 transition hover:bg-slate-100;
+    @apply flex w-full items-center justify-between gap-2 rounded px-2.5 py-1 text-left text-[13px] text-slate-600 transition hover:bg-slate-100;
   }
 
   .ued-select__option.is-active,
@@ -998,33 +1025,33 @@ button:disabled {
   }
 
   .ued-modal__header {
-    @apply flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3;
+    @apply flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-2.5;
   }
 
   .ued-modal__title {
-    @apply text-base font-semibold text-slate-900;
+    @apply text-[15px] font-semibold text-slate-900;
   }
 
   .ued-modal__close {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded border border-transparent bg-transparent p-0 text-lg leading-none text-slate-500 transition hover:bg-slate-200 hover:text-slate-900;
+    @apply inline-flex h-7 w-7 items-center justify-center rounded border border-transparent bg-transparent p-0 text-base leading-none text-slate-500 transition hover:bg-slate-100 hover:text-slate-900;
   }
 
   .ued-modal__body {
-    @apply min-h-0 flex-1 overflow-y-auto px-5 py-5;
-    scrollbar-color: #cbd5e1 transparent;
+    @apply min-h-0 flex-1 overflow-y-auto px-4 py-4;
+    scrollbar-color: #c4c8cf transparent;
     scrollbar-width: thin;
   }
 
   .ued-modal__footer {
-    @apply shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-3;
+    @apply shrink-0 border-t border-slate-200 bg-white px-4 py-2.5;
   }
 
   .ued-alert {
-    @apply relative flex w-full items-start gap-2 rounded border px-3 py-2 text-sm;
+    @apply relative flex w-full items-start gap-2 rounded border px-2.5 py-1.5 text-[13px];
   }
 
   .ued-alert--with-description {
-    @apply px-4 py-3;
+    @apply px-3 py-2;
   }
 
   .ued-alert--banner {
@@ -1245,7 +1272,7 @@ button:disabled {
 .app-sidebar-toggle {
   border-color: var(--ued-color-border);
   color: var(--ued-color-text-muted);
-  box-shadow: 0 1px 1px rgba(20, 31, 50, 0.04);
+  box-shadow: none;
 }
 
 .app-sidebar-toggle:hover {
@@ -1260,20 +1287,20 @@ button:disabled {
 }
 
 .app-nav-item {
-  min-height: 36px;
+  min-height: 32px;
   color: var(--ued-color-text-secondary);
 }
 
 .app-nav-item:hover {
-  background: var(--ued-color-bg-card);
+  background: var(--ued-color-muted);
   color: var(--ued-color-text);
-  box-shadow: 0 1px 2px rgba(20, 31, 50, 0.05);
+  box-shadow: none;
 }
 
 .app-nav-item--active {
   background: var(--ued-color-sidebar-active);
   color: var(--ued-color-primary);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ued-color-primary) 25%, transparent);
+  box-shadow: none;
 }
 
 .app-nav-item--active::before {
@@ -1285,9 +1312,8 @@ button:disabled {
 }
 
 .app-nav-item--active .app-nav-icon {
-  background: var(--ued-color-bg-card);
   color: var(--ued-color-primary);
-  box-shadow: 0 1px 2px rgba(20, 31, 50, 0.05);
+  box-shadow: none;
 }
 
 .app-main {
@@ -1295,13 +1321,13 @@ button:disabled {
 }
 
 .app-topbar {
-  background: rgba(255, 255, 255, 0.96);
-  min-height: 44px;
+  background: var(--ued-color-bg-card);
+  min-height: 38px;
 }
 
 .app-content {
   background: var(--ued-color-bg-page);
-  padding: 16px;
+  padding: 12px;
 }
 
 .app-breadcrumb {
@@ -1314,17 +1340,12 @@ button:disabled {
   color: var(--ued-color-muted-foreground);
 }
 
-.page-section {}
-
+/* Flat: surfaces are defined by 1px borders, not card shadows. */
 .page-header,
 .content-panel,
 .table-shell {
   border-color: var(--ued-color-border);
-  box-shadow: var(--ued-shadow-card);
-}
-
-.page-header {
-  padding: 14px 16px;
+  box-shadow: none;
 }
 
 .page-title {
@@ -1337,7 +1358,6 @@ button:disabled {
 }
 
 .panel-header {
-  min-height: 42px;
   background: var(--ued-color-bg-card);
   border-bottom-color: var(--ued-color-divider);
 }
@@ -1364,20 +1384,20 @@ button:disabled {
   border-color: var(--ued-color-input);
   color: var(--ued-color-text);
   background: var(--ued-color-bg-card);
-  box-shadow: inset 0 1px 0 rgba(20, 31, 50, 0.02);
+  box-shadow: none;
 }
 
 .field-input:hover,
 .ued-input:hover,
 .ued-select__control:hover {
-  border-color: color-mix(in srgb, var(--ued-color-primary) 40%, transparent);
+  border-color: var(--ued-color-text-muted);
 }
 
 .field-input:focus,
 .ued-input:focus,
 .ued-select__control:focus {
   border-color: var(--ued-color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ued-color-primary) 12%, transparent);
+  box-shadow: 0 0 0 2px var(--ued-color-focus-ring-soft);
 }
 
 .ued-field {
@@ -1406,15 +1426,13 @@ button:disabled {
 .ued-button {
   height: var(--ued-size-md);
   border-radius: var(--ued-radius-md);
-  box-shadow: 0 1px 1px rgba(20, 31, 50, 0.04);
+  box-shadow: none;
 }
 
-.ued-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
+/* Flat: no lift on hover/active — feedback comes from color change only. */
+.ued-button:hover:not(:disabled),
 .ued-button:active:not(:disabled) {
-  transform: translateY(0);
+  transform: none;
 }
 
 .ued-button--primary {
@@ -1532,7 +1550,7 @@ button:disabled {
   border-style: solid;
   font-weight: 600;
   letter-spacing: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  box-shadow: none;
 }
 
 .ued-tag__content {
@@ -1632,14 +1650,14 @@ button:disabled {
 }
 
 .admin-table th {
-  height: 38px;
+  height: 32px;
   background: var(--ued-color-muted);
   color: var(--ued-color-text-muted);
   border-bottom-color: var(--ued-color-border);
 }
 
 .admin-table td {
-  height: 44px;
+  height: 38px;
   color: var(--ued-color-text-secondary);
   border-bottom-color: var(--ued-color-divider);
 }
@@ -1648,44 +1666,45 @@ button:disabled {
    aliases for backward compatibility with older call sites. */
 .admin-table--xs th,
 .admin-table--small th {
-  height: 32px;
+  height: 28px;
 }
 
 .admin-table--xs td,
 .admin-table--small td {
-  height: 36px;
+  height: 32px;
 }
 
 .admin-table--sm th {
-  height: 36px;
+  height: 30px;
 }
 
 .admin-table--sm td {
-  height: 40px;
+  height: 34px;
 }
 
 .admin-table--md th,
 .admin-table--middle th {
-  height: 38px;
+  height: 32px;
 }
 
 .admin-table--md td,
 .admin-table--middle td {
-  height: 44px;
+  height: 38px;
 }
 
 .admin-table--lg th,
 .admin-table--large th {
-  height: 42px;
+  height: 36px;
 }
 
 .admin-table--lg td,
 .admin-table--large td {
-  height: 52px;
+  height: 46px;
 }
 
+/* Neutral hover instead of primary tint — flatter, less "web app". */
 .admin-table tbody tr:hover td {
-  background: var(--ued-color-primary-soft);
+  background: var(--ued-color-muted);
 }
 
 .admin-table--stripe tbody tr:nth-child(even) td {
@@ -1910,10 +1929,11 @@ button:disabled {
 }
 
 .ued-switch__track {
-  height: 22px;
-  width: 42px;
+  height: 20px;
+  width: 38px;
   background: var(--ued-color-input);
-  box-shadow: inset 0 1px 2px rgba(20, 31, 50, 0.12);
+  box-shadow: none;
+  transition: background-color 0.16s ease;
 }
 
 .ued-switch__track.is-on {
@@ -1921,12 +1941,13 @@ button:disabled {
 }
 
 .ued-switch__thumb {
-  height: 18px;
-  width: 18px;
+  height: 16px;
+  width: 16px;
+  transition: transform 0.16s ease;
 }
 
 .ued-switch__track.is-on .ued-switch__thumb {
-  transform: translateX(20px);
+  transform: translateX(18px);
 }
 
 .ued-switch input:focus-visible + .ued-switch__track {
@@ -1935,7 +1956,7 @@ button:disabled {
 }
 
 .ued-modal__mask {
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(1px);
 }
 
 .ued-modal__panel {
@@ -1964,7 +1985,7 @@ button:disabled {
 }
 
 .ued-message {
-  top: 42px;
+  top: 46px;
 }
 
 .ued-message__notice {

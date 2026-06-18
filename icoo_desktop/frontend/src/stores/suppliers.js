@@ -92,6 +92,7 @@ const emptyForm = () => ({
   protocol: "openai-responses",
   vendor: "openai",
   base_url: "",
+  models_url: "",
   api_key: "",
   only_stream: false,
   user_agent: "",
@@ -106,6 +107,7 @@ const buildProviderPayload = (form) => ({
   protocol: form.protocol,
   vendor: form.vendor,
   base_url: form.base_url,
+  models_url: form.models_url,
   api_key: form.api_key,
   only_stream: form.only_stream,
   user_agent: form.user_agent,
@@ -222,7 +224,7 @@ export const useSuppliersStore = defineStore("suppliers", {
 
         let warningText = "";
         if (blockingRule) {
-          const providerName = providerLookup[blockingRule.target_provider_id]?.name || blockingRule.supplier_name || "未命名 Provider";
+          const providerName = providerLookup[blockingRule.target_provider_id]?.name || blockingRule.supplier_name || "未命名供应商";
           warningText = `默认路由当前不会生效。更高优先级规则“${blockingRule.name}”会优先转到 ${providerName}。`;
         } else if (partialRules.length > 0) {
           const names = partialRules.slice(0, 2).map((rule) => `“${rule.name}”`).join("、");
@@ -330,6 +332,7 @@ export const useSuppliersStore = defineStore("suppliers", {
         protocol: item.protocol,
         vendor: item.vendor || "openai",
         base_url: item.base_url,
+        models_url: item.models_url || "",
         api_key: "",
         only_stream: Boolean(item.only_stream),
         user_agent: item.user_agent || "",

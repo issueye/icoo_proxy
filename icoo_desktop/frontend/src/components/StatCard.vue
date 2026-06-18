@@ -49,60 +49,50 @@ defineProps({
 
 <style scoped>
 .stat-card {
-  @apply relative flex min-h-[84px] items-center gap-2.5 rounded border bg-white p-3 transition;
+  @apply relative flex min-h-[64px] items-center gap-2.5 rounded border bg-white p-2.5 transition;
   border-color: var(--ued-color-border);
-  border-radius: var(--ued-radius-card);
-  box-shadow: var(--ued-shadow-card);
+  border-radius: var(--ued-radius-lg);
+  box-shadow: none;
 }
 .stat-card:hover {
-  border-color: color-mix(in srgb, var(--ued-color-primary) 25%, transparent);
-  box-shadow: var(--ued-shadow-card-hover);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--ued-color-primary) 30%, transparent);
+  box-shadow: none;
+  transform: none;
 }
 .stat-card__icon {
-  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border;
-  border-color: var(--ued-color-border);
-  border-radius: var(--ued-radius-token);
+  @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border;
+  border-color: var(--ued-color-border-light);
+  border-radius: var(--ued-radius-md);
   background: var(--ued-color-muted);
-  color: var(--ued-color-text-muted);
+  color: var(--ued-color-text-secondary);
 }
 .stat-card__body {
   @apply min-w-0 flex-1;
 }
 .stat-card__label {
-  @apply text-xs font-medium leading-[1.35];
+  @apply text-[11px] font-medium leading-[1.35];
   color: var(--ued-color-text-muted);
 }
 .stat-card__value {
-  @apply mt-1.5 break-keep font-semibold leading-[1.1];
-  font-size: var(--ued-font-size-lg);
+  @apply mt-1 break-keep font-semibold leading-[1.15];
+  font-size: 15px;
   color: var(--ued-color-text);
 }
 
-/* Tones */
+/* Tones — flat: only the icon foreground hints at the tone, no colored tile. */
 .stat-card--primary .stat-card__icon {
-  border-color: color-mix(in srgb, var(--ued-color-primary) 30%, transparent);
-  background: var(--ued-color-primary-soft);
   color: var(--ued-color-primary);
 }
 .stat-card--success .stat-card__icon {
-  border-color: color-mix(in srgb, var(--ued-color-success) 30%, transparent);
-  background: var(--ued-color-success-soft);
   color: var(--ued-color-success);
 }
 .stat-card--warning .stat-card__icon {
-  border-color: color-mix(in srgb, var(--ued-color-warning) 30%, transparent);
-  background: var(--ued-color-warning-soft);
   color: var(--ued-color-warning);
 }
 .stat-card--danger .stat-card__icon {
-  border-color: color-mix(in srgb, var(--ued-color-destructive) 30%, transparent);
-  background: var(--ued-color-error-soft);
   color: var(--ued-color-destructive);
 }
 .stat-card--info .stat-card__icon {
-  border-color: color-mix(in srgb, var(--ued-color-info) 30%, transparent);
-  background: var(--ued-color-info-soft);
   color: var(--ued-color-info);
 }
 </style>

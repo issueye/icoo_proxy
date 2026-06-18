@@ -1,5 +1,18 @@
 <template>
   <section class="page-section">
+    <Teleport to="#app-topbar-actions">
+      <div class="app-topbar-actions__group">
+        <UButton
+          variant="secondary"
+          :loading="store.loading"
+          :disabled="store.loading"
+          @click="store.load"
+        >
+          {{ store.loading ? "刷新中..." : "刷新" }}
+        </UButton>
+      </div>
+    </Teleport>
+
     <!-- 统计卡片部分 -->
     <div class="section-grid grid-cols-1 md:grid-cols-3">
       <StatCard icon="layers" label="协议总数" :value="String(store.routeDefinitions.length)" tone="info" />
@@ -104,6 +117,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
+import { useStoreError } from "../composables/useStoreError";
 
 import StatCard from "../components/StatCard.vue";
 import UButton from "../components/ued/UButton.vue";
@@ -116,6 +130,7 @@ import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
 
 const store = useSuppliersStore();
+useStoreError(store);
 const policyModalOpen = ref(false);
 
 const protocolOptions = [

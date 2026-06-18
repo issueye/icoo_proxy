@@ -148,7 +148,7 @@ function updatePosition() {
 .ued-tooltip__inner {
   max-width: 320px;
   padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--ued-color-tooltip-fg) 8%, transparent);
   border-radius: var(--ued-radius-md);
   background: var(--ued-color-tooltip-bg);
   color: var(--ued-color-tooltip-fg);

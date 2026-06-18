@@ -9,8 +9,6 @@
       </div>
     </Teleport>
 
-    <UAlert v-if="store.error" type="error">{{ store.error }}</UAlert>
-
     <div class="section-grid grid-cols-2 lg:grid-cols-4">
       <StatCard icon="endpoint" label="端点总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
@@ -91,7 +89,6 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
 import StatCard from "../components/StatCard.vue";
-import UAlert from "../components/ued/UAlert.vue";
 import UButton from "../components/ued/UButton.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
@@ -103,8 +100,10 @@ import UTable from "../components/ued/UTable.vue";
 import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
 import { useEndpointsStore } from "../stores/endpoints";
+import { useStoreError } from "../composables/useStoreError";
 
 const store = useEndpointsStore();
+useStoreError(store);
 const modalOpen = ref(false);
 const queryForm = reactive({
   keyword: "",
