@@ -1,31 +1,31 @@
-<template>
+﻿<template>
   <section class="page-section">
     <div class="page-header">
-      <h2 class="page-title">UED 组件</h2>
+      <h2 class="page-title">UED 缁勪欢</h2>
       <p class="page-description">
-        面向本地代理桌面控制台：紧凑信息密度、清晰操作层级、可扫描状态反馈，以及稳定的键盘焦点与弹层体验。
+        闈㈠悜鏈湴浠ｇ悊妗岄潰鎺у埗鍙帮細绱у噾淇℃伅瀵嗗害銆佹竻鏅版搷浣滃眰绾с€佸彲鎵弿鐘舵€佸弽棣堬紝浠ュ強绋冲畾鐨勯敭鐩樼劍鐐逛笌寮瑰眰浣撻獙銆?
       </p>
     </div>
 
-    <PanelBlock title="设计 Token">
+    <PanelBlock title="璁捐 Token">
       <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <div class="sub-card">
-          <p class="text-sm font-medium text-strong">主操作</p>
+          <p class="text-sm font-medium text-strong">涓绘搷浣?/p>
           <div class="mt-3 flex items-center gap-2">
             <span class="h-6 w-10 rounded bg-[var(--ued-color-primary)]"></span>
             <span class="font-mono text-xs text-muted">var(--ued-color-primary)</span>
           </div>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-strong">圆角</p>
-          <p class="mt-3 text-sm text-muted">控件 6px，面板 8px，标签 4px，卡片 12px，胶囊 9999px。</p>
+          <p class="text-sm font-medium text-strong">鍦嗚</p>
+          <p class="mt-3 text-sm text-muted">鎺т欢 6px锛岄潰鏉?8px锛屾爣绛?4px锛屽崱鐗?12px锛岃兌鍥?9999px銆?/p>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-strong">控件高度</p>
-          <p class="mt-3 text-sm text-muted">XS 24 / SM 28 / MD 32 / LG 40。</p>
+          <p class="text-sm font-medium text-strong">鎺т欢楂樺害</p>
+          <p class="mt-3 text-sm text-muted">XS 24 / SM 28 / MD 32 / LG 40銆?/p>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-strong">状态色</p>
+          <p class="text-sm font-medium text-strong">鐘舵€佽壊</p>
           <div class="mt-3 flex flex-wrap gap-2">
             <UTag variant="success" dot>Success</UTag>
             <UTag variant="warning" dot>Warning</UTag>
@@ -37,7 +37,7 @@
     </PanelBlock>
 
     <div class="section-grid lg:grid-cols-2">
-      <PanelBlock title="按钮">
+      <PanelBlock title="鎸夐挳">
         <div class="space-y-3">
           <div class="flex flex-wrap gap-2">
             <UButton variant="primary">
@@ -58,30 +58,30 @@
             <UButton size="sm">SM</UButton>
             <UButton size="md">MD</UButton>
             <UButton size="lg">LG</UButton>
-            <UButton loading>加载中</UButton>
+            <UButton loading>鍔犺浇涓?/UButton>
           </div>
         </div>
       </PanelBlock>
 
-      <PanelBlock title="开关">
+      <PanelBlock title="寮€鍏?>
         <div class="space-y-3">
-          <USwitch v-model="switchValue" label="启用自动健康检查" hint="配置类开关用于开关型参数，文案保持动宾结构。" />
-          <USwitch :model-value="true" label="保留系统默认路由" hint="禁用态示例" :disabled="true" />
+          <USwitch v-model="switchValue" label="鍚敤鑷姩鍋ュ悍妫€鏌? hint="閰嶇疆绫诲紑鍏崇敤浜庡紑鍏冲瀷鍙傛暟锛屾枃妗堜繚鎸佸姩瀹剧粨鏋勩€? />
+          <USwitch :model-value="true" label="淇濈暀绯荤粺榛樿璺敱" hint="绂佺敤鎬佺ず渚? :disabled="true" />
         </div>
       </PanelBlock>
     </div>
 
     <div class="section-grid lg:grid-cols-2">
-      <PanelBlock title="Alert 警告提示">
+      <PanelBlock title="Alert 璀﹀憡鎻愮ず">
         <div class="space-y-3">
-          <UAlert type="success" message="保存成功，配置已写入本地代理。" />
-          <UAlert type="info" message="提示信息" description="用于承载页面内常驻的说明、状态变更或轻量引导。" />
-          <UAlert type="warning" message="代理尚未重载" description="保存端点后需要重载代理，新的路由配置才会生效。" closable />
-          <UAlert type="error" message="连接失败" description="请检查供应商地址、鉴权 Key 和网络连通性。" />
+          <UAlert type="success" message="淇濆瓨鎴愬姛锛岄厤缃凡鍐欏叆鏈湴浠ｇ悊銆? />
+          <UAlert type="info" message="鎻愮ず淇℃伅" description="鐢ㄤ簬鎵胯浇椤甸潰鍐呭父椹荤殑璇存槑銆佺姸鎬佸彉鏇存垨杞婚噺寮曞銆? />
+          <UAlert type="warning" message="浠ｇ悊灏氭湭閲嶈浇" description="淇濆瓨绔偣鍚庨渶瑕侀噸杞戒唬鐞嗭紝鏂扮殑璺敱閰嶇疆鎵嶄細鐢熸晥銆? closable />
+          <UAlert type="error" message="杩炴帴澶辫触" description="璇锋鏌ヤ緵搴斿晢鍦板潃銆侀壌鏉?Key 鍜岀綉缁滆繛閫氭€с€? />
         </div>
       </PanelBlock>
 
-      <PanelBlock title="Message 全局提示">
+      <PanelBlock title="Message 鍏ㄥ眬鎻愮ず">
         <div class="flex flex-wrap gap-2">
           <UButton variant="success" @click="showMessage('success')">Success</UButton>
           <UButton variant="info" @click="showMessage('info')">Info</UButton>
@@ -93,26 +93,26 @@
     </div>
 
     <div class="section-grid lg:grid-cols-2">
-      <PanelBlock title="Loading 加载">
+      <PanelBlock title="Loading 鍔犺浇">
         <div class="space-y-4">
           <div class="flex flex-wrap items-center gap-5">
             <ULoading size="sm" />
             <ULoading />
-            <ULoading size="lg" tip="加载中" />
+            <ULoading size="lg" tip="鍔犺浇涓? />
           </div>
-          <ULoading tip="正在加载端点数据..." :spinning="true">
+          <ULoading tip="姝ｅ湪鍔犺浇绔偣鏁版嵁..." :spinning="true">
             <div class="rounded-md border border-[var(--ued-color-divider)] bg-[var(--ued-color-muted)] p-4">
-              <p class="text-sm font-medium text-strong">代理端点</p>
+              <p class="text-sm font-medium text-strong">浠ｇ悊绔偣</p>
               <p class="mt-2 text-sm leading-6 text-muted">
-                区域加载用于表格、详情面板或配置块刷新，不打断当前页面上下文。
+                鍖哄煙鍔犺浇鐢ㄤ簬琛ㄦ牸銆佽鎯呴潰鏉挎垨閰嶇疆鍧楀埛鏂帮紝涓嶆墦鏂綋鍓嶉〉闈笂涓嬫枃銆?
               </p>
             </div>
           </ULoading>
-          <UButton variant="secondary" @click="showFullscreenLoading">全屏 Loading</UButton>
+          <UButton variant="secondary" @click="showFullscreenLoading">鍏ㄥ睆 Loading</UButton>
         </div>
       </PanelBlock>
 
-      <PanelBlock title="标签">
+      <PanelBlock title="鏍囩">
         <div class="space-y-3">
           <div class="flex flex-wrap gap-2">
             <UTag variant="primary" dot>primary</UTag>
@@ -135,28 +135,28 @@
     </div>
 
     <div class="section-grid lg:grid-cols-2">
-      <PanelBlock title="输入与下拉">
+      <PanelBlock title="杈撳叆涓庝笅鎷?>
         <div class="space-y-3">
-          <UInput v-model="form.name" label="名称" placeholder="请输入供应商名称" hint="表单项采用上 label、下控件布局。" required />
-          <USelect v-model="form.protocol" label="协议" :options="protocolOptions" required />
-          <UInput v-model="form.description" label="描述" placeholder="请输入用途说明" textarea />
+          <UInput v-model="form.name" label="鍚嶇О" placeholder="璇疯緭鍏ヤ緵搴斿晢鍚嶇О" hint="琛ㄥ崟椤归噰鐢ㄤ笂 label銆佷笅鎺т欢甯冨眬銆? required />
+          <USelect v-model="form.protocol" label="鍗忚" :options="protocolOptions" required />
+          <UInput v-model="form.description" label="鎻忚堪" placeholder="璇疯緭鍏ョ敤閫旇鏄? textarea />
         </div>
       </PanelBlock>
 
-      <PanelBlock title="弹窗">
+      <PanelBlock title="寮圭獥">
         <div class="flex flex-wrap gap-2">
-          <UButton @click="showModal = true">普通弹窗</UButton>
-          <UButton variant="error" @click="showConfirm = true">确认弹窗</UButton>
+          <UButton @click="showModal = true">鏅€氬脊绐?/UButton>
+          <UButton variant="error" @click="showConfirm = true">纭寮圭獥</UButton>
         </div>
       </PanelBlock>
     </div>
 
-    <PanelBlock title="基础表格">
+    <PanelBlock title="鍩虹琛ㄦ牸">
       <UTable
         :columns="columns"
         :rows="filteredRows"
         row-key="id"
-        empty-text="暂无组件示例数据。"
+        empty-text="鏆傛棤缁勪欢绀轰緥鏁版嵁銆?
         action-width="72px"
         pagination
         :page-size="3"
@@ -165,44 +165,44 @@
           <div class="table-query-form">
             <UInput
               v-model="basicTableQuery.keyword"
-              label="关键词"
+              label="鍏抽敭璇?
               hide-label
-              placeholder="搜索名称"
+              placeholder="鎼滅储鍚嶇О"
               class="table-query-form__field table-query-form__field--keyword"
             />
             <USelect
               v-model="basicTableQuery.type"
-              label="类型"
+              label="绫诲瀷"
               hide-label
               :options="basicTypeOptions"
               class="table-query-form__field table-query-form__field--select"
             />
             <USelect
               v-model="basicTableQuery.status"
-              label="状态"
+              label="鐘舵€?
               hide-label
               :options="basicStatusOptions"
               class="table-query-form__field table-query-form__field--select"
             />
             <div class="table-query-form__actions">
-              <UButton variant="secondary" @click="resetBasicTableQuery">重置</UButton>
+              <UButton variant="secondary" @click="resetBasicTableQuery">閲嶇疆</UButton>
             </div>
           </div>
         </template>
         <template #cell-status="{ value }">
-          <UTag :variant="value === '启用' ? 'success' : 'error'" dot>{{ value }}</UTag>
+          <UTag :variant="value === '鍚敤' ? 'success' : 'error'" dot>{{ value }}</UTag>
         </template>
         <template #actions="{ row }">
           <div class="table-actions">
-            <UIconButton icon="edit" :label="`编辑示例 ${row.id}`" />
+            <UIconButton icon="edit" :label="`缂栬緫绀轰緥 ${row.id}`" />
           </div>
         </template>
       </UTable>
     </PanelBlock>
 
-    <PanelBlock title="现代化表格">
+    <PanelBlock title="鐜颁唬鍖栬〃鏍?>
       <p class="mb-3 text-xs text-muted">
-        表格沿用 Ant Design 的浅表头、行 hover、高密度信息展示，并保留固定列、文字省略、Tooltip 和列对齐能力。
+        琛ㄦ牸娌跨敤 Ant Design 鐨勬祬琛ㄥご銆佽 hover銆侀珮瀵嗗害淇℃伅灞曠ず锛屽苟淇濈暀鍥哄畾鍒椼€佹枃瀛楃渷鐣ャ€乀ooltip 鍜屽垪瀵归綈鑳藉姏銆?
       </p>
       <UTable
         :columns="advancedColumns"
@@ -213,20 +213,20 @@
         action-width="90px"
       >
         <template #cell-status="{ value }">
-          <UTag :variant="value === '启用' ? 'success' : 'error'" dot>{{ value }}</UTag>
+          <UTag :variant="value === '鍚敤' ? 'success' : 'error'" dot>{{ value }}</UTag>
         </template>
         <template #actions="{ row }">
           <div class="table-actions">
-            <UIconButton icon="edit" :label="`编辑 ${row.name}`" />
-            <UIconButton icon="detail" :label="`查看 ${row.name}`" />
+            <UIconButton icon="edit" :label="`缂栬緫 ${row.name}`" />
+            <UIconButton icon="detail" :label="`鏌ョ湅 ${row.name}`" />
           </div>
         </template>
       </UTable>
     </PanelBlock>
 
-    <PanelBlock title="交互表格（选择 / 行点击 / 加载）">
+    <PanelBlock title="浜や簰琛ㄦ牸锛堥€夋嫨 / 琛岀偣鍑?/ 鍔犺浇锛?>
       <p class="mb-3 text-xs text-muted">
-        UTable 支持 selectable 多选、row-click 行点击、loading 加载遮罩。选择状态通过 v-model:selectedKeys 双向绑定，支持跨页保持与全选当前页。
+        UTable 鏀寔 selectable 澶氶€夈€乺ow-click 琛岀偣鍑汇€乴oading 鍔犺浇閬僵銆傞€夋嫨鐘舵€侀€氳繃 v-model:selectedKeys 鍙屽悜缁戝畾锛屾敮鎸佽法椤典繚鎸佷笌鍏ㄩ€夊綋鍓嶉〉銆?
       </p>
       <UTable
         :columns="interactiveColumns"
@@ -236,64 +236,64 @@
         row-clickable
         :selected-keys="interactiveSelected"
         :loading="interactiveLoading"
-        loading-text="正在刷新…"
+        loading-text="姝ｅ湪鍒锋柊鈥?
         @update:selected-keys="interactiveSelected = $event"
         @row-click="onInteractiveRowClick"
         @selection-change="onInteractiveSelectionChange"
       >
         <template #cell-status="{ value }">
-          <UTag :variant="value === '启用' ? 'success' : 'error'" dot>{{ value }}</UTag>
+          <UTag :variant="value === '鍚敤' ? 'success' : 'error'" dot>{{ value }}</UTag>
         </template>
         <template #actions="{ row }">
           <div class="table-actions">
-            <UIconButton icon="detail" :label="`查看 ${row.name}`" />
+            <UIconButton icon="detail" :label="`鏌ョ湅 ${row.name}`" />
           </div>
         </template>
       </UTable>
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <UButton variant="secondary" size="sm" @click="toggleInteractiveLoading">
-          {{ interactiveLoading ? "停止加载" : "模拟加载" }}
+          {{ interactiveLoading ? "鍋滄鍔犺浇" : "妯℃嫙鍔犺浇" }}
         </UButton>
         <UButton variant="secondary" size="sm" :disabled="!interactiveSelected.length" @click="interactiveSelected = []">
-          清除选择（{{ interactiveSelected.length }}）
+          娓呴櫎閫夋嫨锛坽{ interactiveSelected.length }}锛?
         </UButton>
       </div>
     </PanelBlock>
 
-    <PanelBlock title="Tooltip 组件">
+    <PanelBlock title="Tooltip 缁勪欢">
       <div class="flex flex-wrap items-center gap-4">
-        <UTooltip content="这是一个基础的提示文本">
-          <UButton size="sm" variant="secondary">悬停查看提示</UButton>
+        <UTooltip content="杩欐槸涓€涓熀纭€鐨勬彁绀烘枃鏈?>
+          <UButton size="sm" variant="secondary">鎮仠鏌ョ湅鎻愮ず</UButton>
         </UTooltip>
-        <UTooltip content="提示可以包含很长的说明内容，用于补充界面中无法完整展示的信息。">
-          <span class="text-sm text-secondary underline decoration-dotted">长文本提示</span>
+        <UTooltip content="鎻愮ず鍙互鍖呭惈寰堥暱鐨勮鏄庡唴瀹癸紝鐢ㄤ簬琛ュ厖鐣岄潰涓棤娉曞畬鏁村睍绀虹殑淇℃伅銆?>
+          <span class="text-sm text-secondary underline decoration-dotted">闀挎枃鏈彁绀?/span>
         </UTooltip>
       </div>
     </PanelBlock>
 
-    <UModal v-model:open="showModal" title="普通弹窗">
+    <UModal v-model:open="showModal" title="鏅€氬脊绐?>
       <p class="text-sm leading-6 text-secondary">
-        用于承载说明、预览或表单内容。
+        鐢ㄤ簬鎵胯浇璇存槑銆侀瑙堟垨琛ㄥ崟鍐呭銆?
       </p>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="showModal = false">关闭</UButton>
-          <UButton @click="showModal = false">确认</UButton>
+          <UButton variant="secondary" @click="showModal = false">鍏抽棴</UButton>
+          <UButton @click="showModal = false">纭</UButton>
         </div>
       </template>
     </UModal>
 
     <UConfirmDialog
       v-model:open="showConfirm"
-      title="确认删除示例"
-      message="删除后将无法恢复该示例数据。"
-      description="确认弹窗适用于删除、覆盖、停用等高风险操作。"
-      confirm-text="确认删除"
-      cancel-text="取消"
+      title="纭鍒犻櫎绀轰緥"
+      message="鍒犻櫎鍚庡皢鏃犳硶鎭㈠璇ョず渚嬫暟鎹€?
+      description="纭寮圭獥閫傜敤浜庡垹闄ゃ€佽鐩栥€佸仠鐢ㄧ瓑楂橀闄╂搷浣溿€?
+      confirm-text="纭鍒犻櫎"
+      cancel-text="鍙栨秷"
       danger
       @confirm="showConfirm = false"
     />
-    <ULoading fullscreen tip="正在加载页面..." :spinning="fullscreenLoading" />
+    <ULoading fullscreen tip="姝ｅ湪鍔犺浇椤甸潰..." :spinning="fullscreenLoading" />
   </section>
 </template>
 
@@ -324,15 +324,15 @@ const interactiveSelected = ref([]);
 const interactiveLoading = ref(false);
 
 const interactiveColumns = [
-  { key: "name", title: "名称" },
-  { key: "type", title: "类型" },
-  { key: "status", title: "状态", align: "center" },
+  { key: "name", title: "鍚嶇О" },
+  { key: "type", title: "绫诲瀷" },
+  { key: "status", title: "鐘舵€?, align: "center" },
 ];
 
 const interactiveRows = [
-  { id: "i1", name: "选择示例 A", type: "展示组件", status: "启用" },
-  { id: "i2", name: "选择示例 B", type: "反馈组件", status: "停用" },
-  { id: "i3", name: "选择示例 C", type: "数据组件", status: "启用" },
+  { id: "i1", name: "閫夋嫨绀轰緥 A", type: "灞曠ず缁勪欢", status: "鍚敤" },
+  { id: "i2", name: "閫夋嫨绀轰緥 B", type: "鍙嶉缁勪欢", status: "鍋滅敤" },
+  { id: "i3", name: "閫夋嫨绀轰緥 C", type: "鏁版嵁缁勪欢", status: "鍚敤" },
 ];
 
 function toggleInteractiveLoading() {
@@ -340,12 +340,12 @@ function toggleInteractiveLoading() {
 }
 
 function onInteractiveRowClick({ row }) {
-  message.info(`点击了行：${row.name}`);
+  message.info(`鐐瑰嚮浜嗚锛?{row.name}`);
 }
 
 function onInteractiveSelectionChange(keys) {
   if (keys.length) {
-    message.info(`已选择 ${keys.length} 项`);
+    message.info(`宸查€夋嫨 ${keys.length} 椤筦);
   }
 }
 
@@ -368,10 +368,10 @@ const protocolOptions = [
 ];
 
 const messageText = {
-  success: "操作成功，配置已保存。",
-  info: "这是一条普通提示信息。",
-  warning: "请先重载代理使配置生效。",
-  error: "操作失败，请检查输入后重试。",
+  success: "鎿嶄綔鎴愬姛锛岄厤缃凡淇濆瓨銆?,
+  info: "杩欐槸涓€鏉℃櫘閫氭彁绀轰俊鎭€?,
+  warning: "璇峰厛閲嶈浇浠ｇ悊浣块厤缃敓鏁堛€?,
+  error: "鎿嶄綔澶辫触锛岃妫€鏌ヨ緭鍏ュ悗閲嶈瘯銆?,
 };
 
 function showMessage(type) {
@@ -380,9 +380,9 @@ function showMessage(type) {
 
 function showLoadingMessage() {
   const key = "ued-loading-demo";
-  message.loading({ key, content: "正在同步配置..." });
+  message.loading({ key, content: "姝ｅ湪鍚屾閰嶇疆..." });
   window.setTimeout(() => {
-    message.success({ key, content: "配置同步完成。" });
+    message.success({ key, content: "閰嶇疆鍚屾瀹屾垚銆? });
   }, 1200);
 }
 
@@ -394,33 +394,33 @@ function showFullscreenLoading() {
 }
 
 const columns = [
-  { key: "name", title: "名称" },
-  { key: "type", title: "类型" },
-  { key: "status", title: "状态" },
+  { key: "name", title: "鍚嶇О" },
+  { key: "type", title: "绫诲瀷" },
+  { key: "status", title: "鐘舵€? },
 ];
 
 const rows = [
-  { id: "1", name: "供应商按钮", type: "操作组件", status: "启用" },
-  { id: "2", name: "确认弹窗", type: "反馈组件", status: "启用" },
-  { id: "3", name: "状态标签", type: "展示组件", status: "启用" },
-  { id: "4", name: "分页表格", type: "数据组件", status: "启用" },
-  { id: "5", name: "消息提示", type: "反馈组件", status: "停用" },
-  { id: "6", name: "下拉筛选", type: "表单组件", status: "启用" },
+  { id: "1", name: "渚涘簲鍟嗘寜閽?, type: "鎿嶄綔缁勪欢", status: "鍚敤" },
+  { id: "2", name: "纭寮圭獥", type: "鍙嶉缁勪欢", status: "鍚敤" },
+  { id: "3", name: "鐘舵€佹爣绛?, type: "灞曠ず缁勪欢", status: "鍚敤" },
+  { id: "4", name: "鍒嗛〉琛ㄦ牸", type: "鏁版嵁缁勪欢", status: "鍚敤" },
+  { id: "5", name: "娑堟伅鎻愮ず", type: "鍙嶉缁勪欢", status: "鍋滅敤" },
+  { id: "6", name: "涓嬫媺绛涢€?, type: "琛ㄥ崟缁勪欢", status: "鍚敤" },
 ];
 
 const basicTypeOptions = [
-  { label: "全部类型", value: "all" },
-  { label: "操作组件", value: "操作组件" },
-  { label: "反馈组件", value: "反馈组件" },
-  { label: "展示组件", value: "展示组件" },
-  { label: "数据组件", value: "数据组件" },
-  { label: "表单组件", value: "表单组件" },
+  { label: "鍏ㄩ儴绫诲瀷", value: "all" },
+  { label: "鎿嶄綔缁勪欢", value: "鎿嶄綔缁勪欢" },
+  { label: "鍙嶉缁勪欢", value: "鍙嶉缁勪欢" },
+  { label: "灞曠ず缁勪欢", value: "灞曠ず缁勪欢" },
+  { label: "鏁版嵁缁勪欢", value: "鏁版嵁缁勪欢" },
+  { label: "琛ㄥ崟缁勪欢", value: "琛ㄥ崟缁勪欢" },
 ];
 
 const basicStatusOptions = [
-  { label: "全部状态", value: "all" },
-  { label: "启用", value: "启用" },
-  { label: "停用", value: "停用" },
+  { label: "鍏ㄩ儴鐘舵€?, value: "all" },
+  { label: "鍚敤", value: "鍚敤" },
+  { label: "鍋滅敤", value: "鍋滅敤" },
 ];
 
 const filteredRows = computed(() => {
@@ -445,7 +445,7 @@ const advancedColumns = [
   { key: "id", title: "ID", width: "80px", fixed: "left", align: "center" },
   {
     key: "name",
-    title: "名称（固定左侧 + 省略 + Tooltip）",
+    title: "鍚嶇О锛堝浐瀹氬乏渚?+ 鐪佺暐 + Tooltip锛?,
     width: "200px",
     fixed: "left",
     ellipsis: true,
@@ -453,63 +453,60 @@ const advancedColumns = [
   },
   {
     key: "description",
-    title: "说明（溢出省略 + Tooltip）",
+    title: "璇存槑锛堟孩鍑虹渷鐣?+ Tooltip锛?,
     width: "280px",
     ellipsis: true,
     tooltip: true,
   },
-  { key: "type", title: "类型", width: "120px" },
-  { key: "status", title: "状态", width: "90px", align: "center" },
-  { key: "count", title: "计数", width: "100px", align: "right" },
+  { key: "type", title: "绫诲瀷", width: "120px" },
+  { key: "status", title: "鐘舵€?, width: "90px", align: "center" },
+  { key: "count", title: "璁℃暟", width: "100px", align: "right" },
 ];
 
 const advancedRows = [
   {
     id: "101",
-    name: "这是一个非常长的组件名称，用于测试文字溢出省略和 Tooltip 功能",
+    name: "杩欐槸涓€涓潪甯搁暱鐨勭粍浠跺悕绉帮紝鐢ㄤ簬娴嬭瘯鏂囧瓧婧㈠嚭鐪佺暐鍜?Tooltip 鍔熻兘",
     description:
-      "这是超长说明文本，用于演示当单元格内容超出列宽时，如何通过省略号隐藏并在悬停时通过 Tooltip 展示完整内容。",
-    type: "操作组件",
-    status: "启用",
+      "杩欐槸瓒呴暱璇存槑鏂囨湰锛岀敤浜庢紨绀哄綋鍗曞厓鏍煎唴瀹硅秴鍑哄垪瀹芥椂锛屽浣曢€氳繃鐪佺暐鍙烽殣钘忓苟鍦ㄦ偓鍋滄椂閫氳繃 Tooltip 灞曠ず瀹屾暣鍐呭銆?,
+    type: "鎿嶄綔缁勪欢",
+    status: "鍚敤",
     count: 128,
   },
   {
     id: "102",
-    name: "确认弹窗",
-    description: "用于二次确认的弹窗组件，适用于删除、覆盖等高风险操作场景。",
-    type: "反馈组件",
-    status: "停用",
+    name: "纭寮圭獥",
+    description: "鐢ㄤ簬浜屾纭鐨勫脊绐楃粍浠讹紝閫傜敤浜庡垹闄ゃ€佽鐩栫瓑楂橀闄╂搷浣滃満鏅€?,
+    type: "鍙嶉缁勪欢",
+    status: "鍋滅敤",
     count: 56,
   },
   {
     id: "103",
-    name: "数据表格",
+    name: "鏁版嵁琛ㄦ牸",
     description:
-      "现代化表格组件，支持固定列、表头固定、斑马纹、文字溢出省略、Tooltip 提示等丰富特性。",
-    type: "数据展示",
-    status: "启用",
+      "鐜颁唬鍖栬〃鏍肩粍浠讹紝鏀寔鍥哄畾鍒椼€佽〃澶村浐瀹氥€佹枒椹汗銆佹枃瀛楁孩鍑虹渷鐣ャ€乀ooltip 鎻愮ず绛変赴瀵岀壒鎬с€?,
+    type: "鏁版嵁灞曠ず",
+    status: "鍚敤",
     count: 2048,
   },
   {
     id: "104",
-    name: "下拉选择器",
-    description: "支持单选、搜索和分组的标准下拉选择组件。",
-    type: "表单组件",
-    status: "启用",
+    name: "涓嬫媺閫夋嫨鍣?,
+    description: "鏀寔鍗曢€夈€佹悳绱㈠拰鍒嗙粍鐨勬爣鍑嗕笅鎷夐€夋嫨缁勪欢銆?,
+    type: "琛ㄥ崟缁勪欢",
+    status: "鍚敤",
     count: 12,
   },
   {
     id: "105",
-    name: "开关按钮",
-    description: "用于切换配置项的布尔状态，支持禁用态和提示文本。",
-    type: "表单组件",
-    status: "启用",
+    name: "寮€鍏虫寜閽?,
+    description: "鐢ㄤ簬鍒囨崲閰嶇疆椤圭殑甯冨皵鐘舵€侊紝鏀寔绂佺敤鎬佸拰鎻愮ず鏂囨湰銆?,
+    type: "琛ㄥ崟缁勪欢",
+    status: "鍚敤",
     count: 99,
   },
 ];
 </script>
 
-<style scoped>
-/* Query toolbar styling is centralized in main.css (.table-query-form*).
-   No local overrides here to avoid conflicting width rules. */
 </style>
