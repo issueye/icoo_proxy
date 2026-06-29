@@ -76,6 +76,11 @@ func NewContainer(options Options) (*Container, error) {
 		Repos:     repos,
 		Converter: converter,
 	})
+	// Start the background traffic writer so DB persistence never blocks the
+	// proxy hot path. It is drained on Close().
+	if started, ok := services.Proxy.(interface{ StartTrafficWriter() }); ok {
+		started.StartTrafficWriter()
+	}
 	controllers := controller.NewControllers(services)
 	middlewares := middleware.NewMiddlewares(services.Auth, cfg.AllowLocalWithoutAuth)
 	engine := router.New(controllers, middlewares)
@@ -125,6 +130,13 @@ func (c *Container) Close() error {
 		return nil
 	}
 	var closeErr error
+	// Drain buffered traffic records before closing the DB so records in flight
+	// are not lost on graceful shutdown.
+	if closer, ok := c.Services.Proxy.(interface{ Close() error }); ok {
+		if err := closer.Close(); err != nil && closeErr == nil {
+			closeErr = err
+		}
+	}
 	if c.DB != nil {
 		sqlDB, err := c.DB.DB()
 		if err != nil {

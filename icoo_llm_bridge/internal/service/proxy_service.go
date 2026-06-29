@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"icoo_llm_bridge/internal/config"
@@ -32,6 +33,14 @@ type proxyService struct {
 	tracker      RequestTracker
 	client       *http.Client
 	streamClient *http.Client
+
+	// trafficQueue decouples traffic recording from the proxy hot path. Records
+	// are handed to a background writer so a slow DB write (or "database is
+	// locked" backoff) never blocks the client response. When nil (tests that
+	// build the struct directly) recording falls back to synchronous writes.
+	trafficQueue chan entity.TrafficRecord
+	trafficDone  chan struct{}
+	trafficInflight sync.WaitGroup // tracks records enqueued but not yet written
 }
 
 type proxyAuth interface {
@@ -58,6 +67,63 @@ func NewProxyService(
 		client:       &http.Client{Timeout: cfg.WriteTimeout},
 		streamClient: &http.Client{},
 	}
+}
+
+// trafficQueueCapacity bounds how many records can be buffered while a slow DB
+// write is in flight. It is deliberately generous for normal load while still
+// capping memory under burst traffic (overflow is dropped, never blocks).
+const trafficQueueCapacity = 1024
+
+// StartTrafficWriter spins up the background worker that persists traffic
+// records off the proxy hot path. It is opt-in (called by the container) so
+// tests that build a proxyService directly keep deterministic synchronous
+// recording. Safe to call at most once per service.
+func (s *proxyService) StartTrafficWriter() {
+	if s.trafficQueue != nil {
+		return
+	}
+	s.trafficQueue = make(chan entity.TrafficRecord, trafficQueueCapacity)
+	s.trafficDone = make(chan struct{})
+	go s.runTrafficWriter()
+}
+
+// runTrafficWriter drains the queue, writing each record with an independent
+// timeout so a stuck write cannot stall the whole queue indefinitely.
+func (s *proxyService) runTrafficWriter() {
+	defer close(s.trafficDone)
+	for item := range s.trafficQueue {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := s.traffic.Record(ctx, item); err != nil && s.logger != nil {
+			s.logger.Warn("failed to record traffic", "error", err)
+		}
+		cancel()
+		s.trafficInflight.Done()
+	}
+}
+
+// Close stops the background writer after draining buffered records. It blocks
+// until the queue is empty or the timeout elapses, so records in flight are not
+// lost on graceful shutdown.
+func (s *proxyService) Close() error {
+	if s.trafficQueue == nil {
+		return nil
+	}
+	close(s.trafficQueue)
+	// Drain with a bounded wait so a pathological write cannot hang shutdown.
+	select {
+	case <-s.trafficDone:
+	case <-time.After(10 * time.Second):
+	}
+	s.trafficQueue = nil
+	s.trafficDone = nil
+	return nil
+}
+
+// FlushTraffic blocks until all currently-queued traffic records have been
+// written. It is a no-op when no writer is running. Primarily intended to make
+// traffic assertions deterministic in tests.
+func (s *proxyService) FlushTraffic() {
+	s.trafficInflight.Wait()
 }
 
 func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream constants.Protocol) {
@@ -313,6 +379,36 @@ func (s *proxyService) recordTraffic(
 		TotalTokens:          usage.TotalTokens,
 		Error:                message,
 		CreatedAt:            time.Now(),
+	}
+	s.enqueueTraffic(item)
+}
+
+// enqueueTraffic hands a record to the background writer when available.
+// Falling behind is treated as a degraded-but-safe condition: if the queue is
+// full we drop the record (and log once) rather than block the proxy response,
+// because stalling the client to persist a log row is the wrong tradeoff.
+func (s *proxyService) enqueueTraffic(item entity.TrafficRecord) {
+	if s.trafficQueue == nil {
+		// No worker configured: record synchronously (tests / unstarted service).
+		s.recordTrafficSync(item)
+		return
+	}
+	select {
+	case s.trafficQueue <- item:
+		s.trafficInflight.Add(1)
+	default:
+		if s.logger != nil {
+			s.logger.Warn("traffic queue full; dropping traffic record", "request_id", item.RequestID)
+		}
+	}
+}
+
+// recordTrafficSync is the synchronous fallback used when no background worker
+// is running. It keeps the same independent-timeout context semantics the tests
+// rely on (the request's own context cancellation must not abort recording).
+func (s *proxyService) recordTrafficSync(item entity.TrafficRecord) {
+	if s.traffic == nil {
+		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

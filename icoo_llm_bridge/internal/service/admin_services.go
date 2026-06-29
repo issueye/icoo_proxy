@@ -18,6 +18,11 @@ import (
 	"icoo_llm_bridge/internal/utils/idgen"
 )
 
+// fetchModelsClient is a dedicated *http.Client with a bounded timeout so a slow
+// or stuck upstream /v1/models endpoint cannot indefinitely block the admin
+// "pull models" operation. It is reused across requests (safe for concurrency).
+var fetchModelsClient = &http.Client{Timeout: 30 * time.Second}
+
 type AuthService interface {
 	Verify(ctx context.Context, secret string, scope string) bool
 	ListKeys(ctx context.Context) ([]APIKeyView, error)
@@ -52,7 +57,8 @@ type TrafficService interface {
 }
 
 type authService struct {
-	repo repository.APIKeyRepository
+	repo  repository.APIKeyRepository
+	cache apiKeyCache
 }
 
 func NewAuthService(repo repository.APIKeyRepository) AuthService {
@@ -65,15 +71,19 @@ func (s *authService) Verify(ctx context.Context, secret string, scope string) b
 		return false
 	}
 	sum := hashSecret(secret)
-	keys, err := s.repo.ListEnabled(ctx)
+	// 复用缓存的 enabled keys，避免每次鉴权都 ListEnabled 全表查询
+	keys, err := s.cache.loadOrFetch(ctx, func(ctx context.Context) ([]entity.APIKey, error) {
+		return s.repo.ListEnabled(ctx)
+	})
 	if err != nil {
 		return false
 	}
+	now := time.Now()
 	for _, key := range keys {
 		if !scopeAllowed(key.Scopes, scope) {
 			continue
 		}
-		if key.ExpiresAt != nil && time.Now().After(*key.ExpiresAt) {
+		if key.ExpiresAt != nil && now.After(*key.ExpiresAt) {
 			continue
 		}
 		if subtle.ConstantTimeCompare([]byte(key.SecretHash), []byte(sum)) == 1 {
@@ -157,6 +167,7 @@ func (s *authService) CreateKey(ctx context.Context, input APIKeyCreateInput) (A
 	if err := s.repo.Save(ctx, &item); err != nil {
 		return APIKeyView{}, err
 	}
+	s.cache.invalidate()
 	view := toAPIKeyView(item)
 	if generated || secret != "" {
 		view.SecretPreview = secret
@@ -165,15 +176,29 @@ func (s *authService) CreateKey(ctx context.Context, input APIKeyCreateInput) (A
 }
 
 func (s *authService) DeleteKey(ctx context.Context, id string) error {
-	return s.repo.Delete(ctx, strings.TrimSpace(id))
+	if err := s.repo.Delete(ctx, strings.TrimSpace(id)); err != nil {
+		return err
+	}
+	s.cache.invalidate()
+	return nil
 }
 
 type providerService struct {
-	repo repository.ProviderRepository
+	repo        repository.ProviderRepository
+	invalidator CacheInvalidator
 }
 
-func NewProviderService(repo repository.ProviderRepository) ProviderService {
-	return &providerService{repo: repo}
+func NewProviderService(repo repository.ProviderRepository) *providerService {
+	return &providerService{repo: repo, invalidator: noopInvalidator{}}
+}
+
+// SetCacheInvalidator wires the route cache so provider mutations drop the
+// cached routing snapshot. Called once during service wiring in NewServices.
+func (s *providerService) SetCacheInvalidator(invalidator CacheInvalidator) {
+	if invalidator == nil {
+		invalidator = noopInvalidator{}
+	}
+	s.invalidator = invalidator
 }
 
 func (s *providerService) List(ctx context.Context) ([]entity.Provider, error) {
@@ -210,11 +235,16 @@ func (s *providerService) Upsert(ctx context.Context, input ProviderUpsertInput)
 	if err := s.repo.Save(ctx, &item); err != nil {
 		return entity.Provider{}, err
 	}
+	s.invalidator.InvalidateProviders()
 	return item, nil
 }
 
 func (s *providerService) Delete(ctx context.Context, id string) error {
-	return s.repo.Delete(ctx, strings.TrimSpace(id))
+	if err := s.repo.Delete(ctx, strings.TrimSpace(id)); err != nil {
+		return err
+	}
+	s.invalidator.InvalidateProviders()
+	return nil
 }
 
 type FetchedModel struct {
@@ -227,10 +257,20 @@ type FetchedModel struct {
 type providerModelService struct {
 	repo         repository.ProviderModelRepository
 	providerRepo repository.ProviderRepository
+	invalidator  CacheInvalidator
 }
 
-func NewProviderModelService(repo repository.ProviderModelRepository, providerRepo repository.ProviderRepository) ProviderModelService {
-	return &providerModelService{repo: repo, providerRepo: providerRepo}
+func NewProviderModelService(repo repository.ProviderModelRepository, providerRepo repository.ProviderRepository) *providerModelService {
+	return &providerModelService{repo: repo, providerRepo: providerRepo, invalidator: noopInvalidator{}}
+}
+
+// SetCacheInvalidator wires the route cache so model mutations drop the cached
+// routing snapshot. Called once during service wiring in NewServices.
+func (s *providerModelService) SetCacheInvalidator(invalidator CacheInvalidator) {
+	if invalidator == nil {
+		invalidator = noopInvalidator{}
+	}
+	s.invalidator = invalidator
 }
 
 func (s *providerModelService) ListByProvider(ctx context.Context, providerID string) ([]entity.ProviderModel, error) {
@@ -267,6 +307,7 @@ func (s *providerModelService) Upsert(ctx context.Context, input ProviderModelUp
 	if err := s.repo.Save(ctx, &item); err != nil {
 		return entity.ProviderModel{}, err
 	}
+	s.invalidator.InvalidateProviders()
 	return item, nil
 }
 
@@ -279,7 +320,11 @@ func (s *providerModelService) Delete(ctx context.Context, providerID string, id
 	if id == "" {
 		return fmt.Errorf("id is required")
 	}
-	return s.repo.Delete(ctx, providerID, id)
+	if err := s.repo.Delete(ctx, providerID, id); err != nil {
+		return err
+	}
+	s.invalidator.InvalidateProviders()
+	return nil
 }
 
 func (s *providerModelService) FetchModels(ctx context.Context, providerID string) ([]FetchedModel, error) {
@@ -326,7 +371,7 @@ func (s *providerModelService) FetchModels(ctx context.Context, providerID strin
 	req.Header.Set("Authorization", "Bearer "+provider.APIKeyCipher)
 	req.Header.Set("User-Agent", provider.UserAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := fetchModelsClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request: %w", err)
 	}
@@ -362,12 +407,22 @@ func (s *providerModelService) FetchModels(ctx context.Context, providerID strin
 }
 
 type routingRuleService struct {
-	repo    repository.RoutingRuleRepository
-	tracker RequestTracker
+	repo        repository.RoutingRuleRepository
+	tracker     RequestTracker
+	invalidator CacheInvalidator
 }
 
-func NewRoutingRuleService(repo repository.RoutingRuleRepository, tracker RequestTracker) RoutingRuleService {
-	return &routingRuleService{repo: repo, tracker: tracker}
+func NewRoutingRuleService(repo repository.RoutingRuleRepository, tracker RequestTracker) *routingRuleService {
+	return &routingRuleService{repo: repo, tracker: tracker, invalidator: noopInvalidator{}}
+}
+
+// SetCacheInvalidator wires the route cache so rule mutations drop the cached
+// routing snapshot. Called once during service wiring in NewServices.
+func (s *routingRuleService) SetCacheInvalidator(invalidator CacheInvalidator) {
+	if invalidator == nil {
+		invalidator = noopInvalidator{}
+	}
+	s.invalidator = invalidator
 }
 
 func (s *routingRuleService) List(ctx context.Context) ([]entity.RoutingRule, error) {
@@ -402,6 +457,7 @@ func (s *routingRuleService) Upsert(ctx context.Context, input RoutingRuleUpsert
 	if err := s.repo.Save(ctx, &item); err != nil {
 		return entity.RoutingRule{}, err
 	}
+	s.invalidator.InvalidateProviders()
 	return item, nil
 }
 
@@ -410,7 +466,11 @@ func (s *routingRuleService) Delete(ctx context.Context, id string) error {
 	if s.tracker != nil && s.tracker.ActiveCount(id) > 0 {
 		return fmt.Errorf("routing rule is currently handling active requests, cannot delete")
 	}
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	s.invalidator.InvalidateProviders()
+	return nil
 }
 
 type trafficService struct {
