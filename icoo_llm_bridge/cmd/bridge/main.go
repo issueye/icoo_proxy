@@ -11,6 +11,8 @@ import (
 	"icoo_llm_bridge/internal/app"
 )
 
+var Version = "2.0.1"
+
 func main() {
 	configPath := flag.String("config", "", "path to config.toml")
 	dataDir := flag.String("data-dir", "", "data directory override")

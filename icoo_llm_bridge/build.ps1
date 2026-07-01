@@ -2,6 +2,8 @@ param(
   [switch]$SkipTests
 )
 
+$Version = "2.0.1"
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -30,7 +32,7 @@ try {
   if (-not $SkipTests) {
     Invoke-Checked { go test ./... }
   }
-  Invoke-Checked { go build -o $OutputFile ./cmd/bridge }
+  Invoke-Checked { go build -ldflags "-s -w -X 'cmd/bridge/main.Version=$Version'" -o $OutputFile ./cmd/bridge }
 } finally {
   Pop-Location
 }
