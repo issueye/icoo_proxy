@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"icoo_llm_bridge/internal/constants"
 	"icoo_llm_bridge/internal/service"
@@ -34,6 +35,12 @@ func TestContainerInitializesAndCloses(t *testing.T) {
 	}
 	if container.Server == nil || container.Server.Handler == nil {
 		t.Fatal("server handler is nil")
+	}
+	if container.Config.WriteTimeout != 300*time.Second {
+		t.Fatalf("config write timeout = %s, want 5m0s", container.Config.WriteTimeout)
+	}
+	if container.Server.WriteTimeout != 0 {
+		t.Fatalf("server write timeout = %s, want 0 for long streaming responses", container.Server.WriteTimeout)
 	}
 
 	if err := container.Close(); err != nil {

@@ -24,13 +24,13 @@
         table-class="model-alias-table"
       >
         <template #cell-name="{ row }">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-strong">{{ row.name }}</span>
+          <div class="table-cell-inline" :title="aliasTitle(row)">
+            <span class="table-cell-inline__text text-sm font-medium text-strong">{{ row.name }}</span>
             <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
               {{ row.enabled ? "启用" : "停用" }}
             </UTag>
+            <span class="table-meta">{{ formatTime(row.updated_at) }}</span>
           </div>
-          <p class="mt-0.5 text-[11px] text-muted">{{ formatTime(row.updated_at) }}</p>
         </template>
 
         <template #cell-supplier="{ row }">
@@ -42,7 +42,7 @@
         </template>
 
         <template #cell-model="{ row }">
-          <span class="break-all text-sm text-secondary">{{ row.model }}</span>
+          <span class="table-cell-wrap text-sm text-secondary" :title="row.model">{{ row.model }}</span>
         </template>
 
         <template #actions="{ row }">
@@ -162,6 +162,10 @@ function formatTime(value) {
     return "—";
   }
   return new Date(value).toLocaleString();
+}
+
+function aliasTitle(row) {
+  return `${row.name} · ${row.enabled ? "启用" : "停用"} · ${formatTime(row.updated_at)}`;
 }
 
 function openCreate() {

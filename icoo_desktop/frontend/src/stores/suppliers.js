@@ -415,11 +415,11 @@ export const useSuppliersStore = defineStore("suppliers", {
         this.saving = false;
       }
     },
-    async savePolicy() {
+    async savePolicy({ force = false } = {}) {
       this.saving = true;
       this.error = "";
       try {
-        await SaveRoutePolicy({ ...this.policyForm });
+        await SaveRoutePolicy({ ...this.policyForm, force });
         await this.refreshSupplierCatalog();
         this.resetPolicyForm();
       } catch (error) {

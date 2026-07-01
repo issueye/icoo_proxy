@@ -89,7 +89,7 @@ func NewContainer(options Options) (*Container, error) {
 		Handler:           engine,
 		ReadHeaderTimeout: cfg.ReadTimeout,
 		ReadTimeout:       cfg.ReadTimeout,
-		WriteTimeout:      cfg.WriteTimeout,
+		WriteTimeout:      0,
 		IdleTimeout:       60 * time.Second,
 	}
 

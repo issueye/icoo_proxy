@@ -434,7 +434,7 @@ func (s *routingRuleService) Upsert(ctx context.Context, input RoutingRuleUpsert
 		return entity.RoutingRule{}, fmt.Errorf("name is required")
 	}
 	id := strings.TrimSpace(input.ID)
-	if id != "" && s.tracker != nil && s.tracker.ActiveCount(id) > 0 {
+	if id != "" && !input.Force && s.tracker != nil && s.tracker.ActiveCount(id) > 0 {
 		return entity.RoutingRule{}, fmt.Errorf("routing rule is currently handling active requests, cannot modify")
 	}
 	now := time.Now()

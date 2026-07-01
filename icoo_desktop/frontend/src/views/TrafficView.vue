@@ -8,7 +8,7 @@
           :disabled="store.refreshing || store.clearing"
           @click="store.refresh"
         >
-          {{ store.refreshing ? "鍒锋柊涓?.." : "鍒锋柊娴侀噺" }}
+          {{ store.refreshing ? "刷新中..." : "刷新流量" }}
         </UButton>
         <UButton
           variant="error"
@@ -16,34 +16,34 @@
           :disabled="store.refreshing || store.clearing || !store.totalRequests"
           @click="openClearConfirm"
         >
-          {{ store.clearing ? "娓呯┖涓?.." : "娓呯┖璇锋眰" }}
+          {{ store.clearing ? "清空中..." : "清空请求" }}
         </UButton>
-        <USwitch v-model="store.autoRefresh" label="鑷姩鍒锋柊" />
+        <USwitch v-model="store.autoRefresh" label="自动刷新" />
       </div>
     </Teleport>
 
     <div class="stat-grid stat-grid--5">
-      <StatCard icon="activity" label="鏈€杩戣姹傛暟" :value="String(store.totalRequests)" tone="info" />
-      <StatCard icon="check" label="鎴愬姛璇锋眰" :value="String(store.successCount)" tone="success" />
-      <StatCard icon="alert" label="閿欒璇锋眰" :value="String(store.errorCount)" tone="danger" />
-      <StatCard icon="timer" label="骞冲潎鑰楁椂" :value="`${store.averageLatency} ms`" />
-      <StatCard icon="layers" label="鎬昏緭鍏?Token" :value="formatTokenCount(store.tokenStats.input_tokens)"
+      <StatCard icon="activity" label="最近请求数" :value="String(store.totalRequests)" tone="info" />
+      <StatCard icon="check" label="成功请求" :value="String(store.successCount)" tone="success" />
+      <StatCard icon="alert" label="错误请求" :value="String(store.errorCount)" tone="danger" />
+      <StatCard icon="timer" label="平均耗时" :value="`${store.averageLatency} ms`" />
+      <StatCard icon="layers" label="总输入 Token" :value="formatTokenCount(store.tokenStats.input_tokens)"
         tone="primary" />
-      <StatCard icon="server" label="鎬昏緭鍑?Token" :value="formatTokenCount(store.tokenStats.output_tokens)"
+      <StatCard icon="server" label="总输出 Token" :value="formatTokenCount(store.tokenStats.output_tokens)"
         tone="warning" />
-      <StatCard icon="key" label="鎬?Token" :value="formatTokenCount(store.tokenStats.total_tokens)" tone="info" />
+      <StatCard icon="key" label="总 Token" :value="formatTokenCount(store.tokenStats.total_tokens)" tone="info" />
     </div>
 
-      <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed fixed-field="freeze" stripe
-        size="sm" max-height="100%" min-width="1680px" pagination
-        pagination-mode="server" :page="store.page" :page-size="store.pageSize" :total="store.total"
-        :page-size-options="[8, 20, 50]" @page-change="store.changePage">
+    <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed fixed-field="freeze" stripe
+      size="sm" max-height="100%" min-width="1680px" pagination
+      pagination-mode="server" :page="store.page" :page-size="store.pageSize" :total="store.total"
+      :page-size-options="[8, 20, 50]" @page-change="store.changePage">
         <template #empty>
-          褰撳墠娌℃湁鍖归厤鐨勮姹傝褰曘€?
+          当前没有匹配的请求记录。
         </template>
         <template #query>
           <div class="query-form">
-            <USelect class="query-form__field query-form__field--protocol" label="鍗忚绛涢€? hide-label
+            <USelect class="query-form__field query-form__field--protocol" label="协议筛选" hide-label
               :model-value="store.filter" :options="normalizedProtocolOptions" @update:model-value="store.setFilter" />
           </div>
         </template>
@@ -54,38 +54,30 @@
           <UTag code size="xs">{{ row.endpoint || "-" }}</UTag>
         </template>
         <template #cell-requestInfo="{ row }">
-          <p class="text-sm text-strong table-cell-wrap">{{ row.method || "-" }} 路 {{ row.client_ip || "-" }}</p>
-          <p class="mt-0.5 table-meta table-cell-wrap">{{ row.user_agent || "鏃?User-Agent" }}</p>
+          <p class="table-cell-wrap text-sm text-strong" :title="requestInfoTitle(row)">
+            {{ row.method || "-" }} · {{ row.client_ip || "-" }} · {{ row.user_agent || "无 User-Agent" }}
+          </p>
         </template>
         <template #cell-route="{ row }">
-          <p class="text-sm text-secondary table-cell-wrap">{{ row.downstream }}</p>
-          <p class="mt-0.5 table-meta table-cell-wrap">{{ row.upstream || "-" }}</p>
-          <p v-if="routeHint(row)" class="mt-0.5 table-meta table-cell-wrap">{{ routeHint(row) }}</p>
+          <p class="table-cell-wrap text-sm text-secondary" :title="routeTitle(row)">
+            {{ row.downstream || "-" }} → {{ row.upstream || "-" }}<span v-if="routeHint(row)"> · {{ routeHint(row) }}</span>
+          </p>
         </template>
         <template #cell-model="{ row }">
-          <p class="text-sm text-strong table-cell-wrap">{{ row.requested_model || "-" }}</p>
-          <p class="mt-0.5 table-meta table-cell-wrap">璺敱鍒?{{ row.model || "-" }}</p>
+          <p class="table-cell-wrap text-sm text-strong" :title="modelTitle(row)">
+            {{ row.requested_model || "-" }} → {{ row.model || "-" }}
+          </p>
         </template>
         <template #cell-requestBody="{ row }">
-          <p class="text-sm text-secondary table-cell-wrap">{{ requestBodyPreview(row) }}</p>
-          <p class="mt-0.5 table-meta">
-            {{ formatBytes(row.request_body_bytes) }}{{ row.request_body_truncated ? "锛屽凡鎴柇" : "" }}
+          <p class="table-cell-wrap text-sm text-secondary" :title="requestBodyTitle(row)">
+            {{ requestBodyPreview(row) }} · {{ formatBytes(row.request_body_bytes) }}{{ row.request_body_truncated ? "，已截断" : "" }}
           </p>
         </template>
         <template #cell-tokens="{ row }">
-          <div class="token-cell">
-            <div class="token-cell__row">
-              <span class="token-cell__label">鍏?/span>
-              <span class="token-cell__value">{{ formatTokenCount(row.input_tokens) }}</span>
-            </div>
-            <div class="token-cell__row">
-              <span class="token-cell__label">鍑?/span>
-              <span class="token-cell__value">{{ formatTokenCount(row.output_tokens) }}</span>
-            </div>
-            <div class="token-cell__row token-cell__row--total">
-              <span class="token-cell__label">鎬?/span>
-              <span class="token-cell__value">{{ formatTokenCount(row.total_tokens) }}</span>
-            </div>
+          <div class="token-cell token-cell--inline" :title="tokenTitle(row)">
+            <span class="token-cell__item">入 {{ formatTokenCount(row.input_tokens) }}</span>
+            <span class="token-cell__item">出 {{ formatTokenCount(row.output_tokens) }}</span>
+            <span class="token-cell__item token-cell__item--total">总 {{ formatTokenCount(row.total_tokens) }}</span>
           </div>
         </template>
         <template #cell-status="{ row }">
@@ -100,13 +92,13 @@
           <span class="table-meta">{{ formatDateTime(row.created_at) }}</span>
         </template>
         <template #cell-error="{ row }">
-          <p v-if="row.error" class="text-sm text-error table-cell-wrap">{{ row.error }}</p>
-          <span v-else class="table-meta">鏃?/span>
+          <p v-if="row.error" class="table-cell-wrap text-sm text-error" :title="row.error">{{ row.error }}</p>
+          <span v-else class="table-meta">无</span>
         </template>
-      </UTable>
+    </UTable>
 
-    <UConfirmDialog v-model:open="confirmState.open" title="纭娓呯┖璇锋眰璁板綍" message="纭畾瑕佹竻绌烘祦閲忕洃鎺т腑鐨勬墍鏈夎姹備俊鎭悧锛?
-      description="娓呯┖鍚庡綋鍓嶄繚瀛樼殑璇锋眰璁板綍涓庣粺璁℃暟鎹皢琚Щ闄わ紝涓旀棤娉曟仮澶嶃€? confirm-text="纭娓呯┖" cancel-text="鍙栨秷"
+    <UConfirmDialog v-model:open="confirmState.open" title="确认清空请求记录" message="确定要清空流量监控中的所有请求信息吗？"
+      description="清空后当前保存的请求记录与统计数据将被移除，且无法恢复。" confirm-text="确认清空" cancel-text="取消"
       :loading="store.clearing" danger @confirm="confirmClear" />
   </section>
 </template>
@@ -132,17 +124,17 @@ const confirmState = reactive({
 });
 let refreshTimer = null;
 const tableColumns = [
-  { key: "requestId", title: "璇锋眰 ID", width: 180, freeze: "left" },
-  { key: "endpoint", title: "绔偣", width: 180 },
-  { key: "requestInfo", title: "璇锋眰淇℃伅", width: 240 },
-  { key: "route", title: "涓嬫父 / 涓婃父", width: 220 },
-  { key: "model", title: "妯″瀷", width: 190 },
-  { key: "requestBody", title: "璇锋眰浣?, width: 240 },
+  { key: "requestId", title: "请求 ID", width: 180, freeze: "left" },
+  { key: "endpoint", title: "端点", width: 180 },
+  { key: "requestInfo", title: "请求信息", width: 240 },
+  { key: "route", title: "下游 / 上游", width: 220 },
+  { key: "model", title: "模型", width: 190 },
+  { key: "requestBody", title: "请求体", width: 240 },
   { key: "tokens", title: "Tokens", width: 128 },
-  { key: "createdAt", title: "鍒涘缓鏃堕棿", width: 172 },
-  { key: "error", title: "閿欒淇℃伅", width: 216 },
-  { key: "duration", title: "鑰楁椂", width: 90, align: "center", freeze: "right" },
-  { key: "status", title: "鐘舵€佺爜", width: 92, align: "center", freeze: "right" },
+  { key: "createdAt", title: "创建时间", width: 172 },
+  { key: "error", title: "错误信息", width: 216 },
+  { key: "duration", title: "耗时", width: 90, align: "center", freeze: "right" },
+  { key: "status", title: "状态码", width: 92, align: "center", freeze: "right" },
 ];
 
 const normalizedProtocolOptions = computed(() =>
@@ -157,7 +149,7 @@ const normalizedProtocolOptions = computed(() =>
 
     return {
       value,
-      label: rawLabel === "all" ? "鍏ㄩ儴鍗忚" : rawLabel,
+      label: rawLabel === "all" ? "全部协议" : rawLabel,
     };
   }),
 );
@@ -181,7 +173,7 @@ function startTimer() {
 
 function formatDateTime(value) {
   if (!value) {
-    return "鏆傛棤";
+    return "暂无";
   }
   return new Date(value).toLocaleString();
 }
@@ -204,20 +196,40 @@ function requestBodyPreview(row) {
     return row.request_body;
   }
   if (row.request_body_bytes > 0) {
-    return "璇锋眰浣撴湭璁板綍锛岄渶鍦ㄩ」鐩缃腑寮€鍚褰?body";
+    return "请求体未记录，需在项目设置中开启记录 body";
   }
-  return "鏃犺姹備綋";
+  return "无请求体";
+}
+
+function requestInfoTitle(row) {
+  return `${row.method || "-"} · ${row.client_ip || "-"} · ${row.user_agent || "无 User-Agent"}`;
+}
+
+function routeTitle(row) {
+  return [row.downstream || "-", row.upstream || "-", routeHint(row)].filter(Boolean).join(" · ");
+}
+
+function modelTitle(row) {
+  return `${row.requested_model || "-"} → ${row.model || "-"}`;
+}
+
+function requestBodyTitle(row) {
+  return `${requestBodyPreview(row)} · ${formatBytes(row.request_body_bytes)}${row.request_body_truncated ? "，已截断" : ""}`;
+}
+
+function tokenTitle(row) {
+  return `输入 ${formatTokenCount(row.input_tokens)} · 输出 ${formatTokenCount(row.output_tokens)} · 总 ${formatTokenCount(row.total_tokens)}`;
 }
 
 function routeHint(row) {
   if (row.matched_rule_name) {
-    return `鍛戒腑瑙勫垯锛?{row.matched_rule_name}`;
+    return `命中规则：${row.matched_rule_name}`;
   }
   if (row.route_source === "direct") {
-    return `鐩磋繛璺敱锛?{row.route_name || row.model || "-"}`;
+    return `直连路由：${row.route_name || row.model || "-"}`;
   }
   if (row.route_name) {
-    return `璺敱锛?{row.route_name}`;
+    return `路由：${row.route_name}`;
   }
   return "";
 }
@@ -230,7 +242,7 @@ async function confirmClear() {
   await store.clear();
   if (!store.error) {
     confirmState.open = false;
-    message.success("娴侀噺璇锋眰璁板綍宸叉竻绌恒€?);
+    message.success("流量请求记录已清空。");
   }
 }
 
@@ -250,8 +262,6 @@ onBeforeUnmount(() => {
   stopTimer();
 });
 </script>
-
-</style>
 
 
 

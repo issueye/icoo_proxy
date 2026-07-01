@@ -8,19 +8,19 @@
           :disabled="store.loading"
           @click="store.load"
         >
-          {{ store.loading ? "鍒锋柊涓?.." : "鍒锋柊" }}
+          {{ store.loading ? "刷新中..." : "刷新" }}
         </UButton>
       </div>
     </Teleport>
 
-    <!-- 缁熻鍗＄墖閮ㄥ垎 -->
+    <!-- 统计卡片 -->
     <div class="section-grid grid-cols-1 md:grid-cols-3">
-      <StatCard icon="layers" label="鍗忚鎬绘暟" :value="String(store.routeDefinitions.length)" tone="info" />
-      <StatCard icon="check" label="宸插惎鐢ㄧ瓥鐣? :value="String(store.enabledPolicyCount)" tone="success" />
-      <StatCard icon="server" label="宸查厤缃笂娓? :value="String(store.configuredPolicyCount)" tone="info" />
+      <StatCard icon="layers" label="协议总数" :value="String(store.routeDefinitions.length)" tone="info" />
+      <StatCard icon="check" label="已启用策略" :value="String(store.enabledPolicyCount)" tone="success" />
+      <StatCard icon="server" label="已配置上游" :value="String(store.configuredPolicyCount)" tone="info" />
     </div>
 
-    <!-- 鍗忚鏄犲皠榛樿璺敱瑙勫垯鍒楄〃 -->
+    <!-- 协议映射默认路由规则列表 -->
     <div class="section-grid">
       <UTable
         :columns="routeManagementColumns"
@@ -31,13 +31,12 @@
         table-class="route-management-table"
       >
         <template #cell-protocol="{ row }">
-          <div class="route-map__protocol-main">
+          <div class="route-map__protocol-main" :title="routeProtocolTitle(row)">
             <p class="route-map__name">{{ row.label }}</p>
             <UTag code size="xs">{{ row.key }}</UTag>
+            <span class="route-map__helper">{{ row.helperText }}</span>
+            <span v-if="row.warningText" class="route-map__warning">{{ row.warningText }}</span>
           </div>
-          <p v-if="row.description" class="route-map__desc">{{ row.description }}</p>
-          <p class="route-map__helper">{{ row.helperText }}</p>
-          <p v-if="row.warningText" class="route-map__warning">{{ row.warningText }}</p>
         </template>
 
         <template #cell-supplier="{ row }">
@@ -56,7 +55,7 @@
           <div class="table-actions">
             <UIconButton
               icon="edit"
-              :label="row.policy ? `缂栬緫 ${row.label} 鏄犲皠` : `閰嶇疆 ${row.label} 鏄犲皠`"
+              :label="row.policy ? `编辑 ${row.label} 映射` : `配置 ${row.label} 映射`"
               @click="row.policy ? openPolicyEdit(row.policy) : openPolicyCreate(row.key)"
             />
           </div>
@@ -64,10 +63,10 @@
       </UTable>
     </div>
 
-    <!-- 璺敱绛栫暐缂栬緫寮圭獥 -->
+    <!-- 路由策略编辑弹窗 -->
     <UModal
       v-model:open="policyModalOpen"
-      :title="store.policyForm.id ? '缂栬緫璺敱绛栫暐' : '鏂板缓璺敱绛栫暐'"
+      :title="store.policyForm.id ? '编辑路由策略' : '新建路由策略'"
       width="560px"
       @close="store.resetPolicyForm"
     >
@@ -75,30 +74,30 @@
         <div class="grid gap-3 md:grid-cols-2">
           <USelect
             v-model="store.policyForm.downstream_protocol"
-            label="涓嬫父鍗忚"
+            label="下游协议"
             :options="store.policyOptions"
             disabled
           />
           <USelect
             v-model="store.policyForm.supplier_id"
-            label="渚涘簲鍟?
-            placeholder="璇烽€夋嫨渚涘簲鍟?
+            label="供应商"
+            placeholder="请选择供应商"
             :options="supplierOptions"
           />
         </div>
 
         <USelect
           v-model="store.policyForm.upstream_protocol"
-          label="涓婃父鍗忚"
-          placeholder="鐣欑┖鍒欑户鎵夸緵搴斿晢鍗忚"
+          label="上游协议"
+          placeholder="留空则继承供应商协议"
           :options="protocolOptions"
         />
 
-        <USwitch v-model="store.policyForm.enabled" label="鍚敤璇ヨ矾鐢辩瓥鐣? />
+        <USwitch v-model="store.policyForm.enabled" label="启用该路由策略" />
       </form>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="closePolicyModal">鍙栨秷</UButton>
+          <UButton variant="secondary" @click="closePolicyModal">取消</UButton>
           <UButton
             form="policy-form"
             variant="primary"
@@ -106,21 +105,34 @@
             :loading="store.saving"
             :disabled="store.saving"
           >
-            {{ store.saving ? "淇濆瓨涓?.." : "淇濆瓨璺敱绛栫暐" }}
+            {{ store.saving ? "保存中..." : "保存路由策略" }}
           </UButton>
         </div>
       </template>
     </UModal>
+
+    <UConfirmDialog
+      v-model:open="forceSwitchConfirm.open"
+      title="强制切换供应商"
+      message="当前路由策略正在处理请求，是否仍然切换到新的供应商？"
+      description="强制切换只影响后续新请求，已经开始的请求会继续使用原路由。"
+      confirm-text="强制切换"
+      cancel-text="取消"
+      :loading="store.saving"
+      danger
+      @confirm="confirmForceSwitch"
+    />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
 import { useStoreError } from "../composables/useStoreError";
 
 import StatCard from "../components/StatCard.vue";
 import UButton from "../components/ued/UButton.vue";
+import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UIconButton from "../components/ued/UIconButton.vue";
 import UModal from "../components/ued/UModal.vue";
 import USelect from "../components/ued/USelect.vue";
@@ -132,6 +144,10 @@ import { message } from "../components/ued/message";
 const store = useSuppliersStore();
 useStoreError(store);
 const policyModalOpen = ref(false);
+const forceSwitchConfirm = reactive({
+  open: false,
+  isEdit: false,
+});
 
 const protocolOptions = [
   { label: "anthropic", value: "anthropic" },
@@ -147,10 +163,10 @@ const supplierOptions = computed(() =>
 );
 
 const routeManagementColumns = [
-  { key: "protocol", title: "涓嬫父鍗忚", width: "40%" },
-  { key: "supplier", title: "渚涘簲鍟?, width: "20%" },
-  { key: "upstream", title: "涓婃父鍗忚", width: "20%" },
-  { key: "status", title: "鐘舵€?, width: "12%" },
+  { key: "protocol", title: "下游协议", width: "40%" },
+  { key: "supplier", title: "供应商", width: "20%" },
+  { key: "upstream", title: "上游协议", width: "20%" },
+  { key: "status", title: "状态", width: "12%" },
 ];
 
 function openPolicyCreate(protocol = "anthropic") {
@@ -169,6 +185,12 @@ function closePolicyModal() {
   store.resetPolicyForm();
 }
 
+function routeProtocolTitle(row) {
+  return [row.label, row.key, row.description, row.helperText, row.warningText]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 watch(
   () => store.policyForm.supplier_id,
   (newSupplierID, oldSupplierID) => {
@@ -181,7 +203,7 @@ watch(
     }
     const oldSupplier = store.allSuppliers.find((item) => item.id === oldSupplierID);
     const currentUpstream = store.policyForm.upstream_protocol;
-    // 浠呭湪鏈墜鍔ㄦ寚瀹氫笂娓稿崗璁紙绌哄€硷級鎴栧綋鍓嶅€肩户鎵胯嚜鏃т緵搴斿晢鏃讹紝鑷姩鍚屾鏂颁緵搴斿晢鍗忚
+    // Keep manually selected upstream protocols. Auto-sync only inherited values.
     if (!currentUpstream || (oldSupplier && currentUpstream === oldSupplier.protocol)) {
       store.policyForm.upstream_protocol = newSupplier.protocol;
     }
@@ -191,9 +213,27 @@ watch(
 async function submitPolicy() {
   const isEdit = Boolean(store.policyForm.id);
   await store.savePolicy();
+  if (isActiveRuleError(store.error)) {
+    forceSwitchConfirm.isEdit = isEdit;
+    forceSwitchConfirm.open = true;
+    return;
+  }
   if (!store.error) {
     policyModalOpen.value = false;
-    message.success(isEdit ? "璺敱绛栫暐宸叉洿鏂般€? : "璺敱绛栫暐宸叉柊澧炪€?);
+    message.success(isEdit ? "路由策略已更新。" : "路由策略已新增。");
+  }
+}
+
+function isActiveRuleError(error) {
+  return String(error || "").includes("active requests");
+}
+
+async function confirmForceSwitch() {
+  await store.savePolicy({ force: true });
+  if (!store.error) {
+    forceSwitchConfirm.open = false;
+    policyModalOpen.value = false;
+    message.success(forceSwitchConfirm.isEdit ? "路由策略已更新。" : "路由策略已新增。");
   }
 }
 
@@ -201,5 +241,3 @@ onMounted(() => {
   store.load();
 });
 </script>
-
-</style>

@@ -40,8 +40,9 @@
         <UTag variant="info" size="xs">{{ row.protocol }}</UTag>
       </template>
       <template #cell-description="{ row }">
-        <p class="max-w-xl text-sm text-secondary">{{ row.description || "-" }}</p>
-        <p class="mt-0.5 table-meta">更新时间：{{ formatDateTime(row.updated_at) }}</p>
+        <p class="table-cell-wrap text-sm text-secondary" :title="endpointDescriptionTitle(row)">
+          {{ row.description || "-" }} · 更新时间：{{ formatDateTime(row.updated_at) }}
+        </p>
       </template>
       <template #cell-builtIn="{ row }">
         <UTag :variant="row.built_in ? 'neutral' : 'warning'" size="xs">
@@ -125,6 +126,10 @@ const tableColumns = [
 function openCreate() {
   store.resetForm();
   modalOpen.value = true;
+}
+
+function endpointDescriptionTitle(row) {
+  return `${row.description || "-"} · 更新时间：${formatDateTime(row.updated_at)}`;
 }
 
 function openEdit(item) {

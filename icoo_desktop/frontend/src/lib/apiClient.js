@@ -524,6 +524,7 @@ export async function SaveRoutePolicy(input) {
     target_provider_id: input.supplier_id,
     target_model: "",
     enabled: Boolean(input.enabled),
+    force: Boolean(input.force),
   };
   if (payload.id) {
     await client.put(`${API_PREFIX}/routing-rules/${payload.id}`, payload);

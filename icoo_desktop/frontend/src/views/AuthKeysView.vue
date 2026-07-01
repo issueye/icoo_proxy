@@ -34,14 +34,15 @@
         </div>
       </template>
       <template #cell-name="{ row }">
-        <p class="font-medium text-strong">{{ row.name }}</p>
-        <p class="mt-0.5 table-meta">更新时间：{{ formatDateTime(row.updated_at) }}</p>
+        <p class="table-cell-wrap font-medium text-strong" :title="keyNameTitle(row)">
+          {{ row.name }} · 更新时间：{{ formatDateTime(row.updated_at) }}
+        </p>
       </template>
       <template #cell-secret="{ row }">
         <UTag code size="xs">{{ row.secret_masked }}</UTag>
       </template>
       <template #cell-description="{ row }">
-        <p class="max-w-xl text-sm text-secondary">{{ row.description || "-" }}</p>
+        <p class="table-cell-wrap text-sm text-secondary" :title="row.description || '-'">{{ row.description || "-" }}</p>
       </template>
       <template #cell-enabled="{ row }">
         <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
@@ -131,6 +132,10 @@ const tableColumns = [
 function openCreate() {
   store.resetForm();
   modalOpen.value = true;
+}
+
+function keyNameTitle(row) {
+  return `${row.name} · 更新时间：${formatDateTime(row.updated_at)}`;
 }
 
 function openEdit(item) {

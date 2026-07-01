@@ -43,6 +43,7 @@ type RoutingRuleUpsertInput struct {
 	TargetProviderID  string             `json:"target_provider_id"`
 	TargetModel       string             `json:"target_model"`
 	Enabled           bool               `json:"enabled"`
+	Force             bool               `json:"force"`
 }
 
 type APIKeyCreateInput struct {

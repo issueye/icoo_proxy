@@ -760,10 +760,22 @@ button:disabled {
 
   .admin-table th {
     @apply h-9 border-b border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-semibold leading-4 text-slate-500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .admin-table td {
     @apply h-11 border-b border-slate-100 bg-white px-3 py-2 align-middle text-sm leading-5 text-slate-600;
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-table td > * {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .admin-table tbody tr:hover td {
@@ -856,12 +868,36 @@ button:disabled {
   }
 
   .table-cell-wrap {
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .table-cell-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .table-cell-inline > * {
+    flex: 0 0 auto;
+  }
+
+  .table-cell-inline__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .supplier-table td {
-    @apply align-top;
+    @apply align-middle;
   }
 
   .ued-field {
@@ -1813,6 +1849,8 @@ button:disabled {
   min-width: 0;
   align-items: center;
   gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .route-map__name,
@@ -1829,23 +1867,28 @@ button:disabled {
 
 .route-map__desc,
 .route-map__helper {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--ued-color-text-muted);
   font-size: 12px;
   line-height: 18px;
 }
 
 .route-map__helper {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .route-map__warning {
-  margin: 4px 0 0;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
   color: var(--ued-color-destructive);
   font-size: 12px;
   line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .route-map__action {
@@ -2126,13 +2169,21 @@ button:disabled {
 
 /* Token cell: compact key-value display */
 .token-cell {
-  display: grid;
-  gap: 3px;
-  min-width: 92px;
-  padding: 5px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 7px;
+  overflow: hidden;
   border: 1px solid var(--ued-color-border);
   border-radius: var(--ued-radius-md);
   background: var(--ued-color-muted);
+  white-space: nowrap;
+}
+
+.token-cell--inline {
+  width: 100%;
 }
 
 .token-cell__row {
@@ -2156,6 +2207,20 @@ button:disabled {
 .token-cell__value {
   font-weight: 600;
   color: var(--ued-color-text);
+}
+
+.token-cell__item {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ued-color-text-muted);
+  font-size: var(--ued-font-size-sm);
+  line-height: 16px;
+  text-overflow: ellipsis;
+}
+
+.token-cell__item--total {
+  color: var(--ued-color-text);
+  font-weight: 650;
 }
 
 /* Responsive helpers */
