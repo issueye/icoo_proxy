@@ -19,7 +19,14 @@
       :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
       @page-change="store.changePage">
       <template #empty>
-        当前尚未配置端点。
+        <div class="empty-action">
+          <p class="empty-action__title">当前尚未配置端点</p>
+          <p class="empty-action__desc">新增端点后，请重载代理让入口路径生效。</p>
+          <div class="empty-action__actions">
+            <UButton size="sm" variant="primary" @click="openCreate">新增端点</UButton>
+            <UButton size="sm" variant="secondary" :loading="store.reloading" @click="reloadProxy">重载代理</UButton>
+          </div>
+        </div>
       </template>
       <template #query>
         <div class="table-query-form">
@@ -57,7 +64,7 @@
       <template #actions="{ row }">
         <div class="table-actions">
           <UIconButton icon="edit" label="编辑端点" @click="openEdit(row)" />
-          <UIconButton icon="delete" label="删除端点" variant="error" :loading="store.deleting === row.id"
+          <UIconButton icon="delete" :label="row.built_in ? '内置端点不能删除' : '删除端点'" variant="error" :loading="store.deleting === row.id"
             :disabled="row.built_in || store.deleting === row.id" @click="openDeleteConfirm(row)" />
         </div>
       </template>
@@ -154,7 +161,7 @@ async function submit() {
 function openDeleteConfirm(item) {
   confirmState.open = true;
   confirmState.id = item.id;
-  confirmState.message = `确定要删除端点"${item.path}"吗？`;
+  confirmState.message = `确定要删除端点 "${item.path}" 吗？`;
 }
 
 async function submitQuery() {

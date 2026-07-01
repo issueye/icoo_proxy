@@ -30,6 +30,16 @@
         size="sm"
         table-class="route-management-table"
       >
+        <template #empty>
+          <div class="empty-action">
+            <p class="empty-action__title">当前没有可配置的路由协议</p>
+            <p class="empty-action__desc">请先确认网关服务已正常启动，然后刷新路由规则。</p>
+            <div class="empty-action__actions">
+              <UButton size="sm" variant="primary" :loading="store.loading" @click="store.load">刷新路由规则</UButton>
+            </div>
+          </div>
+        </template>
+
         <template #cell-protocol="{ row }">
           <div class="route-map__protocol-main" :title="routeProtocolTitle(row)">
             <p class="route-map__name">{{ row.label }}</p>
@@ -94,6 +104,12 @@
         />
 
         <USwitch v-model="store.policyForm.enabled" label="启用该路由策略" />
+        <USwitch
+          v-if="store.policyForm.id"
+          v-model="forcePolicyUpdate"
+          label="允许强制修改"
+          hint="当前规则有活跃请求时仍允许保存。只影响后续新请求，已开始的请求继续使用原路由。"
+        />
       </form>
       <template #footer>
         <div class="flex justify-end gap-2">
@@ -105,7 +121,7 @@
             :loading="store.saving"
             :disabled="store.saving"
           >
-            {{ store.saving ? "保存中..." : "保存路由策略" }}
+            {{ store.saving ? "保存中..." : forcePolicyUpdate ? "强制保存" : "保存路由策略" }}
           </UButton>
         </div>
       </template>
@@ -113,10 +129,10 @@
 
     <UConfirmDialog
       v-model:open="forceSwitchConfirm.open"
-      title="强制切换供应商"
-      message="当前路由策略正在处理请求，是否仍然切换到新的供应商？"
-      description="强制切换只影响后续新请求，已经开始的请求会继续使用原路由。"
-      confirm-text="强制切换"
+      title="强制修改路由策略"
+      message="当前路由策略正在处理请求，是否仍然强制保存？"
+      description="强制修改只影响后续新请求，已经开始的请求会继续使用原路由。"
+      confirm-text="强制保存"
       cancel-text="取消"
       :loading="store.saving"
       danger
@@ -144,6 +160,7 @@ import { message } from "../components/ued/message";
 const store = useSuppliersStore();
 useStoreError(store);
 const policyModalOpen = ref(false);
+const forcePolicyUpdate = ref(false);
 const forceSwitchConfirm = reactive({
   open: false,
   isEdit: false,
@@ -171,17 +188,20 @@ const routeManagementColumns = [
 
 function openPolicyCreate(protocol = "anthropic") {
   store.resetPolicyForm();
+  forcePolicyUpdate.value = false;
   store.policyForm.downstream_protocol = protocol;
   policyModalOpen.value = true;
 }
 
 function openPolicyEdit(policy) {
   store.selectPolicy(policy);
+  forcePolicyUpdate.value = false;
   policyModalOpen.value = true;
 }
 
 function closePolicyModal() {
   policyModalOpen.value = false;
+  forcePolicyUpdate.value = false;
   store.resetPolicyForm();
 }
 
@@ -212,14 +232,18 @@ watch(
 
 async function submitPolicy() {
   const isEdit = Boolean(store.policyForm.id);
-  await store.savePolicy();
-  if (isActiveRuleError(store.error)) {
+  const result = await store.savePolicy({
+    force: forcePolicyUpdate.value,
+    silentActiveRuleError: true,
+  });
+  if (isActiveRuleError(result.error)) {
     forceSwitchConfirm.isEdit = isEdit;
     forceSwitchConfirm.open = true;
     return;
   }
-  if (!store.error) {
+  if (result.ok) {
     policyModalOpen.value = false;
+    forcePolicyUpdate.value = false;
     message.success(isEdit ? "路由策略已更新。" : "路由策略已新增。");
   }
 }
@@ -229,10 +253,11 @@ function isActiveRuleError(error) {
 }
 
 async function confirmForceSwitch() {
-  await store.savePolicy({ force: true });
-  if (!store.error) {
+  const result = await store.savePolicy({ force: true });
+  if (result.ok) {
     forceSwitchConfirm.open = false;
     policyModalOpen.value = false;
+    forcePolicyUpdate.value = false;
     message.success(forceSwitchConfirm.isEdit ? "路由策略已更新。" : "路由策略已新增。");
   }
 }

@@ -73,22 +73,22 @@
       <form class="section-grid" @submit.prevent="submit">
         <PanelBlock title="核心运行">
           <div class="grid gap-3 md:grid-cols-2">
-            <UInput v-model="store.form.proxy_host" label="PROXY_HOST" placeholder="127.0.0.1" />
-            <UInput v-model="store.form.proxy_port" label="PROXY_PORT" type="number" />
-            <UInput v-model="store.form.proxy_read_timeout_seconds" label="PROXY_READ_TIMEOUT_SECONDS" type="number" />
-            <UInput v-model="store.form.proxy_write_timeout_seconds" label="PROXY_WRITE_TIMEOUT_SECONDS" type="number" />
-            <UInput v-model="store.form.proxy_shutdown_timeout_seconds" label="PROXY_SHUTDOWN_TIMEOUT_SECONDS" type="number" />
-            <UInput v-model="store.form.default_max_tokens" label="PROXY_DEFAULT_MAX_TOKENS" type="number" />
+            <UInput v-model="store.form.proxy_host" label="代理主机" hint="PROXY_HOST" placeholder="127.0.0.1" />
+            <UInput v-model="store.form.proxy_port" label="代理端口" hint="PROXY_PORT" type="number" />
+            <UInput v-model="store.form.proxy_read_timeout_seconds" label="读取超时（秒）" hint="PROXY_READ_TIMEOUT_SECONDS" type="number" />
+            <UInput v-model="store.form.proxy_write_timeout_seconds" label="写入超时（秒）" hint="PROXY_WRITE_TIMEOUT_SECONDS" type="number" />
+            <UInput v-model="store.form.proxy_shutdown_timeout_seconds" label="关闭等待时间（秒）" hint="PROXY_SHUTDOWN_TIMEOUT_SECONDS" type="number" />
+            <UInput v-model="store.form.default_max_tokens" label="默认最大 Token 数" hint="PROXY_DEFAULT_MAX_TOKENS" type="number" />
           </div>
         </PanelBlock>
 
         <PanelBlock title="日志参数">
           <div class="grid gap-3 md:grid-cols-2">
-            <UInput v-model="store.form.proxy_chain_log_path" label="PROXY_CHAIN_LOG_PATH" placeholder=".data/bridge-chain.log" />
-            <UInput v-model="store.form.proxy_chain_log_max_body_bytes" label="PROXY_CHAIN_LOG_MAX_BODY_BYTES" type="number" />
+            <UInput v-model="store.form.proxy_chain_log_path" label="日志路径" hint="PROXY_CHAIN_LOG_PATH" placeholder=".data/bridge-chain.log" />
+            <UInput v-model="store.form.proxy_chain_log_max_body_bytes" label="Body 最大记录字节数" hint="PROXY_CHAIN_LOG_MAX_BODY_BYTES" type="number" />
           </div>
           <div class="mt-3">
-            <USwitch v-model="store.form.proxy_chain_log_bodies" label="记录请求与响应体" />
+            <USwitch v-model="store.form.proxy_chain_log_bodies" label="记录请求与响应体" hint="可能包含敏感内容，并增加日志体积。" />
           </div>
         </PanelBlock>
       </form>

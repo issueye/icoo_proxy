@@ -2,7 +2,7 @@
 
 Local-first LLM API bridge and desktop console.
 
-`icoo_proxy` exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages compatible endpoints, then routes each request to configured upstream providers. The current replacement-ready backend is the Rust service in `icoo_llm_bridge_r`; the Go service in `icoo_llm_bridge` is kept as the previous implementation and parity reference.
+`icoo_proxy` exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages compatible endpoints, then routes each request to configured upstream providers. The backend service lives in `icoo_llm_bridge`, and the desktop app lives in `icoo_desktop`.
 
 Chinese documentation: [README.cn.md](README.cn.md)
 
@@ -25,17 +25,15 @@ Chinese documentation: [README.cn.md](README.cn.md)
 
 ```text
 .
-├── icoo_llm_bridge_r/   # Rust backend, preferred service for new builds
 ├── icoo_desktop/        # Wails desktop app and Vue frontend
-├── icoo_llm_bridge/     # Go backend, previous implementation/reference
+├── icoo_llm_bridge/     # Go backend service
 ├── icoo_proxy/          # Packaged executable output directory
-└── build-all.ps1        # Legacy all-in-one build script
+└── build-all.ps1        # All-in-one build script
 ```
 
 ## Requirements
 
 - Windows PowerShell
-- Rust toolchain with `cargo`
 - Go toolchain
 - Node.js and npm
 - Wails CLI, for desktop builds
@@ -46,36 +44,30 @@ Install Wails if needed:
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ```
 
-## Build The Rust Bridge
+## Build The Bridge
 
 ```powershell
-cd icoo_llm_bridge_r
+cd icoo_llm_bridge
 .\build.ps1
 ```
 
 The output is:
 
 ```text
-icoo_llm_bridge_r\build\bridge.exe
+icoo_llm_bridge\build\bridge.exe
 ```
 
-Skip tests when you only need a fast release build:
+Skip tests when you only need a fast build:
 
 ```powershell
 .\build.ps1 -SkipTests
 ```
 
-Use a custom Cargo cache only when needed:
-
-```powershell
-.\build.ps1 -CargoHome "E:\cargo-cache"
-```
-
 ## Run The Bridge
 
 ```powershell
-cd icoo_llm_bridge_r
-.\build\bridge.exe --addr 127.0.0.1:18181 --data-dir .data
+cd icoo_llm_bridge
+.\build\bridge.exe
 ```
 
 Health checks:
@@ -90,11 +82,11 @@ By default, local loopback requests can use admin APIs without an API key. Confi
 
 ## Build The Desktop App
 
-Build the desktop app and bundle the Rust bridge:
+Build the desktop app and bundle the bridge:
 
 ```powershell
 cd icoo_desktop
-.\build.ps1 -BridgePath ..\icoo_llm_bridge_r\build\bridge.exe
+.\build.ps1 -BridgePath ..\icoo_llm_bridge\build\bridge.exe
 ```
 
 The output is:
@@ -210,8 +202,8 @@ GET  /api/v1/traffic
 Run backend tests:
 
 ```powershell
-cd icoo_llm_bridge_r
-cargo test
+cd icoo_llm_bridge
+go test ./...
 ```
 
 Run frontend build:
@@ -221,23 +213,9 @@ cd icoo_desktop\frontend
 npm run build
 ```
 
-Real upstream verification scripts:
-
-```powershell
-cd icoo_llm_bridge_r
-.\scripts\verify-real-upstream.ps1 -BridgeUrl http://127.0.0.1:18181 -ApiKey "<key>" -ResponsesModel "<model>"
-.\scripts\preflight-gray-replacement.ps1 -SourceDataDir "E:\path\to\data"
-```
-
-See also:
-
-- [Go/Rust parity checklist](icoo_llm_bridge_r/docs/parity/go-rust-parity-checklist.md)
-- [Rust gray release runbook](icoo_llm_bridge_r/docs/release/rust-gray-release-runbook.md)
-- [Real upstream verification](icoo_llm_bridge_r/docs/release/real-upstream-verification.md)
-
 ## Current Status
 
-The Rust bridge has been validated against real upstream providers for:
+The bridge supports:
 
 - OpenAI Responses to OpenAI Responses
 - OpenAI Chat to OpenAI Responses
@@ -248,12 +226,11 @@ The Rust bridge has been validated against real upstream providers for:
 - Multi-turn messages
 - Tool calls
 - Streaming responses
-- Mixed concurrent requests
+- Traffic recording and desktop-side inspection
 
 Known operational notes:
 
 - Some providers may return `429 Too Many Requests` under concurrent load. Use provider-level concurrency limits, retry, or backoff in production.
-- Full migration of older legacy database schemas is not part of the current Rust gray-release phase.
 - Some cross-protocol streaming paths still buffer during conversion, while same-protocol SSE pass-through is low latency.
 
 ## Packaging

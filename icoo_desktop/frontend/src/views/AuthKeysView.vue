@@ -2,7 +2,7 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <UButton variant="primary" @click="openCreate">新增 Key</UButton>
+        <UButton variant="primary" @click="openCreate">新增授权 Key</UButton>
         <UButton variant="secondary" :loading="store.reloading" :disabled="store.reloading" @click="reloadProxy">
           {{ store.reloading ? "重载中..." : "重载代理" }}
         </UButton>
@@ -10,7 +10,7 @@
     </Teleport>
 
     <div class="section-grid grid-cols-3">
-      <StatCard icon="key" label="Key 总数" :value="String(store.totalCount)" tone="info" />
+      <StatCard icon="key" label="授权 Key 总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
       <StatCard icon="endpoint" label="使用方式" value="Bearer / x-api-key" />
     </div>
@@ -19,7 +19,13 @@
       :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
       @page-change="store.changePage">
       <template #empty>
-        当前尚未添加授权 Key。本地信任模式仍按配置生效。
+        <div class="empty-action">
+          <p class="empty-action__title">当前尚未添加授权 Key</p>
+          <p class="empty-action__desc">如果启用鉴权，需要先新增授权 Key；本地信任模式仍会按当前配置生效。</p>
+          <div class="empty-action__actions">
+            <UButton size="sm" variant="primary" @click="openCreate">新增授权 Key</UButton>
+          </div>
+        </div>
       </template>
       <template #query>
         <div class="table-query-form">
@@ -65,7 +71,7 @@
       <form id="auth-key-form" class="space-y-3" @submit.prevent="submit">
         <UInput v-model="store.form.name" label="名称" placeholder="本地开发 Key" />
         <div class="field-row items-end">
-          <UInput v-model="store.form.secret" label="Key" class="flex-1"
+          <UInput v-model="store.form.secret" label="授权 Key" class="flex-1"
             :placeholder="store.form.id ? '留空则保留原 Key' : '输入或生成授权 Key'" />
           <UButton variant="secondary" class="shrink-0" @click="generateSecret">生成</UButton>
         </div>
@@ -77,7 +83,7 @@
           <UButton variant="secondary" @click="closeModal">取消</UButton>
           <UButton form="auth-key-form" variant="primary" native-type="submit" :loading="store.saving"
             :disabled="store.saving">
-            {{ store.saving ? "保存中..." : "保存 Key" }}
+            {{ store.saving ? "保存中..." : "保存授权 Key" }}
           </UButton>
         </div>
       </template>
@@ -160,7 +166,7 @@ async function submit() {
 function openDeleteConfirm(item) {
   confirmState.open = true;
   confirmState.id = item.id;
-  confirmState.message = `确定要删除授权 Key"${item.name}"吗？`;
+  confirmState.message = `确定要删除授权 Key "${item.name}" 吗？`;
 }
 
 async function submitQuery() {

@@ -11,7 +11,8 @@
           {{ store.refreshing ? "刷新中..." : "刷新流量" }}
         </UButton>
         <UButton
-          variant="error"
+          variant="secondary"
+          class="ued-button--danger-subtle"
           :loading="store.clearing"
           :disabled="store.refreshing || store.clearing || !store.totalRequests"
           @click="openClearConfirm"
@@ -22,16 +23,19 @@
       </div>
     </Teleport>
 
-    <div class="stat-grid stat-grid--5">
+    <div class="stat-grid stat-grid--4">
       <StatCard icon="activity" label="最近请求数" :value="String(store.totalRequests)" tone="info" />
-      <StatCard icon="check" label="成功请求" :value="String(store.successCount)" tone="success" />
       <StatCard icon="alert" label="错误请求" :value="String(store.errorCount)" tone="danger" />
       <StatCard icon="timer" label="平均耗时" :value="`${store.averageLatency} ms`" />
+      <StatCard icon="key" label="总 Token" :value="formatTokenCount(store.tokenStats.total_tokens)" tone="info" />
+    </div>
+
+    <div class="stat-grid stat-grid--3">
+      <StatCard icon="check" label="成功请求" :value="String(store.successCount)" tone="success" />
       <StatCard icon="layers" label="总输入 Token" :value="formatTokenCount(store.tokenStats.input_tokens)"
         tone="primary" />
       <StatCard icon="server" label="总输出 Token" :value="formatTokenCount(store.tokenStats.output_tokens)"
         tone="warning" />
-      <StatCard icon="key" label="总 Token" :value="formatTokenCount(store.tokenStats.total_tokens)" tone="info" />
     </div>
 
     <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed fixed-field="freeze" stripe
@@ -39,7 +43,13 @@
       pagination-mode="server" :page="store.page" :page-size="store.pageSize" :total="store.total"
       :page-size-options="[8, 20, 50]" @page-change="store.changePage">
         <template #empty>
-          当前没有匹配的请求记录。
+          <div class="empty-action">
+            <p class="empty-action__title">当前没有匹配的请求记录</p>
+            <p class="empty-action__desc">可以刷新流量，或向本地代理发起一次请求后再查看。</p>
+            <div class="empty-action__actions">
+              <UButton size="sm" variant="primary" :loading="store.refreshing" @click="store.refresh">刷新流量</UButton>
+            </div>
+          </div>
         </template>
         <template #query>
           <div class="query-form">

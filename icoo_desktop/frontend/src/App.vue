@@ -78,8 +78,11 @@
       <main class="app-main">
         <header class="app-topbar">
           <div class="app-page-identity">
+            <h1>{{ currentTitle }}</h1>
             <div class="app-breadcrumb">
               <span>icoo_proxy</span>
+              <span>/</span>
+              <span>{{ currentGroupName }}</span>
               <span>/</span>
               <span>{{ currentTitle }}</span>
             </div>
@@ -168,27 +171,27 @@ const {
 
 const navGroups = computed(() => [
   {
-    name: "网关",
+    name: "运行",
     items: [
-      { to: "/", label: "网关概览", description: "", icon: "overview" },
-      { to: "/traffic", label: "流量监控", description: "", icon: "traffic" },
+      { to: "/", label: "网关概览", description: "运行状态与健康检查", icon: "overview" },
+      { to: "/traffic", label: "流量监控", description: "请求、耗时与错误", icon: "traffic" },
     ],
   },
   {
     name: "配置",
     items: [
-      { to: "/suppliers", label: "供应商", description: "", icon: "supplier" },
-      { to: "/routing-rules", label: "规则设置", description: "", icon: "rules" },
-      { to: "/model-aliases", label: "模型路由", description: "", icon: "model" },
-      { to: "/endpoints", label: "端点", description: "", icon: "endpoint" },
-      { to: "/auth-keys", label: "授权 Key", description: "", icon: "key" },
-      { to: "/settings", label: "项目设置", description: "", icon: "settings" },
+      { to: "/suppliers", label: "供应商", description: "上游服务与模型", icon: "supplier" },
+      { to: "/routing-rules", label: "路由规则", description: "协议映射策略", icon: "rules" },
+      { to: "/model-aliases", label: "模型路由", description: "别名与目标模型", icon: "model" },
+      { to: "/endpoints", label: "端点", description: "入口路径管理", icon: "endpoint" },
+      { to: "/auth-keys", label: "授权 Key", description: "本地访问凭据", icon: "key" },
     ],
   },
   {
-    name: "UED",
+    name: "系统",
     items: [
-      { to: "/ued", label: "组件规范", description: "", icon: "ued" },
+      { to: "/settings", label: "项目设置", description: "运行参数与外观", icon: "settings" },
+      { to: "/ued", label: "组件规范", description: "界面组件状态", icon: "ued" },
     ],
   },
 ]);
@@ -198,6 +201,10 @@ const navItems = computed(() => navGroups.value.flatMap((group) => group.items))
 const currentNavItem = computed(() => navItems.value.find((item) => item.to === route.path));
 
 const currentTitle = computed(() => currentNavItem.value?.label || "本地 AI 网关管理台");
+
+const currentGroupName = computed(() => (
+  navGroups.value.find((group) => group.items.some((item) => item.to === route.path))?.name || "控制台"
+));
 
 const serverStatusLabel = computed(() => {
   switch (serverStatus.value) {

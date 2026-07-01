@@ -415,15 +415,20 @@ export const useSuppliersStore = defineStore("suppliers", {
         this.saving = false;
       }
     },
-    async savePolicy({ force = false } = {}) {
+    async savePolicy({ force = false, silentActiveRuleError = false } = {}) {
       this.saving = true;
       this.error = "";
       try {
         await SaveRoutePolicy({ ...this.policyForm, force });
         await this.refreshSupplierCatalog();
         this.resetPolicyForm();
+        return { ok: true, error: "" };
       } catch (error) {
-        this.error = error?.message || String(error);
+        const message = error?.message || String(error);
+        if (!(silentActiveRuleError && message.includes("active requests"))) {
+          this.error = message;
+        }
+        return { ok: false, error: message };
       } finally {
         this.saving = false;
       }

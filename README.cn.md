@@ -2,7 +2,7 @@
 
 本地优先的 LLM API 转换网关和桌面管理端。
 
-`icoo_proxy` 对下游暴露 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 兼容接口，并根据供应商、模型和路由策略把请求转发到不同上游。当前推荐使用的后端是 `icoo_llm_bridge_r` 里的 Rust 版本；`icoo_llm_bridge` 里的 Go 版本保留为旧实现和行为对照。
+`icoo_proxy` 对下游暴露 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 兼容接口，并根据供应商、模型和路由策略把请求转发到不同上游。后端服务位于 `icoo_llm_bridge`，桌面端位于 `icoo_desktop`。
 
 English documentation: [README.md](README.md)
 
@@ -25,17 +25,15 @@ English documentation: [README.md](README.md)
 
 ```text
 .
-├── icoo_llm_bridge_r/   # Rust 后端，当前推荐用于新构建
 ├── icoo_desktop/        # Wails 桌面端和 Vue 前端
-├── icoo_llm_bridge/     # Go 后端，旧实现/对照版本
+├── icoo_llm_bridge/     # Go 后端服务
 ├── icoo_proxy/          # 打包输出目录
-└── build-all.ps1        # 旧的一键构建脚本
+└── build-all.ps1        # 一键构建脚本
 ```
 
 ## 环境要求
 
 - Windows PowerShell
-- Rust 工具链和 `cargo`
 - Go 工具链
 - Node.js 和 npm
 - Wails CLI，用于构建桌面端
@@ -46,17 +44,17 @@ English documentation: [README.md](README.md)
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ```
 
-## 构建 Rust 网关
+## 构建网关
 
 ```powershell
-cd icoo_llm_bridge_r
+cd icoo_llm_bridge
 .\build.ps1
 ```
 
 输出文件：
 
 ```text
-icoo_llm_bridge_r\build\bridge.exe
+icoo_llm_bridge\build\bridge.exe
 ```
 
 只想快速构建发布程序，可以跳过测试：
@@ -65,17 +63,11 @@ icoo_llm_bridge_r\build\bridge.exe
 .\build.ps1 -SkipTests
 ```
 
-只有在确实需要时才指定 Cargo 缓存目录：
-
-```powershell
-.\build.ps1 -CargoHome "E:\cargo-cache"
-```
-
 ## 运行网关
 
 ```powershell
-cd icoo_llm_bridge_r
-.\build\bridge.exe --addr 127.0.0.1:18181 --data-dir .data
+cd icoo_llm_bridge
+.\build\bridge.exe
 ```
 
 健康检查：
@@ -90,11 +82,11 @@ Invoke-RestMethod http://127.0.0.1:18181/api/v1/runtime/state
 
 ## 构建桌面端
 
-先构建 Rust 网关，然后构建桌面端并把 `bridge.exe` 打包进去：
+先构建网关，然后构建桌面端并把 `bridge.exe` 打包进去：
 
 ```powershell
 cd icoo_desktop
-.\build.ps1 -BridgePath ..\icoo_llm_bridge_r\build\bridge.exe
+.\build.ps1 -BridgePath ..\icoo_llm_bridge\build\bridge.exe
 ```
 
 输出文件：
@@ -207,11 +199,11 @@ GET  /api/v1/traffic
 
 ## 验证
 
-运行 Rust 后端测试：
+运行后端测试：
 
 ```powershell
-cd icoo_llm_bridge_r
-cargo test
+cd icoo_llm_bridge
+go test ./...
 ```
 
 运行前端构建：
@@ -221,23 +213,9 @@ cd icoo_desktop\frontend
 npm run build
 ```
 
-真实上游验证脚本：
-
-```powershell
-cd icoo_llm_bridge_r
-.\scripts\verify-real-upstream.ps1 -BridgeUrl http://127.0.0.1:18181 -ApiKey "<key>" -ResponsesModel "<model>"
-.\scripts\preflight-gray-replacement.ps1 -SourceDataDir "E:\path\to\data"
-```
-
-更多文档：
-
-- [Go/Rust parity checklist](icoo_llm_bridge_r/docs/parity/go-rust-parity-checklist.md)
-- [Rust gray release runbook](icoo_llm_bridge_r/docs/release/rust-gray-release-runbook.md)
-- [Real upstream verification](icoo_llm_bridge_r/docs/release/real-upstream-verification.md)
-
 ## 当前状态
 
-Rust 网关已经用真实上游验证过以下场景：
+网关支持以下场景：
 
 - OpenAI Responses 到 OpenAI Responses
 - OpenAI Chat 到 OpenAI Responses
@@ -248,12 +226,11 @@ Rust 网关已经用真实上游验证过以下场景：
 - 多轮对话
 - 工具调用
 - 流式响应
-- 混合并发请求
+- 流量记录和桌面端查看
 
 当前需要注意：
 
 - 部分供应商在并发较高时会返回 `429 Too Many Requests`。生产环境建议增加供应商级并发限制、重试或退避策略。
-- Rust 灰度阶段没有包含旧数据库完整迁移。
 - 部分跨协议流式转换仍会缓冲；同协议 SSE 透传已经是低延迟路径。
 
 ## 打包方式

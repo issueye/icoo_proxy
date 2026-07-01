@@ -6,17 +6,24 @@
       </div>
     </Teleport>
 
-    <div class="section-grid grid-cols-1 md:grid-cols-3">
+    <div class="section-grid grid-cols-2 lg:grid-cols-4">
       <StatCard icon="server" label="供应商总数" :value="String(store.totalCount)" tone="info" />
-      <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
-      <StatCard icon="heart-pulse" label="已健康检查" :value="String(store.checkedCount)" />
+      <StatCard icon="check" label="健康可达" :value="String(reachableCount)" tone="success" />
+      <StatCard icon="alert" label="警告 / 异常" :value="String(attentionCount)" :tone="attentionCount ? 'danger' : 'neutral'" />
+      <StatCard icon="heart-pulse" label="未检查" :value="String(uncheckedCount)" :tone="uncheckedCount ? 'warning' : 'neutral'" />
     </div>
 
     <UTable :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed fixed-field="freeze" min-width="1640px"
       table-class="supplier-table" pagination pagination-mode="server" :page="store.page" :page-size="store.pageSize"
       :total="store.total" :page-size-options="[8, 20, 50]" @page-change="store.changePage">
       <template #empty>
-        当前尚未配置供应商。
+        <div class="empty-action">
+          <p class="empty-action__title">当前尚未配置供应商</p>
+          <p class="empty-action__desc">添加供应商后，才能配置路由规则并转发本地请求。</p>
+          <div class="empty-action__actions">
+            <UButton size="sm" variant="primary" @click="openSupplierCreate">新建供应商</UButton>
+          </div>
+        </div>
       </template>
       <template #query>
         <div class="table-query-form">
@@ -38,7 +45,7 @@
       <template #cell-protocol="{ row }">
         <div class="table-cell-inline">
           <span class="table-cell-inline__text font-medium text-strong">{{ row.protocol }}</span>
-          <UTag v-if="row.only_stream" variant="warning" size="xs">only_stream</UTag>
+          <UTag v-if="row.only_stream" variant="warning" size="xs">仅流式</UTag>
         </div>
       </template>
       <template #cell-address="{ row }">
@@ -115,7 +122,7 @@
 
         <div class="grid gap-3 md:grid-cols-2">
           <USwitch v-model="store.form.enabled" label="启用该供应商" />
-          <USwitch v-model="store.form.only_stream" label="仅流式上游" />
+          <USwitch v-model="store.form.only_stream" label="仅使用流式请求" />
         </div>
       </form>
       <template #footer>
@@ -182,7 +189,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
 import { useStoreError } from "../composables/useStoreError";
 
@@ -214,6 +221,10 @@ const confirmState = reactive({
   id: "",
   message: "",
 });
+
+const reachableCount = computed(() => store.health.filter((item) => item.status === "reachable").length);
+const attentionCount = computed(() => store.health.filter((item) => item.status && item.status !== "reachable").length);
+const uncheckedCount = computed(() => Math.max(store.totalCount - store.checkedCount, 0));
 
 const protocolOptions = [
   { label: "anthropic", value: "anthropic" },
