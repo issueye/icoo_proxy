@@ -237,7 +237,7 @@ func (s *proxyService) handleStreamResponse(
 	requestedModel string,
 	requestBody []byte,
 ) {
-	reader, err := preflightStream(resp.Body)
+	reader, err := preflightStream(resp.Body, s.streamPreflightTimeout())
 	if err != nil {
 		statusCode := http.StatusBadGateway
 		message := err.Error()
@@ -620,10 +620,10 @@ func matchedRuleName(ruleID string, routeName string) string {
 }
 
 const (
-	maxUpstreamErrorBodyBytes = 1 << 20
-	streamPreflightMaxBytes   = 64 << 10
-	streamPreflightMaxEvents  = 3
-	streamPreflightTimeout    = 2 * time.Second
+	maxUpstreamErrorBodyBytes     = 1 << 20
+	streamPreflightMaxBytes       = 64 << 10
+	streamPreflightMaxEvents      = 3
+	defaultStreamPreflightTimeout = 30 * time.Second
 )
 
 func isHTTPSuccess(statusCode int) bool {
@@ -705,7 +705,17 @@ type streamPreflightResult struct {
 	err    error
 }
 
-func preflightStream(body io.ReadCloser) (io.Reader, error) {
+func (s *proxyService) streamPreflightTimeout() time.Duration {
+	if s.cfg.StreamPreflightTimeout > 0 {
+		return s.cfg.StreamPreflightTimeout
+	}
+	return defaultStreamPreflightTimeout
+}
+
+func preflightStream(body io.ReadCloser, timeout time.Duration) (io.Reader, error) {
+	if timeout <= 0 {
+		timeout = defaultStreamPreflightTimeout
+	}
 	done := make(chan streamPreflightResult, 1)
 	go func() {
 		reader, err := scanStreamPreflight(body)
@@ -714,7 +724,7 @@ func preflightStream(body io.ReadCloser) (io.Reader, error) {
 	select {
 	case result := <-done:
 		return result.reader, result.err
-	case <-time.After(streamPreflightTimeout):
+	case <-time.After(timeout):
 		_ = body.Close()
 		return nil, fmt.Errorf("upstream stream preflight timed out")
 	}

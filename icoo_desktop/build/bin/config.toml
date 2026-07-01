@@ -2,6 +2,7 @@ host = "127.0.0.1"
 port = 18181
 read_timeout_seconds = 15
 write_timeout_seconds = 300
+stream_preflight_timeout_seconds = 30
 shutdown_timeout_seconds = 10
 allow_local_without_auth = true
 chain_log_path = ".data/bridge-chain.log"

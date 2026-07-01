@@ -10,19 +10,20 @@ import (
 )
 
 type fileConfig struct {
-	Host                   string            `toml:"host"`
-	Port                   int               `toml:"port"`
-	ReadTimeoutSeconds     int               `toml:"read_timeout_seconds"`
-	WriteTimeoutSeconds    int               `toml:"write_timeout_seconds"`
-	ShutdownTimeoutSeconds int               `toml:"shutdown_timeout_seconds"`
-	AllowLocalWithoutAuth  *bool             `toml:"allow_local_without_auth"`
-	AllowUnauthLocal       *bool             `toml:"allow_unauthenticated_local"`
-	DefaultMaxTokens       int               `toml:"default_max_tokens"`
-	DataDir                string            `toml:"data_dir"`
-	DBPath                 string            `toml:"db_path"`
-	TrafficDBPath          string            `toml:"traffic_db_path"`
-	Log                    fileLogConfig     `toml:"log"`
-	Archive                fileArchiveConfig `toml:"archive"`
+	Host                          string            `toml:"host"`
+	Port                          int               `toml:"port"`
+	ReadTimeoutSeconds            int               `toml:"read_timeout_seconds"`
+	WriteTimeoutSeconds           int               `toml:"write_timeout_seconds"`
+	StreamPreflightTimeoutSeconds int               `toml:"stream_preflight_timeout_seconds"`
+	ShutdownTimeoutSeconds        int               `toml:"shutdown_timeout_seconds"`
+	AllowLocalWithoutAuth         *bool             `toml:"allow_local_without_auth"`
+	AllowUnauthLocal              *bool             `toml:"allow_unauthenticated_local"`
+	DefaultMaxTokens              int               `toml:"default_max_tokens"`
+	DataDir                       string            `toml:"data_dir"`
+	DBPath                        string            `toml:"db_path"`
+	TrafficDBPath                 string            `toml:"traffic_db_path"`
+	Log                           fileLogConfig     `toml:"log"`
+	Archive                       fileArchiveConfig `toml:"archive"`
 }
 
 type fileLogConfig struct {
@@ -59,16 +60,17 @@ func Load(path string) (Config, error) {
 func defaults() Config {
 	dataDir := ".data"
 	return Config{
-		Host:                  "127.0.0.1",
-		Port:                  18181,
-		ReadTimeout:           15 * time.Second,
-		WriteTimeout:          300 * time.Second,
-		ShutdownTimeout:       10 * time.Second,
-		AllowLocalWithoutAuth: true,
-		DefaultMaxTokens:      DefaultMaxTokens,
-		DataDir:               dataDir,
-		DBPath:                filepath.Join(dataDir, "icoo_llm_bridge.db"),
-		TrafficDBPath:         filepath.Join(dataDir, "icoo_llm_bridge_traffic.db"),
+		Host:                   "127.0.0.1",
+		Port:                   18181,
+		ReadTimeout:            15 * time.Second,
+		WriteTimeout:           300 * time.Second,
+		StreamPreflightTimeout: 30 * time.Second,
+		ShutdownTimeout:        10 * time.Second,
+		AllowLocalWithoutAuth:  true,
+		DefaultMaxTokens:       DefaultMaxTokens,
+		DataDir:                dataDir,
+		DBPath:                 filepath.Join(dataDir, "icoo_llm_bridge.db"),
+		TrafficDBPath:          filepath.Join(dataDir, "icoo_llm_bridge_traffic.db"),
 		Log: LogConfig{
 			ChainLogPath:         filepath.Join(dataDir, "bridge-chain.log"),
 			ChainLogBodies:       false,
@@ -94,6 +96,9 @@ func applyFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.WriteTimeoutSeconds > 0 {
 		cfg.WriteTimeout = time.Duration(fc.WriteTimeoutSeconds) * time.Second
+	}
+	if fc.StreamPreflightTimeoutSeconds > 0 {
+		cfg.StreamPreflightTimeout = time.Duration(fc.StreamPreflightTimeoutSeconds) * time.Second
 	}
 	if fc.ShutdownTimeoutSeconds > 0 {
 		cfg.ShutdownTimeout = time.Duration(fc.ShutdownTimeoutSeconds) * time.Second

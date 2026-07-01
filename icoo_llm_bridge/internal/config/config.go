@@ -12,18 +12,19 @@ import (
 const DefaultMaxTokens = 32768
 
 type Config struct {
-	Host                  string
-	Port                  int
-	ReadTimeout           time.Duration
-	WriteTimeout          time.Duration
-	ShutdownTimeout       time.Duration
-	AllowLocalWithoutAuth bool
-	DefaultMaxTokens      int
-	DataDir               string
-	DBPath                string
-	TrafficDBPath         string
-	Log                   LogConfig
-	Archive               ArchiveConfig
+	Host                   string
+	Port                   int
+	ReadTimeout            time.Duration
+	WriteTimeout           time.Duration
+	StreamPreflightTimeout time.Duration
+	ShutdownTimeout        time.Duration
+	AllowLocalWithoutAuth  bool
+	DefaultMaxTokens       int
+	DataDir                string
+	DBPath                 string
+	TrafficDBPath          string
+	Log                    LogConfig
+	Archive                ArchiveConfig
 }
 
 type LogConfig struct {

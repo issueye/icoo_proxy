@@ -633,6 +633,66 @@ func TestProxyServiceStreamingRequestDoesNotUseGlobalClientTimeout(t *testing.T)
 	}
 }
 
+func TestProxyServiceStreamPreflightUsesConfiguredTimeout(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		time.Sleep(100 * time.Millisecond)
+		_, _ = w.Write([]byte(strings.Join([]string{
+			`event: response.created`,
+			`data: {"type":"response.created","response":{"id":"resp_1","model":"gpt","status":"in_progress"}}`,
+			``,
+			`event: response.output_text.delta`,
+			`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"hello"}`,
+			``,
+			`event: response.completed`,
+			`data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt","status":"completed"}}`,
+			``,
+		}, "\n")))
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "responses",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "gpt-5.5",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false, StreamPreflightTimeout: 500 * time.Millisecond},
+		slog.Default(),
+		ai_llm_proxy.NewProtocolConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"requested-model","stream":true,"messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIChat)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"content":"hello"`) {
+		t.Fatalf("expected delayed stream body, got: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusOK {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+}
+
 func TestProxyServiceStreamPreflightRejectsEmptyStream(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
