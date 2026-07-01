@@ -332,6 +332,7 @@ func newConcreteRouteResolver(
 		providers: &fakeProviderRepository{items: providers},
 		models:    &fakeProviderModelRepository{items: models},
 		rules:     &fakeRoutingRuleRepository{items: rules},
+		cache:     &RouteCache{},
 	}
 }
 
@@ -440,3 +441,75 @@ func (r *fakeRoutingRuleRepository) Save(context.Context, *entity.RoutingRule) e
 func (r *fakeRoutingRuleRepository) Delete(context.Context, string) error {
 	return errors.New("not implemented")
 }
+
+// countingProviderRepository wraps the fake and records how many times List is
+// called, so cache hit/miss behavior can be asserted.
+type countingProviderRepository struct {
+	inner *fakeProviderRepository
+	calls int
+}
+
+func (r *countingProviderRepository) List(ctx context.Context) ([]entity.Provider, error) {
+	r.calls++
+	return r.inner.List(ctx)
+}
+
+func (r *countingProviderRepository) Find(ctx context.Context, id string) (entity.Provider, error) {
+	return r.inner.Find(ctx, id)
+}
+
+func (r *countingProviderRepository) Save(ctx context.Context, item *entity.Provider) error {
+	return r.inner.Save(ctx, item)
+}
+
+func (r *countingProviderRepository) Delete(ctx context.Context, id string) error {
+	return r.inner.Delete(ctx, id)
+}
+
+// TestRouteResolverCachesProvidersAndInvalidates verifies the route cache serves
+// repeated resolves from memory and drops the snapshot on invalidation so a
+// fresh read happens after a config mutation.
+func TestRouteResolverCachesProvidersAndInvalidates(t *testing.T) {
+	ctx := context.Background()
+	providers := &countingProviderRepository{
+		inner: &fakeProviderRepository{
+			items: []entity.Provider{
+				provider("p-openai", "openai", constants.ProtocolOpenAIChat, true),
+			},
+		},
+	}
+	models := &fakeProviderModelRepository{
+		items: map[string][]entity.ProviderModel{
+			"p-openai": {model("p-openai", "gpt-4o", 128000, true)},
+		},
+	}
+	resolver := newConcreteRouteResolver(nil, nil, nil)
+	resolver.providers = providers
+	resolver.models = models
+
+	// First resolve: one DB hit to load providers.
+	if _, err := resolver.Resolve(ctx, constants.ProtocolOpenAIChat, "openai/gpt-4o"); err != nil {
+		t.Fatalf("first Resolve error: %v", err)
+	}
+	if providers.calls != 1 {
+		t.Fatalf("provider List calls after first resolve = %d, want 1", providers.calls)
+	}
+
+	// Second resolve: served from cache, no extra DB hit.
+	if _, err := resolver.Resolve(ctx, constants.ProtocolOpenAIChat, "openai/gpt-4o"); err != nil {
+		t.Fatalf("second Resolve error: %v", err)
+	}
+	if providers.calls != 1 {
+		t.Fatalf("provider List calls after cached resolve = %d, want 1", providers.calls)
+	}
+
+	// Invalidate: the next resolve re-reads from the DB.
+	resolver.cache.InvalidateProviders()
+	if _, err := resolver.Resolve(ctx, constants.ProtocolOpenAIChat, "openai/gpt-4o"); err != nil {
+		t.Fatalf("post-invalidate Resolve error: %v", err)
+	}
+	if providers.calls != 2 {
+		t.Fatalf("provider List calls after invalidate = %d, want 2", providers.calls)
+	}
+}
+

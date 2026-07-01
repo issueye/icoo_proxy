@@ -34,10 +34,21 @@ func NewServices(deps Deps) Services {
 	providers := NewProviderService(deps.Repos.Provider)
 	providerModels := NewProviderModelService(deps.Repos.ProviderModel, deps.Repos.Provider)
 	rules := NewRoutingRuleService(deps.Repos.RoutingRule, tracker)
-	routing := NewRouteResolver(deps.Repos.Provider, deps.Repos.ProviderModel, deps.Repos.RoutingRule)
+	// Hold the concrete resolver so its route cache can be wired into the admin
+	// services below; it still satisfies the RouteResolver interface.
+	resolver := newRouteResolver(deps.Repos.Provider, deps.Repos.ProviderModel, deps.Repos.RoutingRule)
+
+	// Wire the resolver's route cache into the mutating admin services so any
+	// provider/model/rule write immediately drops the cached snapshot and the
+	// next proxied request re-reads fresh data (write-through invalidation).
+	invalidator := resolver.cache
+	providers.SetCacheInvalidator(invalidator)
+	providerModels.SetCacheInvalidator(invalidator)
+	rules.SetCacheInvalidator(invalidator)
+
 	traffic := NewTrafficService(deps.Repos.Traffic)
 	runtime := NewRuntimeService(deps.Config, endpoints)
-	proxy := NewProxyService(deps.Config, deps.Logger, deps.Converter, auth, routing, traffic, tracker)
+	proxy := NewProxyService(deps.Config, deps.Logger, deps.Converter, auth, resolver, traffic, tracker)
 	return Services{
 		Auth:          auth,
 		Runtime:       runtime,
@@ -45,7 +56,7 @@ func NewServices(deps Deps) Services {
 		Provider:      providers,
 		ProviderModel: providerModels,
 		RoutingRule:   rules,
-		Routing:       routing,
+		Routing:       resolver,
 		Traffic:       traffic,
 		Proxy:         proxy,
 	}

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
@@ -8,19 +8,19 @@
           :disabled="store.loading"
           @click="store.load"
         >
-          {{ store.loading ? "刷新中..." : "刷新" }}
+          {{ store.loading ? "鍒锋柊涓?.." : "鍒锋柊" }}
         </UButton>
       </div>
     </Teleport>
 
-    <!-- 统计卡片部分 -->
+    <!-- 缁熻鍗＄墖閮ㄥ垎 -->
     <div class="section-grid grid-cols-1 md:grid-cols-3">
-      <StatCard icon="layers" label="协议总数" :value="String(store.routeDefinitions.length)" tone="info" />
-      <StatCard icon="check" label="已启用策略" :value="String(store.enabledPolicyCount)" tone="success" />
-      <StatCard icon="server" label="已配置上游" :value="String(store.configuredPolicyCount)" tone="info" />
+      <StatCard icon="layers" label="鍗忚鎬绘暟" :value="String(store.routeDefinitions.length)" tone="info" />
+      <StatCard icon="check" label="宸插惎鐢ㄧ瓥鐣? :value="String(store.enabledPolicyCount)" tone="success" />
+      <StatCard icon="server" label="宸查厤缃笂娓? :value="String(store.configuredPolicyCount)" tone="info" />
     </div>
 
-    <!-- 协议映射默认路由规则列表 -->
+    <!-- 鍗忚鏄犲皠榛樿璺敱瑙勫垯鍒楄〃 -->
     <div class="section-grid">
       <UTable
         :columns="routeManagementColumns"
@@ -56,7 +56,7 @@
           <div class="table-actions">
             <UIconButton
               icon="edit"
-              :label="row.policy ? `编辑 ${row.label} 映射` : `配置 ${row.label} 映射`"
+              :label="row.policy ? `缂栬緫 ${row.label} 鏄犲皠` : `閰嶇疆 ${row.label} 鏄犲皠`"
               @click="row.policy ? openPolicyEdit(row.policy) : openPolicyCreate(row.key)"
             />
           </div>
@@ -64,10 +64,10 @@
       </UTable>
     </div>
 
-    <!-- 路由策略编辑弹窗 -->
+    <!-- 璺敱绛栫暐缂栬緫寮圭獥 -->
     <UModal
       v-model:open="policyModalOpen"
-      :title="store.policyForm.id ? '编辑路由策略' : '新建路由策略'"
+      :title="store.policyForm.id ? '缂栬緫璺敱绛栫暐' : '鏂板缓璺敱绛栫暐'"
       width="560px"
       @close="store.resetPolicyForm"
     >
@@ -75,30 +75,30 @@
         <div class="grid gap-3 md:grid-cols-2">
           <USelect
             v-model="store.policyForm.downstream_protocol"
-            label="下游协议"
+            label="涓嬫父鍗忚"
             :options="store.policyOptions"
             disabled
           />
           <USelect
             v-model="store.policyForm.supplier_id"
-            label="供应商"
-            placeholder="请选择供应商"
+            label="渚涘簲鍟?
+            placeholder="璇烽€夋嫨渚涘簲鍟?
             :options="supplierOptions"
           />
         </div>
 
         <USelect
           v-model="store.policyForm.upstream_protocol"
-          label="上游协议"
-          placeholder="留空则继承供应商协议"
+          label="涓婃父鍗忚"
+          placeholder="鐣欑┖鍒欑户鎵夸緵搴斿晢鍗忚"
           :options="protocolOptions"
         />
 
-        <USwitch v-model="store.policyForm.enabled" label="启用该路由策略" />
+        <USwitch v-model="store.policyForm.enabled" label="鍚敤璇ヨ矾鐢辩瓥鐣? />
       </form>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="closePolicyModal">取消</UButton>
+          <UButton variant="secondary" @click="closePolicyModal">鍙栨秷</UButton>
           <UButton
             form="policy-form"
             variant="primary"
@@ -106,7 +106,7 @@
             :loading="store.saving"
             :disabled="store.saving"
           >
-            {{ store.saving ? "保存中..." : "保存路由策略" }}
+            {{ store.saving ? "淇濆瓨涓?.." : "淇濆瓨璺敱绛栫暐" }}
           </UButton>
         </div>
       </template>
@@ -147,10 +147,10 @@ const supplierOptions = computed(() =>
 );
 
 const routeManagementColumns = [
-  { key: "protocol", title: "下游协议", width: "40%" },
-  { key: "supplier", title: "供应商", width: "20%" },
-  { key: "upstream", title: "上游协议", width: "20%" },
-  { key: "status", title: "状态", width: "12%" },
+  { key: "protocol", title: "涓嬫父鍗忚", width: "40%" },
+  { key: "supplier", title: "渚涘簲鍟?, width: "20%" },
+  { key: "upstream", title: "涓婃父鍗忚", width: "20%" },
+  { key: "status", title: "鐘舵€?, width: "12%" },
 ];
 
 function openPolicyCreate(protocol = "anthropic") {
@@ -181,7 +181,7 @@ watch(
     }
     const oldSupplier = store.allSuppliers.find((item) => item.id === oldSupplierID);
     const currentUpstream = store.policyForm.upstream_protocol;
-    // 仅在未手动指定上游协议（空值）或当前值继承自旧供应商时，自动同步新供应商协议
+    // 浠呭湪鏈墜鍔ㄦ寚瀹氫笂娓稿崗璁紙绌哄€硷級鎴栧綋鍓嶅€肩户鎵胯嚜鏃т緵搴斿晢鏃讹紝鑷姩鍚屾鏂颁緵搴斿晢鍗忚
     if (!currentUpstream || (oldSupplier && currentUpstream === oldSupplier.protocol)) {
       store.policyForm.upstream_protocol = newSupplier.protocol;
     }
@@ -193,7 +193,7 @@ async function submitPolicy() {
   await store.savePolicy();
   if (!store.error) {
     policyModalOpen.value = false;
-    message.success(isEdit ? "路由策略已更新。" : "路由策略已新增。");
+    message.success(isEdit ? "璺敱绛栫暐宸叉洿鏂般€? : "璺敱绛栫暐宸叉柊澧炪€?);
   }
 }
 
@@ -202,6 +202,4 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
-/* 保持简洁与主样式库同步 */
 </style>

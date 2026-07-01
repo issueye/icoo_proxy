@@ -17,6 +17,7 @@ type routeResolver struct {
 	providers repository.ProviderRepository
 	models    repository.ProviderModelRepository
 	rules     repository.RoutingRuleRepository
+	cache     *RouteCache
 }
 
 func NewRouteResolver(
@@ -24,10 +25,21 @@ func NewRouteResolver(
 	models repository.ProviderModelRepository,
 	rules repository.RoutingRuleRepository,
 ) RouteResolver {
+	return newRouteResolver(providers, models, rules)
+}
+
+// newRouteResolver returns the concrete resolver so its route cache can be
+// wired into the admin services after construction.
+func newRouteResolver(
+	providers repository.ProviderRepository,
+	models repository.ProviderModelRepository,
+	rules repository.RoutingRuleRepository,
+) *routeResolver {
 	return &routeResolver{
 		providers: providers,
 		models:    models,
 		rules:     rules,
+		cache:     &RouteCache{},
 	}
 }
 
@@ -45,7 +57,7 @@ func (r *routeResolver) Resolve(ctx context.Context, downstream constants.Protoc
 		return route, err
 	}
 
-	rules, err := r.rules.ListEnabled(ctx)
+	rules, err := r.loadRules(ctx)
 	if err != nil {
 		return domain.Route{}, fmt.Errorf("list enabled routing rules: %w", err)
 	}
@@ -90,7 +102,7 @@ func (r *routeResolver) ResolvePlan(ctx context.Context, downstream constants.Pr
 	}
 
 	// 加载路由规则
-	rules, err := r.rules.ListEnabled(ctx)
+	rules, err := r.loadRules(ctx)
 	if err != nil {
 		return plan, fmt.Errorf("list enabled routing rules: %w", err)
 	}
@@ -118,8 +130,13 @@ func (r *routeResolver) ResolvePlan(ctx context.Context, downstream constants.Pr
 	return plan, fmt.Errorf("no route matched downstream protocol %q and model %q", downstream, requestedModel)
 }
 
-// loadProviders 加载供应商
+// loadProviders 加载供应商（命中缓存则直接返回，避免每个请求都打 DB 的 N+1 查询）
 func (r *routeResolver) loadProviders(ctx context.Context) ([]domain.ProviderSnapshot, error) {
+	return r.cache.loadProviders(ctx, r.loadProvidersFromDB)
+}
+
+// loadProvidersFromDB 一次性拉取启用的供应商及其模型，构建快照
+func (r *routeResolver) loadProvidersFromDB(ctx context.Context) ([]domain.ProviderSnapshot, error) {
 	items, err := r.providers.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list providers: %w", err)
@@ -137,6 +154,13 @@ func (r *routeResolver) loadProviders(ctx context.Context) ([]domain.ProviderSna
 		providers = append(providers, providerSnapshot(item, models))
 	}
 	return providers, nil
+}
+
+// loadRules 加载启用的路由规则（命中缓存则直接返回）
+func (r *routeResolver) loadRules(ctx context.Context) ([]entity.RoutingRule, error) {
+	return r.cache.loadRules(ctx, func(ctx context.Context) ([]entity.RoutingRule, error) {
+		return r.rules.ListEnabled(ctx)
+	})
 }
 
 // resolveDirect 直接解析路由
@@ -278,11 +302,6 @@ func findModel(models []domain.ProviderModelSnapshot, name string) (domain.Provi
 		}
 	}
 	return domain.ProviderModelSnapshot{}, false
-}
-
-// buildRoute 构建路由
-func buildRoute(name string, provider domain.ProviderSnapshot, upstreamProtocol constants.Protocol, model string, maxTokens int, source string) domain.Route {
-	return buildRouteCandidate(name, provider, upstreamProtocol, model, maxTokens, source, 0).Route()
 }
 
 // buildRouteCandidate 构建路由候选

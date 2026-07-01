@@ -176,6 +176,11 @@ func TestCustomEndpointRoutesProxyRequest(t *testing.T) {
 		t.Fatalf("custom endpoint status = %d, body = %s", resp.Code, resp.Body.String())
 	}
 
+	// The proxy persists traffic records asynchronously; flush before asserting.
+	if flusher, ok := container.Services.Proxy.(interface{ FlushTraffic() }); ok {
+		flusher.FlushTraffic()
+	}
+
 	records, err := container.Services.Traffic.List(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("list traffic: %v", err)
