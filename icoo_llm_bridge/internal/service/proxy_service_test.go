@@ -146,6 +146,56 @@ func TestProxyServiceForwardsJSONAndRewritesModel(t *testing.T) {
 	}
 }
 
+func TestProxyServiceUsesProviderProxyURL(t *testing.T) {
+	var proxiedURL string
+	var proxiedAuth string
+	proxyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxiedURL = r.URL.String()
+		proxiedAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp_proxy","usage":{"total_tokens":5}}`))
+	}))
+	defer proxyServer.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "proxied route",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "target-model",
+		Provider: domain.ProviderSnapshot{
+			Name:     "openai",
+			BaseURL:  "http://upstream.example",
+			ProxyURL: proxyServer.URL,
+			APIKey:   "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false},
+		slog.Default(),
+		ai_llm_proxy.NewPassthroughConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"source-model"}`))
+	req.Header.Set("Authorization", "Bearer local-key")
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIResponses)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if proxiedURL != "http://upstream.example/v1/responses" {
+		t.Fatalf("proxied URL = %q", proxiedURL)
+	}
+	if proxiedAuth != "Bearer upstream-key" {
+		t.Fatalf("proxied Authorization = %q", proxiedAuth)
+	}
+}
+
 func TestProxyServiceRecordsTrafficWithIndependentContext(t *testing.T) {
 	traffic := &contextCheckingTraffic{}
 	proxy := &proxyService{traffic: traffic}

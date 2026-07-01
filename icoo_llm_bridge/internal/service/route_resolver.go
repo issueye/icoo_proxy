@@ -239,6 +239,7 @@ func providerSnapshot(item entity.Provider, models []entity.ProviderModel) domai
 		Protocol:    item.Protocol,
 		Vendor:      item.Vendor,
 		BaseURL:     item.BaseURL,
+		ProxyURL:    item.ProxyURL,
 		APIKey:      item.APIKeyCipher,
 		OnlyStream:  item.OnlyStream,
 		UserAgent:   item.UserAgent,

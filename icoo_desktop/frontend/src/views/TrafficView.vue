@@ -38,14 +38,26 @@
         tone="warning" />
     </div>
 
-    <UTable :columns="tableColumns" :rows="store.requests" row-key="request_id" fixed fixed-field="freeze" stripe
-      size="sm" max-height="100%" min-width="1680px" pagination
-      pagination-mode="server" :page="store.page" :page-size="store.pageSize" :total="store.total"
-      :page-size-options="[8, 20, 50]" @page-change="store.changePage">
+    <UTable
+      :columns="tableColumns"
+      :rows="store.requests"
+      row-key="request_id"
+      fixed
+      fixed-field="freeze"
+      stripe
+      size="sm"
+      max-height="100%"
+      min-width="1680px"
+      pagination
+      pagination-mode="server"
+      :page="store.page"
+      :page-size="store.pageSize"
+      :total="store.total"
+      @page-change="store.changePage"
+    >
         <template #empty>
           <div class="empty-action">
             <p class="empty-action__title">当前没有匹配的请求记录</p>
-            <p class="empty-action__desc">可以刷新流量，或向本地代理发起一次请求后再查看。</p>
             <div class="empty-action__actions">
               <UButton size="sm" variant="primary" :loading="store.refreshing" @click="store.refresh">刷新流量</UButton>
             </div>

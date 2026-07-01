@@ -212,6 +212,10 @@ func (s *providerService) Upsert(ctx context.Context, input ProviderUpsertInput)
 	if _, ok := constants.ParseProtocol(input.Protocol.String()); !ok {
 		return entity.Provider{}, fmt.Errorf("protocol is invalid")
 	}
+	proxyURL := strings.TrimSpace(input.ProxyURL)
+	if _, err := parseProviderProxyURL(proxyURL); err != nil {
+		return entity.Provider{}, err
+	}
 	now := time.Now()
 	id := strings.TrimSpace(input.ID)
 	if id == "" {
@@ -224,6 +228,7 @@ func (s *providerService) Upsert(ctx context.Context, input ProviderUpsertInput)
 		Vendor:       input.Vendor,
 		BaseURL:      strings.TrimSpace(input.BaseURL),
 		ModelsURL:    strings.TrimSpace(input.ModelsURL),
+		ProxyURL:     proxyURL,
 		APIKeyCipher: strings.TrimSpace(input.APIKey),
 		OnlyStream:   input.OnlyStream,
 		UserAgent:    strings.TrimSpace(input.UserAgent),
@@ -371,7 +376,14 @@ func (s *providerModelService) FetchModels(ctx context.Context, providerID strin
 	req.Header.Set("Authorization", "Bearer "+provider.APIKeyCipher)
 	req.Header.Set("User-Agent", provider.UserAgent)
 
-	resp, err := fetchModelsClient.Do(req)
+	client := fetchModelsClient
+	if strings.TrimSpace(provider.ProxyURL) != "" {
+		client, err = newProxiedHTTPClient(fetchModelsClient.Timeout, provider.ProxyURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request: %w", err)
 	}

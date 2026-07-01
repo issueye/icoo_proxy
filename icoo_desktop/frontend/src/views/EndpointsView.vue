@@ -15,9 +15,20 @@
       <StatCard icon="layers" label="自定义端点" :value="String(store.customCount)" />
     </div>
 
-    <UTable :columns="tableColumns" :rows="store.items" action-width="90px" fixed fixed-field="freeze" pagination pagination-mode="server"
-      :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
-      @page-change="store.changePage">
+    <UTable
+      :columns="tableColumns"
+      :rows="store.items"
+      action-width="90px"
+      fixed
+      fixed-field="freeze"
+      table-class="endpoint-table"
+      pagination
+      pagination-mode="server"
+      :page="store.page"
+      :page-size="store.pageSize"
+      :total="store.total"
+      @page-change="store.changePage"
+    >
       <template #empty>
         <div class="empty-action">
           <p class="empty-action__title">当前尚未配置端点</p>

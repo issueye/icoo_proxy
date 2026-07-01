@@ -15,13 +15,23 @@
       <StatCard icon="endpoint" label="使用方式" value="Bearer / x-api-key" />
     </div>
 
-    <UTable :columns="tableColumns" :rows="store.items" action-width="118px" fixed fixed-field="freeze" pagination pagination-mode="server"
-      :page="store.page" :page-size="store.pageSize" :total="store.total" :page-size-options="[8, 20, 50]"
-      @page-change="store.changePage">
+    <UTable
+      :columns="tableColumns"
+      :rows="store.items"
+      action-width="118px"
+      fixed
+      fixed-field="freeze"
+      table-class="auth-key-table"
+      pagination
+      pagination-mode="server"
+      :page="store.page"
+      :page-size="store.pageSize"
+      :total="store.total"
+      @page-change="store.changePage"
+    >
       <template #empty>
         <div class="empty-action">
           <p class="empty-action__title">当前尚未添加授权 Key</p>
-          <p class="empty-action__desc">如果启用鉴权，需要先新增授权 Key；本地信任模式仍会按当前配置生效。</p>
           <div class="empty-action__actions">
             <UButton size="sm" variant="primary" @click="openCreate">新增授权 Key</UButton>
           </div>

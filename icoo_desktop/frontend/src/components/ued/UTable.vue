@@ -979,6 +979,9 @@ function handlePageSizeChange(value) {
   color: var(--ued-color-text-muted);
   font-size: var(--ued-font-size-sm);
   line-height: 16px;
+  span {
+    width: 40px;
+  }
 }
 
 .table-pagination__ued-select {

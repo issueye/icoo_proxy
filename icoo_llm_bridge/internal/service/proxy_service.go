@@ -38,8 +38,8 @@ type proxyService struct {
 	// are handed to a background writer so a slow DB write (or "database is
 	// locked" backoff) never blocks the client response. When nil (tests that
 	// build the struct directly) recording falls back to synchronous writes.
-	trafficQueue chan entity.TrafficRecord
-	trafficDone  chan struct{}
+	trafficQueue    chan entity.TrafficRecord
+	trafficDone     chan struct{}
 	trafficInflight sync.WaitGroup // tracks records enqueued but not yet written
 }
 
@@ -260,6 +260,17 @@ func (s *proxyService) sendUpstream(r *http.Request, route domain.Route, body []
 	client := s.client
 	if streaming {
 		client = s.streamClient
+	}
+	if strings.TrimSpace(route.Provider.ProxyURL) != "" {
+		var err error
+		timeout := s.cfg.WriteTimeout
+		if streaming {
+			timeout = 0
+		}
+		client, err = newProxiedHTTPClient(timeout, route.Provider.ProxyURL)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if client == nil {
 		client = http.DefaultClient

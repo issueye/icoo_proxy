@@ -8,6 +8,7 @@ type ProviderSnapshot struct {
 	Protocol    constants.Protocol
 	Vendor      constants.Vendor
 	BaseURL     string
+	ProxyURL    string
 	APIKey      string
 	OnlyStream  bool
 	UserAgent   string

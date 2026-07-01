@@ -16,32 +16,6 @@
     </div>
 
     <template v-else>
-      <div class="content-panel overview-status">
-        <div class="overview-status__primary">
-          <p class="overview-status__label">服务状态</p>
-          <p class="overview-status__value">
-            <span class="app-status-dot" :class="store.data?.running ? 'app-status-dot--running' : 'app-status-dot--error'" aria-hidden="true"></span>
-            {{ store.data?.running ? "网关运行中" : "网关未运行" }}
-          </p>
-          <p class="overview-status__hint">{{ store.data?.listen_addr || "尚未获取监听地址" }}</p>
-        </div>
-        <div class="overview-status__item">
-          <p class="overview-status__label">访问模式</p>
-          <p class="overview-status__value">{{ store.data?.auth_required ? `${store.data?.auth_key_count || 0} 个授权 Key` : "本地信任模式" }}</p>
-          <p class="overview-status__hint">{{ store.data?.auth_required ? "外部访问需要凭据" : "按当前配置信任本地访问" }}</p>
-        </div>
-        <div class="overview-status__item">
-          <p class="overview-status__label">供应商健康</p>
-          <p class="overview-status__value">{{ store.reachableSupplierCount }} / {{ store.supplierCount }} 可用</p>
-          <p class="overview-status__hint">{{ store.warningSupplierCount }} 个需要关注</p>
-        </div>
-        <div class="overview-status__item">
-          <p class="overview-status__label">路由策略</p>
-          <p class="overview-status__value">{{ store.activePolicyCount }} 条启用</p>
-          <p class="overview-status__hint">{{ store.inactivePolicyCount }} 条停用</p>
-        </div>
-      </div>
-
       <div class="section-grid grid-cols-2 lg:grid-cols-4">
         <StatCard icon="wifi" label="监听地址" :value="store.data?.listen_addr || '-'" />
         <StatCard icon="server" label="供应商总数" :value="String(store.supplierCount)" tone="info" />

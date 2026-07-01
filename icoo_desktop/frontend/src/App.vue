@@ -80,8 +80,6 @@
           <div class="app-page-identity">
             <h1>{{ currentTitle }}</h1>
             <div class="app-breadcrumb">
-              <span>icoo_proxy</span>
-              <span>/</span>
               <span>{{ currentGroupName }}</span>
               <span>/</span>
               <span>{{ currentTitle }}</span>
@@ -173,25 +171,25 @@ const navGroups = computed(() => [
   {
     name: "运行",
     items: [
-      { to: "/", label: "网关概览", description: "运行状态与健康检查", icon: "overview" },
-      { to: "/traffic", label: "流量监控", description: "请求、耗时与错误", icon: "traffic" },
+      { to: "/", label: "网关概览",  icon: "overview" },
+      { to: "/traffic", label: "流量监控", icon: "traffic" },
     ],
   },
   {
     name: "配置",
     items: [
-      { to: "/suppliers", label: "供应商", description: "上游服务与模型", icon: "supplier" },
-      { to: "/routing-rules", label: "路由规则", description: "协议映射策略", icon: "rules" },
-      { to: "/model-aliases", label: "模型路由", description: "别名与目标模型", icon: "model" },
-      { to: "/endpoints", label: "端点", description: "入口路径管理", icon: "endpoint" },
-      { to: "/auth-keys", label: "授权 Key", description: "本地访问凭据", icon: "key" },
+      { to: "/suppliers", label: "供应商", icon: "supplier" },
+      { to: "/routing-rules", label: "路由规则", icon: "rules" },
+      { to: "/model-aliases", label: "模型路由", icon: "model" },
+      { to: "/endpoints", label: "端点", icon: "endpoint" },
+      { to: "/auth-keys", label: "授权 Key", icon: "key" },
     ],
   },
   {
     name: "系统",
     items: [
-      { to: "/settings", label: "项目设置", description: "运行参数与外观", icon: "settings" },
-      { to: "/ued", label: "组件规范", description: "界面组件状态", icon: "ued" },
+      { to: "/settings", label: "项目设置", icon: "settings" },
+      { to: "/ued", label: "组件规范", icon: "ued" },
     ],
   },
 ]);

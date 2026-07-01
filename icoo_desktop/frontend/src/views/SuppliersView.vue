@@ -13,13 +13,24 @@
       <StatCard icon="heart-pulse" label="未检查" :value="String(uncheckedCount)" :tone="uncheckedCount ? 'warning' : 'neutral'" />
     </div>
 
-    <UTable :columns="supplierTableColumns" :rows="store.items" action-width="148px" fixed fixed-field="freeze" min-width="1640px"
-      table-class="supplier-table" pagination pagination-mode="server" :page="store.page" :page-size="store.pageSize"
-      :total="store.total" :page-size-options="[8, 20, 50]" @page-change="store.changePage">
+    <UTable
+      :columns="supplierTableColumns"
+      :rows="store.items"
+      action-width="148px"
+      fixed
+      fixed-field="freeze"
+      min-width="1640px"
+      table-class="supplier-table"
+      pagination
+      pagination-mode="server"
+      :page="store.page"
+      :page-size="store.pageSize"
+      :total="store.total"
+      @page-change="store.changePage"
+    >
       <template #empty>
         <div class="empty-action">
           <p class="empty-action__title">当前尚未配置供应商</p>
-          <p class="empty-action__desc">添加供应商后，才能配置路由规则并转发本地请求。</p>
           <div class="empty-action__actions">
             <UButton size="sm" variant="primary" @click="openSupplierCreate">新建供应商</UButton>
           </div>
@@ -52,8 +63,11 @@
         <p class="table-meta table-cell-wrap" :title="row.base_url">{{ row.base_url }}</p>
       </template>
       <template #cell-user_agent="{ row }">
-        <p v-if="row.user_agent" class="table-meta table-cell-wrap" :title="row.user_agent">UA: {{ row.user_agent }}</p>
-        <span v-else class="table-meta">使用默认 UA</span>
+        <div class="table-cell-inline" :title="row.proxy_url || row.user_agent">
+          <span v-if="row.user_agent" class="table-meta table-cell-inline__text">UA: {{ row.user_agent }}</span>
+          <span v-else class="table-meta">默认 UA</span>
+          <UTag v-if="row.proxy_url" variant="info" size="xs">代理</UTag>
+        </div>
       </template>
       <template #cell-key="{ row }">
         <UTag code size="xs">{{ row.api_key_masked || "未保存 API Key" }}</UTag>
@@ -111,6 +125,8 @@
         <UInput v-model="store.form.base_url" label="基础地址" placeholder="https://api.openai.com" />
 
         <UInput v-model="store.form.models_url" label="模型列表地址" placeholder="留空则用基础地址 + /v1/models" />
+
+        <UInput v-model="store.form.proxy_url" label="网络代理" placeholder="例如：http://127.0.0.1:7890，留空则使用默认网络" />
 
         <UInput v-model="store.form.api_key" label="API Key" placeholder="编辑时留空则保留已有密钥" />
 
@@ -249,7 +265,7 @@ const supplierTableColumns = [
   { key: "supplier", title: "供应商", width: "12%", freeze: "left" },
   { key: "protocol", title: "协议 / 地址", width: "12%" },
   { key: "address", title: "地址", width: "18%" },
-  { key: "user_agent", title: "User-Agent", width: "14%" },
+  { key: "user_agent", title: "UA / 代理", width: "14%" },
   { key: "key", title: "API Key", width: "12%" },
   { key: "models", title: "模型 / Max Tokens", width: "18%" },
   { key: "health", title: "健康状态", width: "14%" },

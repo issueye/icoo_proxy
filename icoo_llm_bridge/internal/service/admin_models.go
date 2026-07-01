@@ -9,6 +9,7 @@ type ProviderUpsertInput struct {
 	Vendor      constants.Vendor   `json:"vendor"`
 	BaseURL     string             `json:"base_url"`
 	ModelsURL   string             `json:"models_url"`
+	ProxyURL    string             `json:"proxy_url"`
 	APIKey      string             `json:"api_key"`
 	OnlyStream  bool               `json:"only_stream"`
 	UserAgent   string             `json:"user_agent"`

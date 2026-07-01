@@ -26,7 +26,6 @@
         <template #empty>
           <div class="empty-action">
             <p class="empty-action__title">当前尚未配置模型别名</p>
-            <p class="empty-action__desc">添加别名后，可以把下游请求模型映射到指定供应商模型。</p>
             <div class="empty-action__actions">
               <UButton size="sm" variant="primary" @click="openCreate">新建别名</UButton>
             </div>

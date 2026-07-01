@@ -295,11 +295,13 @@ button:disabled {
   }
 
   .app-topbar {
-    @apply z-20 flex min-h-[38px] shrink-0 items-center justify-between gap-4 border-b border-slate-300 bg-white px-4;
+    height: 2.5rem;
+    @apply z-20 flex shrink-0 items-center justify-between gap-4 border-b border-slate-300 bg-white px-4;
   }
 
   .app-page-identity {
     @apply min-w-0;
+
   }
 
   .app-breadcrumb {
@@ -1358,7 +1360,7 @@ button:disabled {
 
 .app-topbar {
   background: var(--ued-color-bg-card);
-  min-height: 42px;
+  height: 2.5rem;
 }
 
 .app-content {
@@ -1369,8 +1371,8 @@ button:disabled {
 .app-page-identity {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 2px;
+  gap: 12px;
+  align-items: flex-end;
 }
 
 .app-page-identity h1 {
