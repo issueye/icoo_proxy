@@ -40,9 +40,14 @@
   --ued-color-divider: #ebecef;
   --ued-color-bg-page: #f3f4f6;
   --ued-color-bg-shell: #eceef1;
-  --ued-color-titlebar: #1e1e1e;
-  --ued-color-titlebar-border: #2a2a2a;
-  --ued-color-titlebar-caption: #9a9a9a;
+  --ued-color-titlebar: color-mix(in srgb, var(--ued-color-primary) 72%, #111827);
+  --ued-color-titlebar-border: color-mix(in srgb, var(--ued-color-primary) 58%, #0f172a);
+  --ued-color-titlebar-foreground: #ffffff;
+  --ued-color-titlebar-caption: color-mix(in srgb, #ffffff 68%, var(--ued-color-primary));
+  --ued-color-titlebar-control: color-mix(in srgb, #ffffff 78%, var(--ued-color-primary));
+  --ued-color-titlebar-control-hover: color-mix(in srgb, var(--ued-color-primary) 74%, #ffffff);
+  --ued-color-titlebar-button-bg: color-mix(in srgb, var(--ued-color-primary) 82%, #0f172a);
+  --ued-color-titlebar-button-hover: color-mix(in srgb, var(--ued-color-primary) 70%, #ffffff);
   --ued-color-bg-card: #ffffff;
   --ued-color-mask: rgba(20, 22, 26, 0.45);
   --ued-color-sidebar: #fafbfc;
@@ -1272,10 +1277,36 @@ button:disabled {
 .app-titlebar {
   background: var(--ued-color-titlebar);
   border-bottom-color: var(--ued-color-titlebar-border);
+  color: var(--ued-color-titlebar-foreground);
+}
+
+.app-titlebar__divider {
+  background: color-mix(in srgb, #ffffff 28%, var(--ued-color-titlebar));
 }
 
 .app-titlebar__caption {
   color: var(--ued-color-titlebar-caption);
+}
+
+.app-service-info-btn {
+  border-color: color-mix(in srgb, #ffffff 26%, var(--ued-color-titlebar));
+  background: var(--ued-color-titlebar-button-bg);
+  color: var(--ued-color-titlebar-control);
+}
+
+.app-service-info-btn:hover {
+  border-color: color-mix(in srgb, #ffffff 42%, var(--ued-color-titlebar));
+  background: var(--ued-color-titlebar-button-hover);
+  color: var(--ued-color-titlebar-foreground);
+}
+
+.app-window-control {
+  color: var(--ued-color-titlebar-control);
+}
+
+.app-window-control:hover {
+  background: var(--ued-color-titlebar-control-hover);
+  color: var(--ued-color-titlebar-foreground);
 }
 
 .app-sidebar {
@@ -1928,7 +1959,166 @@ button:disabled {
   display: none;
 }
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.settings-nav {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--ued-color-border);
+  border-radius: var(--ued-radius-lg);
+  background: var(--ued-color-bg-card);
+}
+
+.settings-nav-item {
+  display: flex;
+  min-height: 58px;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--ued-radius-md);
+  background: transparent;
+  padding: 9px 10px;
+  color: var(--ued-color-text-secondary);
+  text-align: left;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.settings-nav-item:hover {
+  border-color: color-mix(in srgb, var(--ued-color-primary) 22%, transparent);
+  background: var(--ued-color-muted);
+  color: var(--ued-color-text);
+}
+
+.settings-nav-item--active {
+  border-color: color-mix(in srgb, var(--ued-color-primary) 36%, transparent);
+  background: var(--ued-color-primary-soft);
+  color: var(--ued-color-primary);
+}
+
+.settings-nav-item__title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.settings-nav-item__desc {
+  color: var(--ued-color-text-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.settings-nav-item--active .settings-nav-item__desc {
+  color: color-mix(in srgb, var(--ued-color-primary) 72%, var(--ued-color-text-muted));
+}
+
+.settings-detail {
+  min-width: 0;
+}
+
+.settings-field-group {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.36fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--ued-color-divider);
+}
+
+.settings-field-group:first-child {
+  padding-top: 2px;
+}
+
+.settings-field-group:last-child {
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+
+.settings-field-copy {
+  min-width: 0;
+}
+
+.settings-field-title {
+  margin: 0;
+  color: var(--ued-color-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.settings-field-desc {
+  margin: 3px 0 0;
+  color: var(--ued-color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.settings-control-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-control-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-control-grid--swatches {
+  align-content: start;
+}
+
+.settings-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-switch-row {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ued-color-divider);
+}
+
 @media (max-width: 760px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-nav {
+    position: static;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-nav-item {
+    min-height: 54px;
+  }
+
+  .settings-field-group {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .settings-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .route-map__head {
     display: none;
   }

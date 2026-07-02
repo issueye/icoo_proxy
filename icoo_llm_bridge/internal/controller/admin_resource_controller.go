@@ -181,6 +181,28 @@ func (c *TrafficController) Clear(ctx *gin.Context) {
 	writeResult(ctx, gin.H{"cleared": true}, c.service.Clear(ctx.Request.Context()))
 }
 
+type UIPreferenceController struct {
+	service service.UIPreferenceService
+}
+
+func NewUIPreferenceController(service service.UIPreferenceService) *UIPreferenceController {
+	return &UIPreferenceController{service: service}
+}
+
+func (c *UIPreferenceController) Get(ctx *gin.Context) {
+	item, err := c.service.Get(ctx.Request.Context())
+	writeResult(ctx, item, err)
+}
+
+func (c *UIPreferenceController) Save(ctx *gin.Context) {
+	var input service.UIPrefsInput
+	if !bindJSON(ctx, &input) {
+		return
+	}
+	item, err := c.service.Save(ctx.Request.Context(), input)
+	writeResult(ctx, item, err)
+}
+
 func bindJSON(ctx *gin.Context, target any) bool {
 	if err := ctx.ShouldBindJSON(target); err != nil {
 		ctx.JSON(http.StatusBadRequest, view.Response{Error: &view.Error{Code: "BAD_REQUEST", Message: err.Error()}})

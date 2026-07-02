@@ -1,7 +1,6 @@
 import axios from "axios";
 
 const API_PREFIX = "/api/v1";
-const UI_PREFS_KEY = "icoo_llm_bridge.ui_prefs";
 
 const client = axios.create({
   timeout: 15000,
@@ -634,21 +633,11 @@ export async function SaveProjectSettings(values) {
 }
 
 export function GetUiPrefs() {
-  if (typeof window === "undefined") {
-    return Promise.resolve({});
-  }
-  try {
-    return Promise.resolve(JSON.parse(window.localStorage.getItem(UI_PREFS_KEY) || "{}"));
-  } catch {
-    return Promise.resolve({});
-  }
+  return client.get(`${API_PREFIX}/ui-prefs`);
 }
 
 export function SaveUiPrefs(input) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(UI_PREFS_KEY, JSON.stringify(input || {}));
-  }
-  return Promise.resolve(input || {});
+  return client.put(`${API_PREFIX}/ui-prefs`, input || {});
 }
 
 export async function GetTrafficPage(page, pageSize, filter) {

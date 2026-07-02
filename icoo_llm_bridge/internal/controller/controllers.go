@@ -12,6 +12,7 @@ type Controllers struct {
 	RoutingRule   *RoutingRuleController
 	APIKey        *APIKeyController
 	Traffic       *TrafficController
+	UIPreference  *UIPreferenceController
 }
 
 func NewControllers(services service.Services) Controllers {
@@ -25,5 +26,6 @@ func NewControllers(services service.Services) Controllers {
 		RoutingRule:   NewRoutingRuleController(services.RoutingRule),
 		APIKey:        NewAPIKeyController(services.Auth),
 		Traffic:       NewTrafficController(services.Traffic),
+		UIPreference:  NewUIPreferenceController(services.UIPreference),
 	}
 }

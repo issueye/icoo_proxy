@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,8 @@ import (
 	"icoo_llm_bridge/internal/model/entity"
 	"icoo_llm_bridge/internal/repository"
 	"icoo_llm_bridge/internal/utils/idgen"
+
+	"gorm.io/gorm"
 )
 
 // fetchModelsClient is a dedicated *http.Client with a bounded timeout so a slow
@@ -54,6 +57,11 @@ type TrafficService interface {
 	Record(ctx context.Context, item entity.TrafficRecord) error
 	List(ctx context.Context, limit int) ([]entity.TrafficRecord, error)
 	Clear(ctx context.Context) error
+}
+
+type UIPreferenceService interface {
+	Get(ctx context.Context) (UIPrefsView, error)
+	Save(ctx context.Context, input UIPrefsInput) (UIPrefsView, error)
 }
 
 type authService struct {
@@ -503,6 +511,81 @@ func (s *trafficService) Record(ctx context.Context, item entity.TrafficRecord) 
 
 func (s *trafficService) Clear(ctx context.Context) error {
 	return s.repo.Clear(ctx)
+}
+
+const uiPrefsAppearanceKey = "appearance"
+
+type uiPreferenceService struct {
+	repo repository.UIPreferenceRepository
+}
+
+func NewUIPreferenceService(repo repository.UIPreferenceRepository) UIPreferenceService {
+	return &uiPreferenceService{repo: repo}
+}
+
+func (s *uiPreferenceService) Get(ctx context.Context) (UIPrefsView, error) {
+	item, err := s.repo.Find(ctx, uiPrefsAppearanceKey)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return defaultUIPrefs(), nil
+	}
+	if err != nil {
+		return UIPrefsView{}, err
+	}
+
+	prefs := defaultUIPrefs()
+	if err := json.Unmarshal([]byte(item.ValueJSON), &prefs); err != nil {
+		return defaultUIPrefs(), nil
+	}
+	return normalizeUIPrefs(prefs), nil
+}
+
+func (s *uiPreferenceService) Save(ctx context.Context, input UIPrefsInput) (UIPrefsView, error) {
+	prefs := normalizeUIPrefs(UIPrefsView{
+		Theme:      input.Theme,
+		ButtonSize: input.ButtonSize,
+	})
+	value, err := json.Marshal(prefs)
+	if err != nil {
+		return UIPrefsView{}, err
+	}
+
+	now := time.Now()
+	item, err := s.repo.Find(ctx, uiPrefsAppearanceKey)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		item = entity.UIPreference{
+			Key:       uiPrefsAppearanceKey,
+			CreatedAt: now,
+		}
+	} else if err != nil {
+		return UIPrefsView{}, err
+	}
+
+	item.ValueJSON = string(value)
+	item.UpdatedAt = now
+	if err := s.repo.Save(ctx, &item); err != nil {
+		return UIPrefsView{}, err
+	}
+	return prefs, nil
+}
+
+func defaultUIPrefs() UIPrefsView {
+	return UIPrefsView{
+		Theme:      "blue",
+		ButtonSize: "md",
+	}
+}
+
+func normalizeUIPrefs(input UIPrefsView) UIPrefsView {
+	prefs := defaultUIPrefs()
+	switch strings.TrimSpace(input.Theme) {
+	case "blue", "green", "purple", "orange", "red", "cyan", "dark":
+		prefs.Theme = strings.TrimSpace(input.Theme)
+	}
+	switch strings.TrimSpace(input.ButtonSize) {
+	case "xs", "sm", "md", "lg":
+		prefs.ButtonSize = strings.TrimSpace(input.ButtonSize)
+	}
+	return prefs
 }
 
 func hashSecret(secret string) string {

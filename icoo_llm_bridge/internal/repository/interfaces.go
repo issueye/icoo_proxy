@@ -50,5 +50,6 @@ type TrafficRepository interface {
 }
 
 type UIPreferenceRepository interface {
+	Find(ctx context.Context, key string) (entity.UIPreference, error)
 	Save(ctx context.Context, item *entity.UIPreference) error
 }

@@ -17,6 +17,7 @@ type Services struct {
 	RoutingRule   RoutingRuleService
 	Routing       RouteResolver
 	Traffic       TrafficService
+	UIPreference  UIPreferenceService
 	Proxy         ProxyService
 }
 
@@ -47,6 +48,7 @@ func NewServices(deps Deps) Services {
 	rules.SetCacheInvalidator(invalidator)
 
 	traffic := NewTrafficService(deps.Repos.Traffic)
+	uiPreference := NewUIPreferenceService(deps.Repos.UIPreference)
 	runtime := NewRuntimeService(deps.Config, endpoints)
 	proxy := NewProxyService(deps.Config, deps.Logger, deps.Converter, auth, resolver, traffic, tracker)
 	return Services{
@@ -58,6 +60,7 @@ func NewServices(deps Deps) Services {
 		RoutingRule:   rules,
 		Routing:       resolver,
 		Traffic:       traffic,
+		UIPreference:  uiPreference,
 		Proxy:         proxy,
 	}
 }

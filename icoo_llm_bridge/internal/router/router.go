@@ -46,6 +46,8 @@ func New(controllers controller.Controllers, middlewares middleware.Middlewares)
 	api.DELETE("/api-keys/:id", controllers.APIKey.Delete)
 	api.GET("/traffic", controllers.Traffic.List)
 	api.DELETE("/traffic", controllers.Traffic.Clear)
+	api.GET("/ui-prefs", controllers.UIPreference.Get)
+	api.PUT("/ui-prefs", controllers.UIPreference.Save)
 
 	engine.NoRoute(controllers.Proxy.HandleDynamic())
 

@@ -173,6 +173,11 @@ func (r *gormTrafficRepository) Clear(ctx context.Context) error {
 // UIPreferenceRepository 用户偏好仓库
 type gormUIPreferenceRepository struct{ db *gorm.DB }
 
+func (r *gormUIPreferenceRepository) Find(ctx context.Context, key string) (entity.UIPreference, error) {
+	var item entity.UIPreference
+	return item, r.db.WithContext(ctx).First(&item, "key = ?", key).Error
+}
+
 func (r *gormUIPreferenceRepository) Save(ctx context.Context, item *entity.UIPreference) error {
 	return r.db.WithContext(ctx).Save(item).Error
 }

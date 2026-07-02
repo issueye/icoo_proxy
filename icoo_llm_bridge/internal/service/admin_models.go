@@ -69,3 +69,13 @@ type APIKeyView struct {
 type APIKeySecretView struct {
 	Secret string `json:"secret"`
 }
+
+type UIPrefsInput struct {
+	Theme      string `json:"theme"`
+	ButtonSize string `json:"buttonSize"`
+}
+
+type UIPrefsView struct {
+	Theme      string `json:"theme"`
+	ButtonSize string `json:"buttonSize"`
+}
