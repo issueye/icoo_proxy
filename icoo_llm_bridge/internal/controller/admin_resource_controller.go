@@ -12,10 +12,11 @@ import (
 
 type ProviderController struct {
 	service service.ProviderService
+	chat    service.ProviderChatService
 }
 
-func NewProviderController(service service.ProviderService) *ProviderController {
-	return &ProviderController{service: service}
+func NewProviderController(service service.ProviderService, chat service.ProviderChatService) *ProviderController {
+	return &ProviderController{service: service, chat: chat}
 }
 
 func (c *ProviderController) List(ctx *gin.Context) {
@@ -37,6 +38,15 @@ func (c *ProviderController) Save(ctx *gin.Context) {
 
 func (c *ProviderController) Delete(ctx *gin.Context) {
 	writeResult(ctx, gin.H{"deleted": true}, c.service.Delete(ctx.Request.Context(), pathID(ctx)))
+}
+
+func (c *ProviderController) Chat(ctx *gin.Context) {
+	var input service.ProviderChatInput
+	if !bindJSON(ctx, &input) {
+		return
+	}
+	item, err := c.chat.Chat(ctx.Request.Context(), pathID(ctx), input)
+	writeResult(ctx, item, err)
 }
 
 type ProviderModelController struct {

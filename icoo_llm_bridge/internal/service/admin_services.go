@@ -47,6 +47,10 @@ type ProviderModelService interface {
 	FetchModels(ctx context.Context, providerID string) ([]FetchedModel, error)
 }
 
+type ProviderChatService interface {
+	Chat(ctx context.Context, providerID string, input ProviderChatInput) (ProviderChatResult, error)
+}
+
 type RoutingRuleService interface {
 	List(ctx context.Context) ([]entity.RoutingRule, error)
 	Upsert(ctx context.Context, input RoutingRuleUpsertInput) (entity.RoutingRule, error)

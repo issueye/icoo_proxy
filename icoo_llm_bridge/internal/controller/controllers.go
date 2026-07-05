@@ -20,7 +20,7 @@ func NewControllers(services service.Services) Controllers {
 		Health:        NewHealthController(services.Runtime),
 		Runtime:       NewRuntimeController(services.Runtime),
 		Proxy:         NewProxyController(services.Proxy, services.Endpoint),
-		Provider:      NewProviderController(services.Provider),
+		Provider:      NewProviderController(services.Provider, services.ProviderChat),
 		ProviderModel: NewProviderModelController(services.ProviderModel),
 		Endpoint:      NewEndpointController(services.Endpoint),
 		RoutingRule:   NewRoutingRuleController(services.RoutingRule),

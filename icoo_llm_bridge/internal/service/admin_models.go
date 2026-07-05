@@ -25,6 +25,26 @@ type ProviderModelUpsertInput struct {
 	Enabled    bool   `json:"enabled"`
 }
 
+type ProviderChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type ProviderChatInput struct {
+	Model       string                `json:"model"`
+	Messages    []ProviderChatMessage `json:"messages"`
+	MaxTokens   int                   `json:"max_tokens"`
+	Temperature *float64              `json:"temperature,omitempty"`
+}
+
+type ProviderChatResult struct {
+	SupplierID string              `json:"supplier_id"`
+	Model      string              `json:"model"`
+	Message    ProviderChatMessage `json:"message"`
+	StatusCode int                 `json:"status_code"`
+	DurationMS int64               `json:"duration_ms"`
+}
+
 type EndpointUpsertInput struct {
 	ID                 string             `json:"id"`
 	Path               string             `json:"path"`

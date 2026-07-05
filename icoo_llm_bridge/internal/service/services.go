@@ -14,6 +14,7 @@ type Services struct {
 	Endpoint      EndpointService
 	Provider      ProviderService
 	ProviderModel ProviderModelService
+	ProviderChat  ProviderChatService
 	RoutingRule   RoutingRuleService
 	Routing       RouteResolver
 	Traffic       TrafficService
@@ -34,6 +35,7 @@ func NewServices(deps Deps) Services {
 	endpoints := NewEndpointService(deps.Repos.Endpoint)
 	providers := NewProviderService(deps.Repos.Provider)
 	providerModels := NewProviderModelService(deps.Repos.ProviderModel, deps.Repos.Provider)
+	providerChat := NewProviderChatService(deps.Repos.Provider)
 	rules := NewRoutingRuleService(deps.Repos.RoutingRule, tracker)
 	// Hold the concrete resolver so its route cache can be wired into the admin
 	// services below; it still satisfies the RouteResolver interface.
@@ -57,6 +59,7 @@ func NewServices(deps Deps) Services {
 		Endpoint:      endpoints,
 		Provider:      providers,
 		ProviderModel: providerModels,
+		ProviderChat:  providerChat,
 		RoutingRule:   rules,
 		Routing:       resolver,
 		Traffic:       traffic,

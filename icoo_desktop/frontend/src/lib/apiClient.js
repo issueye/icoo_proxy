@@ -238,6 +238,20 @@ function normalizeSupplierHealth(raw) {
   };
 }
 
+function normalizeProviderChat(raw) {
+  const message = valueOf(raw, "message", "Message", {});
+  return {
+    supplier_id: valueOf(raw, "supplier_id", "SupplierID"),
+    model: valueOf(raw, "model", "Model"),
+    message: {
+      role: valueOf(message, "role", "Role", "assistant"),
+      content: valueOf(message, "content", "Content"),
+    },
+    status_code: Number(valueOf(raw, "status_code", "StatusCode", 0) || 0),
+    duration_ms: Number(valueOf(raw, "duration_ms", "DurationMS", 0) || 0),
+  };
+}
+
 async function listProviderModels(providerID) {
   if (!providerID) {
     return [];
@@ -412,6 +426,18 @@ export function ListSupplierHealth() {
 
 export async function CheckSupplier(id) {
   return client.post(`${API_PREFIX}/providers/${id}/check`).then(normalizeSupplierHealth);
+}
+
+export async function ChatWithSupplier(id, input = {}) {
+  return client.post(`${API_PREFIX}/providers/${id}/chat`, {
+    model: String(input.model || "").trim(),
+    messages: (input.messages || []).map((message) => ({
+      role: String(message?.role || "user").trim(),
+      content: String(message?.content || "").trim(),
+    })),
+    max_tokens: Number(input.max_tokens || 1024),
+    temperature: input.temperature,
+  }).then(normalizeProviderChat);
 }
 
 export async function GetEndpointsPage(page, pageSize, keyword, protocol) {

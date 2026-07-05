@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from "vue-router";
 
 import OverviewView from "../views/OverviewView.vue";
+import ChatView from "../views/ChatView.vue";
 import AuthKeysView from "../views/AuthKeysView.vue";
 import EndpointsView from "../views/EndpointsView.vue";
 import RoutingRulesView from "../views/RoutingRulesView.vue";
@@ -18,6 +19,11 @@ export default createRouter({
       path: "/",
       name: "overview",
       component: OverviewView,
+    },
+    {
+      path: "/chat",
+      name: "chat",
+      component: ChatView,
     },
     {
       path: "/suppliers",
