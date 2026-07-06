@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { DeleteAuthKey, GetAuthKeySecret, GetAuthKeysPage, ReloadProxy, SaveAuthKey } from "../lib/apiClient";
+import { DEFAULT_PAGE_SIZE } from "../constants/index";
 
 const emptyForm = () => ({
   id: "",
@@ -29,7 +30,7 @@ export const useAuthKeysStore = defineStore("authKeys", {
     totalCount: 0,
     enabledCount: 0,
     page: 1,
-    pageSize: 8,
+    pageSize: DEFAULT_PAGE_SIZE,
     keyword: "",
     status: "all",
     form: emptyForm(),

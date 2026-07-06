@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ClearTrafficRequests, GetTrafficPage } from "../lib/apiClient";
+import { DEFAULT_PAGE_SIZE } from "../constants/index";
 
 function defaultTokenStats() {
   return {
@@ -20,7 +21,7 @@ export const useTrafficStore = defineStore("traffic", {
     totalRequests: 0,
     total: 0,
     page: 1,
-    pageSize: 8,
+    pageSize: DEFAULT_PAGE_SIZE,
     successCount: 0,
     errorCount: 0,
     averageLatency: 0,

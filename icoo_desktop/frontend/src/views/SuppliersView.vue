@@ -22,6 +22,7 @@
       min-width="1640px"
       table-class="supplier-table"
       pagination
+      class="grow"
       pagination-mode="server"
       :page="store.page"
       :page-size="store.pageSize"

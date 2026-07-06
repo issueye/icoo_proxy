@@ -49,6 +49,7 @@
       max-height="100%"
       min-width="1680px"
       pagination
+      class="grow"
       pagination-mode="server"
       :page="store.page"
       :page-size="store.pageSize"

@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { DeleteEndpoint, GetEndpointsPage, ReloadProxy, SaveEndpoint } from "../lib/apiClient";
+import { DEFAULT_PAGE_SIZE } from "../constants/index";
 
 const emptyForm = () => ({
   id: "",
@@ -22,7 +23,7 @@ export const useEndpointsStore = defineStore("endpoints", {
     enabledCount: 0,
     customCount: 0,
     page: 1,
-    pageSize: 8,
+    pageSize: DEFAULT_PAGE_SIZE,
     keyword: "",
     protocol: "all",
     form: emptyForm(),

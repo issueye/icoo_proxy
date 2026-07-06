@@ -429,6 +429,9 @@ button:disabled {
 
   .page-section {
     @apply space-y-3;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
 
   .page-header {

@@ -10,6 +10,7 @@ import {
   SaveRoutePolicy,
   SaveSupplier,
 } from "../lib/apiClient";
+import { DEFAULT_PAGE_SIZE } from "../constants/index";
 
 const routeDefinitions = [
   {
@@ -159,7 +160,7 @@ export const useSuppliersStore = defineStore("suppliers", {
     totalCount: 0,
     enabledCount: 0,
     page: 1,
-    pageSize: 8,
+    pageSize: DEFAULT_PAGE_SIZE,
     keyword: "",
     protocol: "all",
     form: emptyForm(),

@@ -23,6 +23,7 @@
       fixed-field="freeze"
       table-class="endpoint-table"
       pagination
+      class="grow"
       pagination-mode="server"
       :page="store.page"
       :page-size="store.pageSize"

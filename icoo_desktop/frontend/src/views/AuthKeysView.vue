@@ -23,6 +23,7 @@
       fixed-field="freeze"
       table-class="auth-key-table"
       pagination
+      class="grow"
       pagination-mode="server"
       :page="store.page"
       :page-size="store.pageSize"

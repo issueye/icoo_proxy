@@ -186,8 +186,7 @@ watch(
     searchKeyword.value = "";
     resetActive();
 
-    await nextTick();
-    updateMenuPosition();
+    await refreshMenuPosition();
     scrollActiveOptionIntoView();
 
     if (props.searchable) {
@@ -198,14 +197,12 @@ watch(
   { flush: "post" },
 );
 
-watch(searchKeyword, () => {
+watch(searchKeyword, async () => {
   if (!open.value) return;
   resetActive();
-  nextTick(() => {
-    updateMenuPosition();
-    scrollActiveOptionIntoView();
-    emit("search", searchKeyword.value);
-  });
+  await refreshMenuPosition();
+  scrollActiveOptionIntoView();
+  emit("search", searchKeyword.value);
 });
 
 watch(
@@ -214,8 +211,7 @@ watch(
     if (!open.value) {
       return;
     }
-    await nextTick();
-    updateMenuPosition();
+    await refreshMenuPosition();
     scrollActiveOptionIntoView();
   },
   { deep: true },
@@ -227,8 +223,7 @@ watch(
     if (!open.value) {
       return;
     }
-    await nextTick();
-    updateMenuPosition();
+    await refreshMenuPosition();
     scrollActiveOptionIntoView();
   },
 );
@@ -336,6 +331,15 @@ function updateMenuPosition() {
     width,
     maxHeight: props.searchable ? maxHeight - SEARCH_ROW_HEIGHT : maxHeight,
   };
+}
+
+async function refreshMenuPosition() {
+  await nextTick();
+  if (!open.value) return;
+  updateMenuPosition();
+  await nextTick();
+  if (!open.value) return;
+  updateMenuPosition();
 }
 
 function scrollActiveOptionIntoView() {
