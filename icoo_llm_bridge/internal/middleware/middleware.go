@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -45,9 +46,20 @@ func RequestID() gin.HandlerFunc {
 
 func CORS() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		ctx.Header("Access-Control-Allow-Origin", "*")
+		origin := strings.TrimSpace(ctx.GetHeader("Origin"))
+		if origin != "" {
+			if !isAllowedBrowserOrigin(origin) {
+				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"error": gin.H{"code": "ORIGIN_FORBIDDEN", "message": "browser origin is not allowed"},
+				})
+				return
+			}
+			ctx.Header("Access-Control-Allow-Origin", origin)
+			ctx.Header("Vary", "Origin")
+		}
 		ctx.Header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
 		ctx.Header("Access-Control-Allow-Headers", "Content-Type,Authorization,x-api-key,x-request-id")
+		ctx.Header("Access-Control-Max-Age", "600")
 		if ctx.Request.Method == http.MethodOptions {
 			ctx.AbortWithStatus(http.StatusNoContent)
 			return
@@ -58,7 +70,7 @@ func CORS() gin.HandlerFunc {
 
 func AdminAuth(auth AuthVerifier, allowLocalWithoutAuth bool) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if allowLocalWithoutAuth && isLocalClient(ctx.ClientIP()) {
+		if allowLocalWithoutAuth && isLocalClient(ctx.Request.RemoteAddr) {
 			ctx.Next()
 			return
 		}
@@ -70,6 +82,26 @@ func AdminAuth(auth AuthVerifier, allowLocalWithoutAuth bool) gin.HandlerFunc {
 			return
 		}
 		ctx.Next()
+	}
+}
+
+func isAllowedBrowserOrigin(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	switch strings.ToLower(parsed.Scheme) {
+	case "wails":
+		return host == "wails"
+	case "http", "https":
+		if host == "localhost" || host == "wails.localhost" {
+			return true
+		}
+		ip := net.ParseIP(host)
+		return ip != nil && ip.IsLoopback()
+	default:
+		return false
 	}
 }
 

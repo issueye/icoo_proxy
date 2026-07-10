@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -48,6 +49,32 @@ func TestContainerInitializesAndCloses(t *testing.T) {
 	}
 }
 
+func TestContainerStartReturnsListenError(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve listen address: %v", err)
+	}
+	defer listener.Close()
+
+	dataDir := t.TempDir()
+	container, err := NewContainer(Options{
+		DataDir:      dataDir,
+		AddrOverride: listener.Addr().String(),
+	})
+	if err != nil {
+		t.Fatalf("NewContainer() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := container.Close(); err != nil {
+			t.Errorf("Close() error = %v", err)
+		}
+	})
+
+	if err := container.Start(); err == nil {
+		t.Fatal("Start() error = nil, want address-in-use error")
+	}
+}
+
 func TestProviderAdminCRUD(t *testing.T) {
 	container := newTestContainer(t)
 	t.Cleanup(func() {
@@ -80,20 +107,27 @@ func TestProviderAdminCRUD(t *testing.T) {
 	if createResp.Code != http.StatusOK {
 		t.Fatalf("create status = %d, body = %s", createResp.Code, createResp.Body.String())
 	}
-	assertResponseDataField(t, createResp.Body.Bytes(), "ID", "provider-test")
+	assertResponseDataField(t, createResp.Body.Bytes(), "id", "provider-test")
+	assertBodyDoesNotContain(t, createResp.Body.Bytes(), "provider-secret", "APIKeyCipher", "api_key_cipher")
+
+	createdProvider, err := container.Repos.Provider.Find(context.Background(), "provider-test")
+	if err != nil {
+		t.Fatalf("find created provider: %v", err)
+	}
 
 	listResp := doJSON(t, container.Server.Handler, http.MethodGet, "/api/v1/providers", adminSecret, nil)
 	if listResp.Code != http.StatusOK {
 		t.Fatalf("list status = %d, body = %s", listResp.Code, listResp.Body.String())
 	}
 	assertResponseDataContainsID(t, listResp.Body.Bytes(), "provider-test")
+	assertBodyDoesNotContain(t, listResp.Body.Bytes(), "provider-secret", "APIKeyCipher", "api_key_cipher")
 
 	updateBody := map[string]any{
 		"name":        "Updated Provider",
 		"protocol":    "anthropic",
 		"vendor":      "anthropic",
 		"base_url":    "https://anthropic.example.test",
-		"api_key":     "updated-secret",
+		"api_key":     "",
 		"enabled":     true,
 		"description": "updated by test",
 	}
@@ -101,11 +135,99 @@ func TestProviderAdminCRUD(t *testing.T) {
 	if updateResp.Code != http.StatusOK {
 		t.Fatalf("update status = %d, body = %s", updateResp.Code, updateResp.Body.String())
 	}
-	assertResponseDataField(t, updateResp.Body.Bytes(), "Name", "Updated Provider")
+	assertResponseDataField(t, updateResp.Body.Bytes(), "name", "Updated Provider")
+	assertBodyDoesNotContain(t, updateResp.Body.Bytes(), "provider-secret", "APIKeyCipher", "api_key_cipher")
+
+	updatedProvider, err := container.Repos.Provider.Find(context.Background(), "provider-test")
+	if err != nil {
+		t.Fatalf("find updated provider: %v", err)
+	}
+	if updatedProvider.APIKeyCipher != "provider-secret" {
+		t.Fatalf("provider key = %q, want preserved secret", updatedProvider.APIKeyCipher)
+	}
+	if !updatedProvider.CreatedAt.Equal(createdProvider.CreatedAt) {
+		t.Fatalf("created_at changed from %s to %s", createdProvider.CreatedAt, updatedProvider.CreatedAt)
+	}
 
 	deleteResp := doJSON(t, container.Server.Handler, http.MethodDelete, "/api/v1/providers/provider-test", adminSecret, nil)
 	if deleteResp.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, body = %s", deleteResp.Code, deleteResp.Body.String())
+	}
+}
+
+func TestProviderHealthCheckEndpoint(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("upstream path = %q", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer provider-secret" {
+			t.Fatalf("upstream authorization = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"OK"}}]}`))
+	}))
+	defer upstream.Close()
+
+	container := newTestContainer(t)
+	t.Cleanup(func() {
+		if err := container.Close(); err != nil {
+			t.Errorf("Close() error = %v", err)
+		}
+	})
+
+	const adminSecret = "admin-secret"
+	if _, err := container.Services.Auth.CreateKey(context.Background(), service.APIKeyCreateInput{
+		Name:    "admin",
+		Secret:  adminSecret,
+		Scopes:  "admin",
+		Enabled: true,
+	}); err != nil {
+		t.Fatalf("create admin key: %v", err)
+	}
+	if _, err := container.Services.Provider.Upsert(context.Background(), service.ProviderUpsertInput{
+		ID:       "provider-health",
+		Name:     "Health Provider",
+		Protocol: constants.ProtocolOpenAIChat,
+		BaseURL:  upstream.URL,
+		APIKey:   "provider-secret",
+		Enabled:  true,
+	}); err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
+	if _, err := container.Services.ProviderModel.Upsert(context.Background(), service.ProviderModelUpsertInput{
+		ProviderID: "provider-health",
+		Name:       "health-model",
+		MaxTokens:  1024,
+		Enabled:    true,
+	}); err != nil {
+		t.Fatalf("create provider model: %v", err)
+	}
+
+	resp := doJSON(t, container.Server.Handler, http.MethodPost, "/api/v1/providers/provider-health/check", adminSecret, nil)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("check status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var payload struct {
+		Data struct {
+			SupplierID string `json:"supplier_id"`
+			Status     string `json:"status"`
+			StatusCode int    `json:"status_code"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal health response: %v", err)
+	}
+	if payload.Data.SupplierID != "provider-health" || payload.Data.Status != "reachable" || payload.Data.StatusCode != http.StatusOK {
+		t.Fatalf("health response = %+v", payload.Data)
+	}
+}
+
+func assertBodyDoesNotContain(t *testing.T, body []byte, values ...string) {
+	t.Helper()
+	for _, value := range values {
+		if bytes.Contains(body, []byte(value)) {
+			t.Fatalf("response unexpectedly contains %q: %s", value, string(body))
+		}
 	}
 }
 
@@ -335,7 +457,11 @@ func assertResponseDataContainsID(t *testing.T, raw []byte, wantID string) {
 		t.Fatalf("unexpected page metadata: %+v", response.Data)
 	}
 	for _, item := range response.Data.Items {
-		if got, _ := item["ID"].(string); got == wantID {
+		got, _ := item["id"].(string)
+		if got == "" {
+			got, _ = item["ID"].(string)
+		}
+		if got == wantID {
 			return
 		}
 	}

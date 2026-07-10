@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -19,10 +20,99 @@ var providerChatClient = &http.Client{Timeout: 120 * time.Second}
 
 type providerChatService struct {
 	providerRepo repository.ProviderRepository
+	modelRepo    repository.ProviderModelRepository
 }
 
-func NewProviderChatService(providerRepo repository.ProviderRepository) ProviderChatService {
-	return &providerChatService{providerRepo: providerRepo}
+func NewProviderChatService(providerRepo repository.ProviderRepository, modelRepo repository.ProviderModelRepository) ProviderChatService {
+	return &providerChatService{providerRepo: providerRepo, modelRepo: modelRepo}
+}
+
+func (s *providerChatService) Check(ctx context.Context, providerID string) (ProviderHealthResult, error) {
+	providerID = strings.TrimSpace(providerID)
+	if providerID == "" {
+		return ProviderHealthResult{}, fmt.Errorf("provider_id is required")
+	}
+	provider, err := s.providerRepo.Find(ctx, providerID)
+	if err != nil {
+		return ProviderHealthResult{}, fmt.Errorf("provider not found: %w", err)
+	}
+	checkedAt := time.Now()
+	result := ProviderHealthResult{
+		SupplierID: provider.ID,
+		Status:     "warning",
+		Message:    "provider has no enabled model",
+		CheckedAt:  checkedAt.Format(time.RFC3339),
+	}
+	if !provider.Enabled {
+		result.Message = "provider is disabled"
+		return result, nil
+	}
+	models, err := s.modelRepo.ListByProvider(ctx, provider.ID)
+	if err != nil {
+		return ProviderHealthResult{}, fmt.Errorf("list provider models: %w", err)
+	}
+	model := ""
+	for _, item := range models {
+		if item.Enabled {
+			model = strings.TrimSpace(item.Name)
+			if model != "" {
+				break
+			}
+		}
+	}
+	if model == "" {
+		return result, nil
+	}
+
+	body, err := buildProviderChatRequest(provider.Protocol, model, []ProviderChatMessage{{
+		Role:    "user",
+		Content: "Reply with OK.",
+	}}, ProviderChatInput{MaxTokens: 1})
+	if err != nil {
+		return ProviderHealthResult{}, err
+	}
+	url := joinUpstreamURL(provider.BaseURL, provider.Protocol)
+	if url == "" {
+		return ProviderHealthResult{}, fmt.Errorf("upstream base_url is required")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return ProviderHealthResult{}, fmt.Errorf("build upstream request: %w", err)
+	}
+	applyProviderChatHeaders(req, provider)
+	client := providerChatClient
+	if strings.TrimSpace(provider.ProxyURL) != "" {
+		client, err = newProxiedHTTPClient(providerChatClient.Timeout, provider.ProxyURL)
+		if err != nil {
+			return ProviderHealthResult{}, err
+		}
+	}
+
+	start := time.Now()
+	resp, err := client.Do(req)
+	result.DurationMS = time.Since(start).Milliseconds()
+	result.CheckedAt = time.Now().Format(time.RFC3339)
+	if err != nil {
+		result.Status = "unreachable"
+		result.Message = err.Error()
+		return result, nil
+	}
+	defer resp.Body.Close()
+	result.StatusCode = resp.StatusCode
+	if !isHTTPSuccess(resp.StatusCode) {
+		respBody, readErr := readLimitedBody(resp.Body, maxUpstreamErrorBodyBytes)
+		result.Status = "unreachable"
+		if readErr != nil {
+			result.Message = "read upstream error response failed"
+		} else {
+			result.Message = upstreamErrorMessage(resp.StatusCode, respBody)
+		}
+		return result, nil
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxUpstreamErrorBodyBytes))
+	result.Status = "reachable"
+	result.Message = "upstream request succeeded"
+	return result, nil
 }
 
 func (s *providerChatService) Chat(ctx context.Context, providerID string, input ProviderChatInput) (ProviderChatResult, error) {

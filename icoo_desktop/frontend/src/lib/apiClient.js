@@ -118,7 +118,8 @@ function normalizeProvider(raw) {
     base_url: valueOf(raw, "base_url", "BaseURL"),
     models_url: valueOf(raw, "models_url", "ModelsURL"),
     proxy_url: valueOf(raw, "proxy_url", "ProxyURL"),
-    api_key_masked: maskSecret(valueOf(raw, "api_key_cipher", "APIKeyCipher")),
+    api_key_masked: valueOf(raw, "api_key_masked", "APIKeyMasked") ||
+      maskSecret(valueOf(raw, "api_key_cipher", "APIKeyCipher")),
     only_stream: boolOf(raw, "only_stream", "OnlyStream"),
     user_agent: valueOf(raw, "user_agent", "UserAgent"),
     enabled: boolOf(raw, "enabled", "Enabled", true),
@@ -267,7 +268,7 @@ export async function FetchModelsFromProvider(providerID) {
     return [];
   }
   const raw = await client.post(`${API_PREFIX}/providers/${providerID}/fetch-models`);
-  return raw?.data || [];
+  return Array.isArray(raw) ? raw : [];
 }
 
 async function listProvidersWithModels() {
@@ -394,15 +395,6 @@ export function ListSuppliers() {
 
 export async function SaveSupplier(input) {
   const payload = providerPayload(input);
-  if (payload.id && !payload.api_key) {
-    const raw = await client.get(`${API_PREFIX}/providers`, {
-      params: { page: 1, page_size: 200 },
-    });
-    const existing = normalizePage(raw, 1, 200).items.find(
-      (item) => valueOf(item, "id", "ID") === payload.id,
-    );
-    payload.api_key = valueOf(existing, "api_key_cipher", "APIKeyCipher");
-  }
   let saved;
   if (payload.id) {
     saved = await client.put(`${API_PREFIX}/providers/${payload.id}`, payload);
@@ -690,7 +682,8 @@ export async function GetTrafficPage(page, pageSize, filter) {
   result.token_stats = tokenStats;
   result.total_requests = items.length;
   result.success_count = items.filter((item) => item.status_code < 400).length;
-  result.error_count = items.filter((item) => item.status_code >= 400).length;
+  result.canceled_count = items.filter((item) => item.status_code === 499).length;
+  result.error_count = items.filter((item) => item.status_code >= 400 && item.status_code !== 499).length;
   result.average_latency = items.length
     ? Math.round(items.reduce((sum, item) => sum + item.duration_ms, 0) / items.length)
     : 0;

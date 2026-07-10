@@ -11,6 +11,9 @@ import (
 func New(controllers controller.Controllers, middlewares middleware.Middlewares) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
+	if err := engine.SetTrustedProxies(nil); err != nil {
+		panic(err)
+	}
 	engine.Use(middlewares.Recovery, middlewares.RequestID, middlewares.CORS)
 
 	engine.GET("/", controllers.Health.Index)
@@ -27,6 +30,7 @@ func New(controllers controller.Controllers, middlewares middleware.Middlewares)
 	api.POST("/providers", controllers.Provider.Save)
 	api.PUT("/providers/:provider_id", controllers.Provider.Save)
 	api.DELETE("/providers/:provider_id", controllers.Provider.Delete)
+	api.POST("/providers/:provider_id/check", controllers.Provider.Check)
 	api.POST("/providers/:provider_id/chat", controllers.Provider.Chat)
 	api.GET("/providers/:provider_id/models", controllers.ProviderModel.List)
 	api.POST("/providers/:provider_id/models", controllers.ProviderModel.Save)

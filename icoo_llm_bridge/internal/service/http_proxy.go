@@ -29,16 +29,25 @@ func parseProviderProxyURL(raw string) (*url.URL, error) {
 }
 
 func newProxiedHTTPClient(timeout time.Duration, rawProxyURL string) (*http.Client, error) {
+	return newProxiedHTTPClientWithResponseHeaderTimeout(timeout, 0, rawProxyURL)
+}
+
+func newProxiedHTTPClientWithResponseHeaderTimeout(timeout time.Duration, responseHeaderTimeout time.Duration, rawProxyURL string) (*http.Client, error) {
 	proxyURL, err := parseProviderProxyURL(rawProxyURL)
 	if err != nil {
 		return nil, err
 	}
 	client := &http.Client{Timeout: timeout}
-	if proxyURL == nil {
+	if proxyURL == nil && responseHeaderTimeout <= 0 {
 		return client, nil
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = http.ProxyURL(proxyURL)
+	if proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+	if responseHeaderTimeout > 0 {
+		transport.ResponseHeaderTimeout = responseHeaderTimeout
+	}
 	client.Transport = transport
 	return client, nil
 }

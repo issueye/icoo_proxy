@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -56,6 +57,11 @@ func NewProxyService(
 	traffic TrafficService,
 	tracker RequestTracker,
 ) ProxyService {
+	streamHeaderTimeout := cfg.StreamPreflightTimeout
+	if streamHeaderTimeout <= 0 {
+		streamHeaderTimeout = defaultStreamPreflightTimeout
+	}
+	streamClient, _ := newProxiedHTTPClientWithResponseHeaderTimeout(0, streamHeaderTimeout, "")
 	return &proxyService{
 		cfg:          cfg,
 		logger:       logger,
@@ -65,7 +71,7 @@ func NewProxyService(
 		traffic:      traffic,
 		tracker:      tracker,
 		client:       &http.Client{Timeout: cfg.WriteTimeout},
-		streamClient: &http.Client{},
+		streamClient: streamClient,
 	}
 }
 
@@ -142,10 +148,23 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		return
 	}
 
+	maxRequestBodyBytes := s.cfg.MaxRequestBodyBytes
+	if maxRequestBodyBytes <= 0 {
+		maxRequestBodyBytes = config.DefaultMaxRequestBytes
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		s.writeProxyError(w, downstream, http.StatusBadRequest, "failed to read request body")
-		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusBadRequest, start, "failed to read request body", domain.TokenUsage{}, "", nil)
+		fallbackStatus := http.StatusBadRequest
+		fallbackMessage := "failed to read request body"
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			fallbackStatus = http.StatusRequestEntityTooLarge
+			fallbackMessage = fmt.Sprintf("request body exceeds %d bytes", maxRequestBodyBytes)
+		}
+		statusCode, message := proxyOperationErrorStatus(r.Context(), err, fallbackStatus, fallbackMessage)
+		s.writeProxyError(w, downstream, statusCode, message)
+		s.recordTraffic(r, requestID, downstream, domain.Route{}, statusCode, start, message, domain.TokenUsage{}, "", nil)
 		return
 	}
 	requestedModel, err := extractRequestModel(body)
@@ -156,8 +175,9 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 	}
 	route, err := s.routes.Resolve(r.Context(), downstream, requestedModel)
 	if err != nil {
-		s.writeProxyError(w, downstream, http.StatusBadRequest, err.Error())
-		s.recordTraffic(r, requestID, downstream, domain.Route{}, http.StatusBadRequest, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		statusCode, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadRequest, "")
+		s.writeProxyError(w, downstream, statusCode, message)
+		s.recordTraffic(r, requestID, downstream, domain.Route{}, statusCode, start, message, domain.TokenUsage{}, requestedModel, body)
 		return
 	}
 
@@ -173,16 +193,18 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		Body:       body,
 	})
 	if err != nil {
-		s.writeProxyError(w, downstream, http.StatusBadRequest, err.Error())
-		s.recordTraffic(r, requestID, downstream, route, http.StatusBadRequest, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		statusCode, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadRequest, "")
+		s.writeProxyError(w, downstream, statusCode, message)
+		s.recordTraffic(r, requestID, downstream, route, statusCode, start, message, domain.TokenUsage{}, requestedModel, body)
 		return
 	}
 
 	upstreamWantsStream := requestWantsStream(upstreamBody)
 	resp, err := s.sendUpstream(r, route, upstreamBody, upstreamWantsStream)
 	if err != nil {
-		s.writeProxyError(w, downstream, http.StatusBadGateway, err.Error())
-		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		statusCode, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadGateway, "")
+		s.writeProxyError(w, downstream, statusCode, message)
+		s.recordTraffic(r, requestID, downstream, route, statusCode, start, message, domain.TokenUsage{}, requestedModel, body)
 		return
 	}
 	defer resp.Body.Close()
@@ -199,8 +221,9 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		s.writeProxyError(w, downstream, http.StatusBadGateway, "read upstream response failed")
-		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		statusCode, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadGateway, "read upstream response failed")
+		s.writeProxyError(w, downstream, statusCode, message)
+		s.recordTraffic(r, requestID, downstream, route, statusCode, start, message, domain.TokenUsage{}, requestedModel, body)
 		return
 	}
 	wantsStream, includeUsage := downstreamStreamPreference(downstream, body)
@@ -213,8 +236,9 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		Body:       respBody,
 	})
 	if err != nil {
-		s.writeProxyError(w, downstream, http.StatusBadGateway, err.Error())
-		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), domain.TokenUsage{}, requestedModel, body)
+		statusCode, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadGateway, "")
+		s.writeProxyError(w, downstream, statusCode, message)
+		s.recordTraffic(r, requestID, downstream, route, statusCode, start, message, domain.TokenUsage{}, requestedModel, body)
 		return
 	}
 
@@ -223,7 +247,8 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 		prepareStreamHeaders(w.Header(), resp.Header)
 		w.WriteHeader(statusCode)
 		if err := writeChatCompletionAsStream(converted, includeUsage, flushWriter{writer: w}); err != nil {
-			s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), usage, requestedModel, body)
+			errorStatus, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadGateway, "")
+			s.recordTraffic(r, requestID, downstream, route, errorStatus, start, message, usage, requestedModel, body)
 			if s.logger != nil {
 				s.logger.Warn("non-stream chat fallback conversion failed", "request_id", requestID, "error", err)
 			}
@@ -235,7 +260,11 @@ func (s *proxyService) Handle(w http.ResponseWriter, r *http.Request, downstream
 
 	copySafeHeaders(w.Header(), resp.Header)
 	w.WriteHeader(statusCode)
-	_, _ = w.Write(converted)
+	if _, err := w.Write(converted); err != nil {
+		errorStatus, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadGateway, "write downstream response failed")
+		s.recordTraffic(r, requestID, downstream, route, errorStatus, start, message, usage, requestedModel, body)
+		return
+	}
 	s.recordTraffic(r, requestID, downstream, route, statusCode, start, "", usage, requestedModel, body)
 }
 
@@ -266,8 +295,10 @@ func (s *proxyService) sendUpstream(r *http.Request, route domain.Route, body []
 		timeout := s.cfg.WriteTimeout
 		if streaming {
 			timeout = 0
+			client, err = newProxiedHTTPClientWithResponseHeaderTimeout(timeout, s.streamPreflightTimeout(), route.Provider.ProxyURL)
+		} else {
+			client, err = newProxiedHTTPClient(timeout, route.Provider.ProxyURL)
 		}
-		client, err = newProxiedHTTPClient(timeout, route.Provider.ProxyURL)
 		if err != nil {
 			return nil, err
 		}
@@ -297,7 +328,7 @@ func (s *proxyService) handleUpstreamErrorResponse(
 	statusCode := downstreamErrorStatus(resp.StatusCode)
 	message := upstreamErrorMessage(resp.StatusCode, respBody)
 	if err != nil {
-		message = "read upstream error response failed"
+		statusCode, message = proxyOperationErrorStatus(r.Context(), err, statusCode, "read upstream error response failed")
 	}
 	s.writeProxyError(w, downstream, statusCode, message)
 	s.recordTraffic(r, requestID, downstream, route, statusCode, start, message, domain.TokenUsage{}, requestedModel, requestBody)
@@ -316,8 +347,7 @@ func (s *proxyService) handleStreamResponse(
 ) {
 	reader, err := preflightStream(resp.Body, s.streamPreflightTimeout())
 	if err != nil {
-		statusCode := http.StatusBadGateway
-		message := err.Error()
+		statusCode, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadGateway, "")
 		s.writeProxyError(w, downstream, statusCode, message)
 		s.recordTraffic(r, requestID, downstream, route, statusCode, start, message, domain.TokenUsage{}, requestedModel, requestBody)
 		if s.logger != nil {
@@ -338,7 +368,8 @@ func (s *proxyService) handleStreamResponse(
 		Writer:     writer,
 	})
 	if err != nil {
-		s.recordTraffic(r, requestID, downstream, route, http.StatusBadGateway, start, err.Error(), result.Usage, requestedModel, requestBody)
+		errorStatus, message := proxyOperationErrorStatus(r.Context(), err, http.StatusBadGateway, "")
+		s.recordTraffic(r, requestID, downstream, route, errorStatus, start, message, result.Usage, requestedModel, requestBody)
 		if s.logger != nil {
 			s.logger.Warn("stream conversion failed", "request_id", requestID, "error", err)
 		}
@@ -404,10 +435,11 @@ func (s *proxyService) enqueueTraffic(item entity.TrafficRecord) {
 		s.recordTrafficSync(item)
 		return
 	}
+	s.trafficInflight.Add(1)
 	select {
 	case s.trafficQueue <- item:
-		s.trafficInflight.Add(1)
 	default:
+		s.trafficInflight.Done()
 		if s.logger != nil {
 			s.logger.Warn("traffic queue full; dropping traffic record", "request_id", item.RequestID)
 		}
@@ -731,6 +763,7 @@ const (
 	streamPreflightMaxBytes       = 64 << 10
 	streamPreflightMaxEvents      = 3
 	defaultStreamPreflightTimeout = 30 * time.Second
+	statusClientClosedRequest     = 499
 )
 
 func isHTTPSuccess(statusCode int) bool {
@@ -764,6 +797,29 @@ func upstreamErrorMessage(statusCode int, body []byte) string {
 		return fallback + ": " + message
 	}
 	return fallback
+}
+
+func proxyOperationErrorStatus(ctx context.Context, err error, fallbackStatus int, fallbackMessage string) (int, string) {
+	if ctx != nil && errors.Is(ctx.Err(), context.Canceled) {
+		return statusClientClosedRequest, "client canceled request"
+	}
+	if errors.Is(err, context.Canceled) {
+		return statusClientClosedRequest, "client canceled request"
+	}
+	if ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return http.StatusGatewayTimeout, "upstream request timed out"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return http.StatusGatewayTimeout, "upstream request timed out"
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return http.StatusGatewayTimeout, "upstream request timed out"
+	}
+	if fallbackMessage == "" && err != nil {
+		fallbackMessage = err.Error()
+	}
+	return fallbackStatus, fallbackMessage
 }
 
 func extractErrorMessage(body []byte) string {

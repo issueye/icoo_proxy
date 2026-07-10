@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -107,9 +108,13 @@ func NewContainer(options Options) (*Container, error) {
 }
 
 func (c *Container) Start() error {
+	listener, err := net.Listen("tcp", c.Server.Addr)
+	if err != nil {
+		return err
+	}
 	c.Logger.Info("icoo_llm_bridge started", "addr", c.Config.Addr())
 	go func() {
-		if err := c.Server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := c.Server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			c.Logger.Error("server error", "error", err)
 		}
 	}()

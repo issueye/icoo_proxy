@@ -1,6 +1,10 @@
 package service
 
-import "icoo_llm_bridge/internal/constants"
+import (
+	"time"
+
+	"icoo_llm_bridge/internal/constants"
+)
 
 type ProviderUpsertInput struct {
 	ID          string             `json:"id"`
@@ -15,6 +19,24 @@ type ProviderUpsertInput struct {
 	UserAgent   string             `json:"user_agent"`
 	Enabled     bool               `json:"enabled"`
 	Description string             `json:"description"`
+}
+
+type ProviderView struct {
+	ID           string             `json:"id"`
+	Name         string             `json:"name"`
+	Protocol     constants.Protocol `json:"protocol"`
+	Vendor       constants.Vendor   `json:"vendor"`
+	BaseURL      string             `json:"base_url"`
+	ModelsURL    string             `json:"models_url"`
+	ProxyURL     string             `json:"proxy_url"`
+	APIKeyMasked string             `json:"api_key_masked"`
+	HasAPIKey    bool               `json:"has_api_key"`
+	OnlyStream   bool               `json:"only_stream"`
+	UserAgent    string             `json:"user_agent"`
+	Enabled      bool               `json:"enabled"`
+	Description  string             `json:"description"`
+	CreatedAt    time.Time          `json:"created_at"`
+	UpdatedAt    time.Time          `json:"updated_at"`
 }
 
 type ProviderModelUpsertInput struct {
@@ -43,6 +65,15 @@ type ProviderChatResult struct {
 	Message    ProviderChatMessage `json:"message"`
 	StatusCode int                 `json:"status_code"`
 	DurationMS int64               `json:"duration_ms"`
+}
+
+type ProviderHealthResult struct {
+	SupplierID string `json:"supplier_id"`
+	Status     string `json:"status"`
+	StatusCode int    `json:"status_code"`
+	DurationMS int64  `json:"duration_ms"`
+	Message    string `json:"message"`
+	CheckedAt  string `json:"checked_at"`
 }
 
 type EndpointUpsertInput struct {

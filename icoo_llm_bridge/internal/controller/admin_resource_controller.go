@@ -49,6 +49,11 @@ func (c *ProviderController) Chat(ctx *gin.Context) {
 	writeResult(ctx, item, err)
 }
 
+func (c *ProviderController) Check(ctx *gin.Context) {
+	item, err := c.chat.Check(ctx.Request.Context(), pathID(ctx))
+	writeResult(ctx, item, err)
+}
+
 type ProviderModelController struct {
 	service service.ProviderModelService
 }

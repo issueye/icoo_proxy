@@ -19,17 +19,21 @@ type fileConfig struct {
 	AllowLocalWithoutAuth         *bool             `toml:"allow_local_without_auth"`
 	AllowUnauthLocal              *bool             `toml:"allow_unauthenticated_local"`
 	DefaultMaxTokens              int               `toml:"default_max_tokens"`
+	MaxRequestBodyBytes           int64             `toml:"max_request_body_bytes"`
 	DataDir                       string            `toml:"data_dir"`
 	DBPath                        string            `toml:"db_path"`
 	TrafficDBPath                 string            `toml:"traffic_db_path"`
+	ChainLogPath                  string            `toml:"chain_log_path"`
+	ChainLogBodies                *bool             `toml:"chain_log_bodies"`
+	ChainLogMaxBodyBytes          *int              `toml:"chain_log_max_body_bytes"`
 	Log                           fileLogConfig     `toml:"log"`
 	Archive                       fileArchiveConfig `toml:"archive"`
 }
 
 type fileLogConfig struct {
 	ChainLogPath         string `toml:"chain_log_path"`
-	ChainLogBodies       bool   `toml:"chain_log_bodies"`
-	ChainLogMaxBodyBytes int    `toml:"chain_log_max_body_bytes"`
+	ChainLogBodies       *bool  `toml:"chain_log_bodies"`
+	ChainLogMaxBodyBytes *int   `toml:"chain_log_max_body_bytes"`
 }
 
 type fileArchiveConfig struct {
@@ -68,6 +72,7 @@ func defaults() Config {
 		ShutdownTimeout:        10 * time.Second,
 		AllowLocalWithoutAuth:  true,
 		DefaultMaxTokens:       DefaultMaxTokens,
+		MaxRequestBodyBytes:    DefaultMaxRequestBytes,
 		DataDir:                dataDir,
 		DBPath:                 filepath.Join(dataDir, "icoo_llm_bridge.db"),
 		TrafficDBPath:          filepath.Join(dataDir, "icoo_llm_bridge_traffic.db"),
@@ -111,6 +116,9 @@ func applyFileConfig(cfg *Config, fc fileConfig) {
 	if fc.DefaultMaxTokens > 0 {
 		cfg.DefaultMaxTokens = fc.DefaultMaxTokens
 	}
+	if fc.MaxRequestBodyBytes > 0 {
+		cfg.MaxRequestBodyBytes = fc.MaxRequestBodyBytes
+	}
 	if fc.DataDir != "" {
 		cfg.ApplyDataDir(fc.DataDir)
 	}
@@ -120,12 +128,27 @@ func applyFileConfig(cfg *Config, fc fileConfig) {
 	if fc.TrafficDBPath != "" {
 		cfg.TrafficDBPath = fc.TrafficDBPath
 	}
-	if fc.Log.ChainLogPath != "" {
-		cfg.Log.ChainLogPath = fc.Log.ChainLogPath
-	}
-	cfg.Log.ChainLogBodies = fc.Log.ChainLogBodies
-	if fc.Log.ChainLogMaxBodyBytes > 0 {
-		cfg.Log.ChainLogMaxBodyBytes = fc.Log.ChainLogMaxBodyBytes
+	hasNestedLog := fc.Log.ChainLogPath != "" || fc.Log.ChainLogBodies != nil || fc.Log.ChainLogMaxBodyBytes != nil
+	if hasNestedLog {
+		if fc.Log.ChainLogPath != "" {
+			cfg.Log.ChainLogPath = fc.Log.ChainLogPath
+		}
+		if fc.Log.ChainLogBodies != nil {
+			cfg.Log.ChainLogBodies = *fc.Log.ChainLogBodies
+		}
+		if fc.Log.ChainLogMaxBodyBytes != nil && *fc.Log.ChainLogMaxBodyBytes >= 0 {
+			cfg.Log.ChainLogMaxBodyBytes = *fc.Log.ChainLogMaxBodyBytes
+		}
+	} else {
+		if fc.ChainLogPath != "" {
+			cfg.Log.ChainLogPath = fc.ChainLogPath
+		}
+		if fc.ChainLogBodies != nil {
+			cfg.Log.ChainLogBodies = *fc.ChainLogBodies
+		}
+		if fc.ChainLogMaxBodyBytes != nil && *fc.ChainLogMaxBodyBytes >= 0 {
+			cfg.Log.ChainLogMaxBodyBytes = *fc.ChainLogMaxBodyBytes
+		}
 	}
 	cfg.Archive.Enabled = fc.Archive.Enabled
 	if fc.Archive.DownRequestDir != "" {

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,6 +53,32 @@ type contextCheckingTraffic struct {
 	seenErr error
 }
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type cancelAwareBody struct {
+	ctx     context.Context
+	prefix  []byte
+	waiting chan struct{}
+	once    sync.Once
+}
+
+func (b *cancelAwareBody) Read(target []byte) (int, error) {
+	if len(b.prefix) > 0 {
+		n := copy(target, b.prefix)
+		b.prefix = b.prefix[n:]
+		return n, nil
+	}
+	b.once.Do(func() { close(b.waiting) })
+	<-b.ctx.Done()
+	return 0, b.ctx.Err()
+}
+
+func (b *cancelAwareBody) Close() error { return nil }
+
 func (m *contextCheckingTraffic) Record(ctx context.Context, item entity.TrafficRecord) error {
 	m.seenErr = ctx.Err()
 	return m.seenErr
@@ -63,6 +90,29 @@ func (m *contextCheckingTraffic) List(context.Context, int) ([]entity.TrafficRec
 
 func (m *contextCheckingTraffic) Clear(context.Context) error {
 	return nil
+}
+
+func TestProxyServiceTrafficWriterFlushesFastRecords(t *testing.T) {
+	traffic := &memoryTraffic{}
+	proxy := &proxyService{
+		logger:  slog.Default(),
+		traffic: traffic,
+	}
+	proxy.StartTrafficWriter()
+	t.Cleanup(func() {
+		if err := proxy.Close(); err != nil {
+			t.Errorf("Close() error = %v", err)
+		}
+	})
+
+	const total = 5000
+	for i := 0; i < total; i++ {
+		proxy.enqueueTraffic(entity.TrafficRecord{RequestID: "req-" + strconv.Itoa(i)})
+		proxy.FlushTraffic()
+	}
+	if len(traffic.items) != total {
+		t.Fatalf("traffic records = %d, want %d", len(traffic.items), total)
+	}
 }
 
 func TestProxyServiceForwardsJSONAndRewritesModel(t *testing.T) {
@@ -209,6 +259,196 @@ func TestProxyServiceRecordsTrafficWithIndependentContext(t *testing.T) {
 
 	if traffic.seenErr != nil {
 		t.Fatalf("traffic record context error = %v", traffic.seenErr)
+	}
+}
+
+func TestProxyServiceClientCancellationIsNotRecordedAsBadGateway(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("upstream should not be called for an already canceled request")
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "responses",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "target-model",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false},
+		slog.Default(),
+		ai_llm_proxy.NewPassthroughConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"requested-model"}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	proxy.Handle(rec, req, constants.ProtocolOpenAIResponses)
+
+	if rec.Code != statusClientClosedRequest {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "client canceled request") {
+		t.Fatalf("expected client cancellation message, got: %s", rec.Body.String())
+	}
+	if len(traffic.items) != 1 {
+		t.Fatalf("traffic records = %d", len(traffic.items))
+	}
+	if traffic.items[0].StatusCode != statusClientClosedRequest {
+		t.Fatalf("traffic status = %d", traffic.items[0].StatusCode)
+	}
+	if traffic.items[0].Error != "client canceled request" {
+		t.Fatalf("traffic error = %q", traffic.items[0].Error)
+	}
+}
+
+func TestProxyServiceRejectsOversizedRequestBody(t *testing.T) {
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "responses",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "target-model",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{AllowLocalWithoutAuth: false, MaxRequestBodyBytes: 16},
+		slog.Default(),
+		ai_llm_proxy.NewPassthroughConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"requested-model","input":"too large"}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+	proxy.Handle(rec, req, constants.ProtocolOpenAIResponses)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if upstreamCalled {
+		t.Fatal("upstream was called for oversized request")
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+}
+
+func TestProxyServiceStreamCancellationIsRecordedAsClientClosed(t *testing.T) {
+	tests := []struct {
+		name   string
+		prefix string
+	}{
+		{
+			name: "during stream preflight",
+		},
+		{
+			name: "after first stream event",
+			prefix: strings.Join([]string{
+				`event: response.created`,
+				`data: {"type":"response.created","response":{"id":"resp_1","model":"gpt","status":"in_progress"}}`,
+				``,
+				``,
+			}, "\n"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			traffic := &memoryTraffic{}
+			waiting := make(chan struct{})
+			route := domain.Route{
+				Name:             "responses",
+				UpstreamProtocol: constants.ProtocolOpenAIResponses,
+				Model:            "target-model",
+				Provider: domain.ProviderSnapshot{
+					Name:    "openai",
+					BaseURL: "http://upstream.example",
+					APIKey:  "upstream-key",
+				},
+			}
+			proxy := NewProxyService(
+				config.Config{AllowLocalWithoutAuth: false, StreamPreflightTimeout: time.Second},
+				slog.Default(),
+				ai_llm_proxy.NewPassthroughConverter(),
+				allowAuth{},
+				fixedRouteResolver{route: route},
+				traffic,
+				nil,
+			).(*proxyService)
+			proxy.streamClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header: http.Header{
+						"Content-Type": []string{"text/event-stream"},
+					},
+					Body: &cancelAwareBody{
+						ctx:     req.Context(),
+						prefix:  []byte(tt.prefix),
+						waiting: waiting,
+					},
+				}, nil
+			})}
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"requested-model","stream":true}`))
+			req.Header.Set("x-api-key", "proxy-key")
+			ctx, cancel := context.WithCancel(req.Context())
+			req = req.WithContext(ctx)
+			rec := httptest.NewRecorder()
+			done := make(chan struct{})
+			go func() {
+				proxy.Handle(rec, req, constants.ProtocolOpenAIResponses)
+				close(done)
+			}()
+
+			select {
+			case <-waiting:
+			case <-time.After(time.Second):
+				t.Fatal("proxy did not reach the blocking stream read")
+			}
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				t.Fatal("proxy did not stop after request cancellation")
+			}
+
+			if len(traffic.items) != 1 {
+				t.Fatalf("traffic records = %d", len(traffic.items))
+			}
+			if traffic.items[0].StatusCode != statusClientClosedRequest {
+				t.Fatalf("traffic status = %d, error = %q", traffic.items[0].StatusCode, traffic.items[0].Error)
+			}
+			if traffic.items[0].Error != "client canceled request" {
+				t.Fatalf("traffic error = %q", traffic.items[0].Error)
+			}
+		})
 	}
 }
 
@@ -679,6 +919,52 @@ func TestProxyServiceStreamingRequestDoesNotUseGlobalClientTimeout(t *testing.T)
 		t.Fatalf("expected delayed stream body, got: %s", rec.Body.String())
 	}
 	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusOK {
+		t.Fatalf("unexpected traffic records: %+v", traffic.items)
+	}
+}
+
+func TestProxyServiceStreamingRequestTimesOutWaitingForResponseHeaders(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer upstream.Close()
+
+	traffic := &memoryTraffic{}
+	route := domain.Route{
+		Name:             "responses",
+		UpstreamProtocol: constants.ProtocolOpenAIResponses,
+		Model:            "target-model",
+		Provider: domain.ProviderSnapshot{
+			Name:    "openai",
+			BaseURL: upstream.URL,
+			APIKey:  "upstream-key",
+		},
+	}
+	proxy := NewProxyService(
+		config.Config{
+			AllowLocalWithoutAuth:  false,
+			WriteTimeout:           time.Second,
+			StreamPreflightTimeout: 20 * time.Millisecond,
+		},
+		slog.Default(),
+		ai_llm_proxy.NewPassthroughConverter(),
+		allowAuth{},
+		fixedRouteResolver{route: route},
+		traffic,
+		nil,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"requested-model","stream":true}`))
+	req.Header.Set("x-api-key", "proxy-key")
+	rec := httptest.NewRecorder()
+	proxy.Handle(rec, req, constants.ProtocolOpenAIResponses)
+
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if len(traffic.items) != 1 || traffic.items[0].StatusCode != http.StatusGatewayTimeout {
 		t.Fatalf("unexpected traffic records: %+v", traffic.items)
 	}
 }

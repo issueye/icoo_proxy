@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const DefaultMaxTokens = 32768
+const (
+	DefaultMaxTokens       = 32768
+	DefaultMaxRequestBytes = 64 << 20
+)
 
 type Config struct {
 	Host                   string
@@ -20,6 +23,7 @@ type Config struct {
 	ShutdownTimeout        time.Duration
 	AllowLocalWithoutAuth  bool
 	DefaultMaxTokens       int
+	MaxRequestBodyBytes    int64
 	DataDir                string
 	DBPath                 string
 	TrafficDBPath          string

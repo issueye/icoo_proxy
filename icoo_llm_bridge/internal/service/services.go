@@ -35,7 +35,7 @@ func NewServices(deps Deps) Services {
 	endpoints := NewEndpointService(deps.Repos.Endpoint)
 	providers := NewProviderService(deps.Repos.Provider)
 	providerModels := NewProviderModelService(deps.Repos.ProviderModel, deps.Repos.Provider)
-	providerChat := NewProviderChatService(deps.Repos.Provider)
+	providerChat := NewProviderChatService(deps.Repos.Provider, deps.Repos.ProviderModel)
 	rules := NewRoutingRuleService(deps.Repos.RoutingRule, tracker)
 	// Hold the concrete resolver so its route cache can be wired into the admin
 	// services below; it still satisfies the RouteResolver interface.

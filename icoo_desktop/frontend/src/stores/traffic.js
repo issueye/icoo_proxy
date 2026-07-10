@@ -24,6 +24,7 @@ export const useTrafficStore = defineStore("traffic", {
     pageSize: DEFAULT_PAGE_SIZE,
     successCount: 0,
     errorCount: 0,
+    canceledCount: 0,
     averageLatency: 0,
     protocolOptions: ["all"],
     filter: "all",
@@ -53,6 +54,7 @@ export const useTrafficStore = defineStore("traffic", {
         this.totalRequests = Number(result?.total_requests || 0);
         this.successCount = Number(result?.success_count || 0);
         this.errorCount = Number(result?.error_count || 0);
+        this.canceledCount = Number(result?.canceled_count || 0);
         this.averageLatency = Number(result?.average_latency || 0);
         this.lastUpdatedAt = result?.last_updated_at || new Date().toISOString();
 
@@ -87,6 +89,7 @@ export const useTrafficStore = defineStore("traffic", {
         this.total = 0;
         this.successCount = 0;
         this.errorCount = 0;
+        this.canceledCount = 0;
         this.averageLatency = 0;
         this.page = 1;
         this.protocolOptions = ["all"];

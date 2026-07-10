@@ -30,8 +30,9 @@
       <StatCard icon="key" label="总 Token" :value="formatTokenCount(store.tokenStats.total_tokens)" tone="info" />
     </div>
 
-    <div class="stat-grid stat-grid--3">
+    <div class="stat-grid stat-grid--4">
       <StatCard icon="check" label="成功请求" :value="String(store.successCount)" tone="success" />
+      <StatCard icon="timer" label="客户端取消" :value="String(store.canceledCount)" tone="warning" />
       <StatCard icon="layers" label="总输入 Token" :value="formatTokenCount(store.tokenStats.input_tokens)"
         tone="primary" />
       <StatCard icon="server" label="总输出 Token" :value="formatTokenCount(store.tokenStats.output_tokens)"
@@ -104,7 +105,7 @@
           </div>
         </template>
         <template #cell-status="{ row }">
-          <UTag :variant="row.status_code >= 400 ? 'error' : 'success'" size="xs">
+          <UTag :variant="row.status_code === 499 ? 'warning' : row.status_code >= 400 ? 'error' : 'success'" size="xs">
             {{ row.status_code || "-" }}
           </UTag>
         </template>
@@ -115,7 +116,8 @@
           <span class="table-meta">{{ formatDateTime(row.created_at) }}</span>
         </template>
         <template #cell-error="{ row }">
-          <p v-if="row.error" class="table-cell-wrap text-sm text-error" :title="row.error">{{ row.error }}</p>
+          <p v-if="row.error" class="table-cell-wrap text-sm"
+            :class="row.status_code === 499 ? 'text-warning' : 'text-error'" :title="row.error">{{ row.error }}</p>
           <span v-else class="table-meta">无</span>
         </template>
     </UTable>

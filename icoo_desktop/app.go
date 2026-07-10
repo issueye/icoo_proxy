@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -226,11 +227,31 @@ func findServerExecutable(exeDir string) string {
 	}
 	for _, candidate := range candidates {
 		cleaned := filepath.Clean(candidate)
-		if info, err := os.Stat(cleaned); err == nil && !info.IsDir() {
+		if isUsableServerExecutable(cleaned) {
 			return cleaned
 		}
 	}
 	return ""
+}
+
+func isUsableServerExecutable(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() || info.Size() == 0 {
+		return false
+	}
+	if runtime.GOOS != "windows" {
+		return true
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	var header [2]byte
+	if _, err := io.ReadFull(file, header[:]); err != nil {
+		return false
+	}
+	return header == [2]byte{'M', 'Z'}
 }
 
 // StopServer stops the icoo_llm_bridge child process.
@@ -245,10 +266,8 @@ func (a *App) StopServer() error {
 			return err
 		}
 	} else if serverHealthOK(serverURL) {
-		if err := terminateServerByAddr(listenAddr); err != nil {
-			a.mu.Unlock()
-			return err
-		}
+		a.mu.Unlock()
+		return fmt.Errorf("refusing to stop server on %s because it was not started by icoo_desktop", listenAddr)
 	}
 	a.serverCmd = nil
 	a.serverStartedAt = time.Time{}
@@ -289,18 +308,26 @@ func (a *App) GetServerConfig() ServerConfig {
 
 // SaveServerConfig saves and applies new server configuration
 func (a *App) SaveServerConfig(cfg ServerConfig) error {
-	if cfg.Host == "" {
-		cfg.Host = "127.0.0.1"
-	}
-	if cfg.Port <= 0 {
-		cfg.Port = 18181
+	cfg = normalizeConfig(cfg)
+	if err := saveConfig(cfg); err != nil {
+		return err
 	}
 
 	a.mu.Lock()
+	restartManagedServer := isRunning(a.serverCmd)
 	a.config = cfg
 	a.mu.Unlock()
 
-	return saveConfig(cfg)
+	if !restartManagedServer {
+		return nil
+	}
+	if err := a.StopServer(); err != nil {
+		return fmt.Errorf("stop server for config reload: %w", err)
+	}
+	if err := a.StartServer(); err != nil {
+		return fmt.Errorf("start server after config reload: %w", err)
+	}
+	return nil
 }
 
 // GetAppVersion returns the app version

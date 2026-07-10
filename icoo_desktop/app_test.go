@@ -33,7 +33,40 @@ func TestStartServerWakesPackagedServer(t *testing.T) {
 	}
 }
 
-func TestStopServerStopsExistingListener(t *testing.T) {
+func TestSaveServerConfigRestartsManagedServer(t *testing.T) {
+	if findServerExecutable(".") == "" {
+		t.Skip("icoo_llm_bridge executable not found")
+	}
+
+	app := NewApp()
+	app.config.Port = 19196
+	oldURL := app.config.URL()
+	if err := app.StartServer(); err != nil {
+		t.Fatalf("StartServer() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := app.StopServer(); err != nil {
+			t.Errorf("StopServer() error = %v", err)
+		}
+	})
+
+	cfg := app.GetServerConfig()
+	cfg.Port = 19197
+	if err := app.SaveServerConfig(cfg); err != nil {
+		t.Fatalf("SaveServerConfig() error = %v", err)
+	}
+	if serverHealthOK(oldURL) {
+		t.Fatal("old server address still responds after config reload")
+	}
+	if !serverHealthOK(cfg.URL()) {
+		t.Fatal("new server address is not healthy after config reload")
+	}
+	if info := app.GetServerProcessInfo(); !info.Running || info.ListenAddr != "127.0.0.1:19197" {
+		t.Fatalf("server info after reload = %+v", info)
+	}
+}
+
+func TestStopServerRefusesToKillExistingListener(t *testing.T) {
 	app := NewApp()
 	app.config.Port = 19194
 
@@ -61,10 +94,10 @@ func TestStopServerStopsExistingListener(t *testing.T) {
 		t.Fatal("external server did not become ready")
 	}
 
-	if err := app.StopServer(); err != nil {
-		t.Fatalf("StopServer() error = %v", err)
+	if err := app.StopServer(); err == nil {
+		t.Fatal("StopServer() error = nil, want unmanaged-process refusal")
 	}
-	if serverHealthOK(app.config.URL()) {
-		t.Fatal("server still responds after StopServer")
+	if !serverHealthOK(app.config.URL()) {
+		t.Fatal("unmanaged server was terminated")
 	}
 }

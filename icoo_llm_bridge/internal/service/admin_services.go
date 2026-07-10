@@ -35,8 +35,8 @@ type AuthService interface {
 }
 
 type ProviderService interface {
-	List(ctx context.Context) ([]entity.Provider, error)
-	Upsert(ctx context.Context, input ProviderUpsertInput) (entity.Provider, error)
+	List(ctx context.Context) ([]ProviderView, error)
+	Upsert(ctx context.Context, input ProviderUpsertInput) (ProviderView, error)
 	Delete(ctx context.Context, id string) error
 }
 
@@ -49,6 +49,7 @@ type ProviderModelService interface {
 
 type ProviderChatService interface {
 	Chat(ctx context.Context, providerID string, input ProviderChatInput) (ProviderChatResult, error)
+	Check(ctx context.Context, providerID string) (ProviderHealthResult, error)
 }
 
 type RoutingRuleService interface {
@@ -213,47 +214,67 @@ func (s *providerService) SetCacheInvalidator(invalidator CacheInvalidator) {
 	s.invalidator = invalidator
 }
 
-func (s *providerService) List(ctx context.Context) ([]entity.Provider, error) {
-	return s.repo.List(ctx)
+func (s *providerService) List(ctx context.Context) ([]ProviderView, error) {
+	items, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]ProviderView, 0, len(items))
+	for _, item := range items {
+		views = append(views, toProviderView(item))
+	}
+	return views, nil
 }
 
-func (s *providerService) Upsert(ctx context.Context, input ProviderUpsertInput) (entity.Provider, error) {
+func (s *providerService) Upsert(ctx context.Context, input ProviderUpsertInput) (ProviderView, error) {
 	if strings.TrimSpace(input.Name) == "" {
-		return entity.Provider{}, fmt.Errorf("name is required")
+		return ProviderView{}, fmt.Errorf("name is required")
 	}
 	if _, ok := constants.ParseProtocol(input.Protocol.String()); !ok {
-		return entity.Provider{}, fmt.Errorf("protocol is invalid")
+		return ProviderView{}, fmt.Errorf("protocol is invalid")
 	}
 	proxyURL := strings.TrimSpace(input.ProxyURL)
 	if _, err := parseProviderProxyURL(proxyURL); err != nil {
-		return entity.Provider{}, err
+		return ProviderView{}, err
 	}
 	now := time.Now()
 	id := strings.TrimSpace(input.ID)
+	item := entity.Provider{}
 	if id == "" {
 		id = idgen.New("provider")
+		item.ID = id
+		item.CreatedAt = now
+	} else {
+		existing, err := s.repo.Find(ctx, id)
+		switch {
+		case err == nil:
+			item = existing
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			item.ID = id
+			item.CreatedAt = now
+		default:
+			return ProviderView{}, err
+		}
 	}
-	item := entity.Provider{
-		ID:           id,
-		Name:         strings.TrimSpace(input.Name),
-		Protocol:     input.Protocol,
-		Vendor:       input.Vendor,
-		BaseURL:      strings.TrimSpace(input.BaseURL),
-		ModelsURL:    strings.TrimSpace(input.ModelsURL),
-		ProxyURL:     proxyURL,
-		APIKeyCipher: strings.TrimSpace(input.APIKey),
-		OnlyStream:   input.OnlyStream,
-		UserAgent:    strings.TrimSpace(input.UserAgent),
-		Enabled:      input.Enabled,
-		Description:  strings.TrimSpace(input.Description),
-		CreatedAt:    now,
-		UpdatedAt:    now,
+	item.Name = strings.TrimSpace(input.Name)
+	item.Protocol = input.Protocol
+	item.Vendor = input.Vendor
+	item.BaseURL = strings.TrimSpace(input.BaseURL)
+	item.ModelsURL = strings.TrimSpace(input.ModelsURL)
+	item.ProxyURL = proxyURL
+	if apiKey := strings.TrimSpace(input.APIKey); apiKey != "" || item.APIKeyCipher == "" {
+		item.APIKeyCipher = apiKey
 	}
+	item.OnlyStream = input.OnlyStream
+	item.UserAgent = strings.TrimSpace(input.UserAgent)
+	item.Enabled = input.Enabled
+	item.Description = strings.TrimSpace(input.Description)
+	item.UpdatedAt = now
 	if err := s.repo.Save(ctx, &item); err != nil {
-		return entity.Provider{}, err
+		return ProviderView{}, err
 	}
 	s.invalidator.InvalidateProviders()
-	return item, nil
+	return toProviderView(item), nil
 }
 
 func (s *providerService) Delete(ctx context.Context, id string) error {
@@ -599,6 +620,9 @@ func hashSecret(secret string) string {
 
 func previewSecret(secret string) string {
 	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return ""
+	}
 	if len(secret) <= 8 {
 		return "****"
 	}
@@ -626,5 +650,25 @@ func toAPIKeyView(item entity.APIKey) APIKeyView {
 		Enabled:       item.Enabled,
 		CreatedAt:     item.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:     item.UpdatedAt.Format(time.RFC3339),
+	}
+}
+
+func toProviderView(item entity.Provider) ProviderView {
+	return ProviderView{
+		ID:           item.ID,
+		Name:         item.Name,
+		Protocol:     item.Protocol,
+		Vendor:       item.Vendor,
+		BaseURL:      item.BaseURL,
+		ModelsURL:    item.ModelsURL,
+		ProxyURL:     item.ProxyURL,
+		APIKeyMasked: previewSecret(item.APIKeyCipher),
+		HasAPIKey:    strings.TrimSpace(item.APIKeyCipher) != "",
+		OnlyStream:   item.OnlyStream,
+		UserAgent:    item.UserAgent,
+		Enabled:      item.Enabled,
+		Description:  item.Description,
+		CreatedAt:    item.CreatedAt,
+		UpdatedAt:    item.UpdatedAt,
 	}
 }
