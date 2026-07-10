@@ -19,6 +19,13 @@ type ProviderModelRepository interface {
 	Delete(ctx context.Context, providerID string, id string) error
 }
 
+type ModelCatalogRepository interface {
+	List(ctx context.Context) ([]entity.ModelCatalogItem, error)
+	Find(ctx context.Context, id string) (entity.ModelCatalogItem, error)
+	Save(ctx context.Context, item *entity.ModelCatalogItem) error
+	Delete(ctx context.Context, id string) error
+}
+
 type EndpointRepository interface {
 	List(ctx context.Context) ([]entity.IngressEndpoint, error)
 	Enabled(ctx context.Context) ([]entity.IngressEndpoint, error)

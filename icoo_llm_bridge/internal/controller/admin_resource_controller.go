@@ -89,6 +89,35 @@ func (c *ProviderModelController) Delete(ctx *gin.Context) {
 	writeResult(ctx, gin.H{"deleted": true}, c.service.Delete(ctx.Request.Context(), ctx.Param("provider_id"), ctx.Param("id")))
 }
 
+type ModelCatalogController struct {
+	service service.ModelCatalogService
+}
+
+func NewModelCatalogController(service service.ModelCatalogService) *ModelCatalogController {
+	return &ModelCatalogController{service: service}
+}
+
+func (c *ModelCatalogController) List(ctx *gin.Context) {
+	items, err := c.service.List(ctx.Request.Context())
+	writePagedResult(ctx, items, err)
+}
+
+func (c *ModelCatalogController) Save(ctx *gin.Context) {
+	var input service.ModelCatalogUpsertInput
+	if !bindJSON(ctx, &input) {
+		return
+	}
+	if input.ID == "" {
+		input.ID = ctx.Param("id")
+	}
+	item, err := c.service.Upsert(ctx.Request.Context(), input)
+	writeResult(ctx, item, err)
+}
+
+func (c *ModelCatalogController) Delete(ctx *gin.Context) {
+	writeResult(ctx, gin.H{"deleted": true}, c.service.Delete(ctx.Request.Context(), ctx.Param("id")))
+}
+
 type EndpointController struct {
 	service service.EndpointService
 }

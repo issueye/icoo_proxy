@@ -164,29 +164,38 @@
             <UButton type="button" variant="secondary" size="xs" :loading="store.fetchingModels" :disabled="store.fetchingModels" @click="fetchModelsForSupplier">
               从上游获取模型
             </UButton>
-            <UButton type="button" variant="secondary" size="xs" @click="addModelRow(store.modelForm.models)">
-              添加模型
-            </UButton>
           </div>
         </div>
 
+        <div class="supplier-model-picker">
+          <USelect v-model="catalogSelection" label="从模型目录选择" placeholder="请选择模型"
+            :options="availableCatalogOptions" searchable class="supplier-model-picker__select" />
+          <UButton type="button" variant="secondary" size="sm" :disabled="!catalogSelection" @click="addCatalogModel">
+            添加到供应商
+          </UButton>
+        </div>
+        <p class="text-[11px] text-muted">模型目录提供 GPT、DeepSeek、GLM、Claude 图标，也可在“模型管理”中新增具体版本。</p>
+
         <div class="space-y-2">
-          <div v-for="(model, index) in store.modelForm.models" :key="index" class="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
-            <UInput
-              :model-value="model.name"
-              :label="`模型 ${index + 1}`"
-              :placeholder="index === 0 ? '例如：gpt-4.1-mini' : '继续添加模型'"
-              @update:modelValue="updateModelRow(store.modelForm.models, index, 'name', $event)" />
+          <div v-for="model in configuredModels" :key="`${model.name}-${model.sourceIndex}`" class="supplier-model-row">
+            <div class="supplier-model-row__identity">
+              <ModelBrandIcon :icon="catalogIconFor(model.name)" />
+              <div>
+                <p>{{ model.name }}</p>
+                <span>{{ catalogFamilyFor(model.name) }}</span>
+              </div>
+            </div>
             <UInput
               :model-value="model.max_tokens"
               label="max_tokens"
               type="number"
               placeholder="32768"
-              @update:modelValue="updateModelRow(store.modelForm.models, index, 'max_tokens', $event)" />
-            <UButton type="button" variant="secondary" size="sm" :disabled="store.modelForm.models.length === 1" @click="removeModelRow(store.modelForm, index)">
+              @update:modelValue="updateModelRow(store.modelForm.models, model.sourceIndex, 'max_tokens', $event)" />
+            <UButton type="button" variant="secondary" size="sm" @click="removeModelRow(store.modelForm, model.sourceIndex)">
               删除
             </UButton>
           </div>
+          <div v-if="!configuredModels.length" class="supplier-model-empty">尚未添加模型，请从模型目录选择或从上游获取。</div>
         </div>
       </form>
       <template #footer>
@@ -208,9 +217,11 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
+import { useModelCatalogStore } from "../stores/modelCatalog";
 import { useStoreError } from "../composables/useStoreError";
 
 import StatCard from "../components/StatCard.vue";
+import ModelBrandIcon from "../components/ModelBrandIcon.vue";
 import UAlert from "../components/ued/UAlert.vue";
 import UButton from "../components/ued/UButton.vue";
 import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
@@ -226,9 +237,12 @@ import { message } from "../components/ued/message";
 const DEFAULT_MODEL_MAX_TOKENS = 32768;
 
 const store = useSuppliersStore();
+const catalogStore = useModelCatalogStore();
 useStoreError(store);
+useStoreError(catalogStore);
 const supplierModalOpen = ref(false);
 const modelModalOpen = ref(false);
+const catalogSelection = ref("");
 const queryForm = reactive({
   keyword: "",
   protocol: "all",
@@ -242,6 +256,15 @@ const confirmState = reactive({
 const reachableCount = computed(() => store.health.filter((item) => item.status === "reachable").length);
 const attentionCount = computed(() => store.health.filter((item) => item.status && item.status !== "reachable").length);
 const uncheckedCount = computed(() => Math.max(store.totalCount - store.checkedCount, 0));
+const configuredModels = computed(() => (store.modelForm.models || [])
+  .map((model, sourceIndex) => ({ ...model, sourceIndex }))
+  .filter((model) => getModelName(model)));
+const availableCatalogOptions = computed(() => {
+  const assigned = new Set(configuredModels.value.map((item) => item.name));
+  return catalogStore.items
+    .filter((item) => !assigned.has(item.name))
+    .map((item) => ({ label: item.family ? `${item.name} · ${item.family}` : item.name, value: item.id }));
+});
 
 const protocolOptions = [
   { label: "anthropic", value: "anthropic" },
@@ -257,7 +280,9 @@ const supplierFilterOptions = [
 const vendorOptions = [
   { label: "openai", value: "openai" },
   { label: "deepseek", value: "deepseek" },
+  { label: "glm", value: "glm" },
   { label: "anthropic", value: "anthropic" },
+  { label: "custom", value: "custom" },
 ];
 
 
@@ -344,6 +369,10 @@ function closeSupplierModal() {
 
 function openModelEditor(item) {
   store.selectModelEditor(item);
+  catalogSelection.value = "";
+  if (!catalogStore.items.length) {
+    catalogStore.load();
+  }
   modelModalOpen.value = true;
 }
 
@@ -352,11 +381,30 @@ function closeModelModal() {
   store.resetModelForm();
 }
 
-function addModelRow(target) {
-  target.push({
-    name: "",
-    max_tokens: DEFAULT_MODEL_MAX_TOKENS,
-  });
+function addCatalogModel() {
+  const selected = catalogStore.items.find((item) => item.id === catalogSelection.value);
+  if (!selected) return;
+  const models = store.modelForm.models || [];
+  const emptyIndex = models.findIndex((item) => !getModelName(item));
+  const next = { name: selected.name, max_tokens: selected.max_tokens || DEFAULT_MODEL_MAX_TOKENS };
+  if (emptyIndex >= 0) {
+    models.splice(emptyIndex, 1, next);
+  } else {
+    models.push(next);
+  }
+  catalogSelection.value = "";
+}
+
+function catalogItemFor(name) {
+  return catalogStore.items.find((item) => item.name === name);
+}
+
+function catalogIconFor(name) {
+  return catalogItemFor(name)?.icon || "custom";
+}
+
+function catalogFamilyFor(name) {
+  return catalogItemFor(name)?.family || "上游模型";
 }
 
 function updateModelRow(target, index, field, value) {
@@ -367,10 +415,10 @@ function updateModelRow(target, index, field, value) {
 }
 
 function removeModelRow(form, index) {
-  if (form.models.length === 1) {
-    return;
-  }
   form.models.splice(index, 1);
+  if (!form.models.length) {
+    form.models.push({ name: "", max_tokens: DEFAULT_MODEL_MAX_TOKENS });
+  }
 }
 
 async function submitSupplier() {
@@ -426,6 +474,7 @@ onMounted(() => {
   queryForm.keyword = store.keyword;
   queryForm.protocol = store.protocol;
   store.load();
+  catalogStore.load();
 });
 </script>
 

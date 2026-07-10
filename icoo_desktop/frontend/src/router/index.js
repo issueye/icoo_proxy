@@ -11,6 +11,7 @@ import TrafficView from "../views/TrafficView.vue";
 import UedSpecView from "../views/UedSpecView.vue";
 
 import ModelAliasesView from "../views/ModelAliasesView.vue";
+import ModelsView from "../views/ModelsView.vue";
 
 export default createRouter({
   history: createWebHashHistory(),
@@ -34,6 +35,11 @@ export default createRouter({
       path: "/routing-rules",
       name: "routing-rules",
       component: RoutingRulesView,
+    },
+    {
+      path: "/models",
+      name: "models",
+      component: ModelsView,
     },
     {
       path: "/model-aliases",

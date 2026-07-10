@@ -47,6 +47,12 @@ type ProviderModelService interface {
 	FetchModels(ctx context.Context, providerID string) ([]FetchedModel, error)
 }
 
+type ModelCatalogService interface {
+	List(ctx context.Context) ([]entity.ModelCatalogItem, error)
+	Upsert(ctx context.Context, input ModelCatalogUpsertInput) (entity.ModelCatalogItem, error)
+	Delete(ctx context.Context, id string) error
+}
+
 type ProviderChatService interface {
 	Chat(ctx context.Context, providerID string, input ProviderChatInput) (ProviderChatResult, error)
 	Check(ctx context.Context, providerID string) (ProviderHealthResult, error)
@@ -449,6 +455,72 @@ func (s *providerModelService) FetchModels(ctx context.Context, providerID strin
 		})
 	}
 	return result, nil
+}
+
+type modelCatalogService struct {
+	repo repository.ModelCatalogRepository
+}
+
+func NewModelCatalogService(repo repository.ModelCatalogRepository) ModelCatalogService {
+	return &modelCatalogService{repo: repo}
+}
+
+func (s *modelCatalogService) List(ctx context.Context) ([]entity.ModelCatalogItem, error) {
+	return s.repo.List(ctx)
+}
+
+func (s *modelCatalogService) Upsert(ctx context.Context, input ModelCatalogUpsertInput) (entity.ModelCatalogItem, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return entity.ModelCatalogItem{}, fmt.Errorf("name is required")
+	}
+
+	now := time.Now()
+	id := strings.TrimSpace(input.ID)
+	item := entity.ModelCatalogItem{}
+	if id == "" {
+		item.ID = idgen.New("catalog-model")
+		item.CreatedAt = now
+	} else {
+		existing, err := s.repo.Find(ctx, id)
+		if err != nil {
+			return entity.ModelCatalogItem{}, err
+		}
+		item = existing
+		if item.BuiltIn {
+			return entity.ModelCatalogItem{}, fmt.Errorf("built-in model cannot be modified")
+		}
+	}
+
+	maxTokens := input.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 32768
+	}
+	icon := strings.TrimSpace(input.Icon)
+	if icon == "" {
+		icon = "custom"
+	}
+	item.Name = name
+	item.Family = strings.TrimSpace(input.Family)
+	item.Icon = icon
+	item.MaxTokens = maxTokens
+	item.Description = strings.TrimSpace(input.Description)
+	item.UpdatedAt = now
+	if err := s.repo.Save(ctx, &item); err != nil {
+		return entity.ModelCatalogItem{}, err
+	}
+	return item, nil
+}
+
+func (s *modelCatalogService) Delete(ctx context.Context, id string) error {
+	item, err := s.repo.Find(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return err
+	}
+	if item.BuiltIn {
+		return fmt.Errorf("built-in model cannot be deleted")
+	}
+	return s.repo.Delete(ctx, item.ID)
 }
 
 type routingRuleService struct {

@@ -142,6 +142,20 @@ function normalizeProviderModel(raw) {
   };
 }
 
+function normalizeCatalogModel(raw) {
+  return {
+    id: valueOf(raw, "id", "ID"),
+    name: valueOf(raw, "name", "Name"),
+    family: valueOf(raw, "family", "Family"),
+    icon: valueOf(raw, "icon", "Icon", "custom"),
+    max_tokens: Number(valueOf(raw, "max_tokens", "MaxTokens", 32768) || 32768),
+    description: valueOf(raw, "description", "Description"),
+    built_in: boolOf(raw, "built_in", "BuiltIn"),
+    created_at: valueOf(raw, "created_at", "CreatedAt"),
+    updated_at: valueOf(raw, "updated_at", "UpdatedAt"),
+  };
+}
+
 function normalizeEndpoint(raw) {
   return {
     id: valueOf(raw, "id", "ID"),
@@ -269,6 +283,32 @@ export async function FetchModelsFromProvider(providerID) {
   }
   const raw = await client.post(`${API_PREFIX}/providers/${providerID}/fetch-models`);
   return Array.isArray(raw) ? raw : [];
+}
+
+export async function ListModelCatalog() {
+  const raw = await client.get(`${API_PREFIX}/model-catalog`, {
+    params: { page: 1, page_size: 200 },
+  });
+  return normalizePage(raw, 1, 200).items.map(normalizeCatalogModel);
+}
+
+export function SaveCatalogModel(input) {
+  const payload = {
+    id: input.id || undefined,
+    name: String(input.name || "").trim(),
+    family: String(input.family || "").trim(),
+    icon: String(input.icon || "custom").trim(),
+    max_tokens: Number(input.max_tokens || 32768),
+    description: String(input.description || "").trim(),
+  };
+  const request = payload.id
+    ? client.put(`${API_PREFIX}/model-catalog/${payload.id}`, payload)
+    : client.post(`${API_PREFIX}/model-catalog`, payload);
+  return request.then(normalizeCatalogModel);
+}
+
+export function DeleteCatalogModel(id) {
+  return client.delete(`${API_PREFIX}/model-catalog/${id}`);
 }
 
 async function listProvidersWithModels() {

@@ -47,6 +47,15 @@ type ProviderModelUpsertInput struct {
 	Enabled    bool   `json:"enabled"`
 }
 
+type ModelCatalogUpsertInput struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Family      string `json:"family"`
+	Icon        string `json:"icon"`
+	MaxTokens   int    `json:"max_tokens"`
+	Description string `json:"description"`
+}
+
 type ProviderChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`

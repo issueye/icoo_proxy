@@ -10,6 +10,7 @@ func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&entity.Provider{},
 		&entity.ProviderModel{},
+		&entity.ModelCatalogItem{},
 		&entity.IngressEndpoint{},
 		&entity.RoutingRule{},
 		&entity.APIKey{},

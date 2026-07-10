@@ -8,6 +8,7 @@ type Controllers struct {
 	Proxy         *ProxyController
 	Provider      *ProviderController
 	ProviderModel *ProviderModelController
+	ModelCatalog  *ModelCatalogController
 	Endpoint      *EndpointController
 	RoutingRule   *RoutingRuleController
 	APIKey        *APIKeyController
@@ -22,6 +23,7 @@ func NewControllers(services service.Services) Controllers {
 		Proxy:         NewProxyController(services.Proxy, services.Endpoint),
 		Provider:      NewProviderController(services.Provider, services.ProviderChat),
 		ProviderModel: NewProviderModelController(services.ProviderModel),
+		ModelCatalog:  NewModelCatalogController(services.ModelCatalog),
 		Endpoint:      NewEndpointController(services.Endpoint),
 		RoutingRule:   NewRoutingRuleController(services.RoutingRule),
 		APIKey:        NewAPIKeyController(services.Auth),

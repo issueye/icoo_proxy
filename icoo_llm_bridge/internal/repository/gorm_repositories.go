@@ -11,6 +11,7 @@ import (
 type Repositories struct {
 	Provider      ProviderRepository
 	ProviderModel ProviderModelRepository
+	ModelCatalog  ModelCatalogRepository
 	Endpoint      EndpointRepository
 	RoutingRule   RoutingRuleRepository
 	APIKey        APIKeyRepository
@@ -25,12 +26,33 @@ func NewRepositories(db *gorm.DB, trafficDB *gorm.DB) Repositories {
 	return Repositories{
 		Provider:      &gormProviderRepository{db: db},
 		ProviderModel: &gormProviderModelRepository{db: db},
+		ModelCatalog:  &gormModelCatalogRepository{db: db},
 		Endpoint:      &gormEndpointRepository{db: db},
 		RoutingRule:   &gormRoutingRuleRepository{db: db},
 		APIKey:        &gormAPIKeyRepository{db: db},
 		Traffic:       &gormTrafficRepository{db: trafficDB},
 		UIPreference:  &gormUIPreferenceRepository{db: db},
 	}
+}
+
+type gormModelCatalogRepository struct{ db *gorm.DB }
+
+func (r *gormModelCatalogRepository) List(ctx context.Context) ([]entity.ModelCatalogItem, error) {
+	var items []entity.ModelCatalogItem
+	return items, r.db.WithContext(ctx).Order("built_in desc, name asc").Find(&items).Error
+}
+
+func (r *gormModelCatalogRepository) Find(ctx context.Context, id string) (entity.ModelCatalogItem, error) {
+	var item entity.ModelCatalogItem
+	return item, r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+}
+
+func (r *gormModelCatalogRepository) Save(ctx context.Context, item *entity.ModelCatalogItem) error {
+	return r.db.WithContext(ctx).Save(item).Error
+}
+
+func (r *gormModelCatalogRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&entity.ModelCatalogItem{}, "id = ?", id).Error
 }
 
 // ProviderRepository 供应商仓库
