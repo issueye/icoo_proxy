@@ -1,0 +1,10 @@
+{
+  "plugin_id": "grokbuild",
+  "name": "GrokBuild / SuperGrok Proxy",
+  "version": "0.1.0",
+  "executable": "plugin-grokbuild",
+  "capabilities": ["proxy.complete", "proxy.stream", "models.list", "health", "ui"],
+  "supported_ingress": ["anthropic", "openai-responses", "openai-chat"],
+  "upstream_kind": "grok-build-responses",
+  "disclaimer": "Unofficial community plugin. Use only accounts you legally control. May violate third-party ToS."
+}

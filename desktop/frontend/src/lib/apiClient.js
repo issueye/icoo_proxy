@@ -39,6 +39,15 @@ export {
   State,
 } from "./api/runtime_traffic";
 export {
+  ListPlugins,
+  ListPluginUIPages,
+  StartPlugin,
+  StopPlugin,
+  RestartPlugin,
+  GetPluginHealth,
+} from "./api/plugins";
+
+export {
   GetProjectSettings,
   SaveProjectSettings,
   getAppVersion,

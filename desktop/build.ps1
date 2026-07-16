@@ -1,5 +1,6 @@
 param(
   [switch]$SkipTests,
+  [switch]$SkipFrontend,
   [string]$BridgePath = ""
 )
 
@@ -35,7 +36,9 @@ function Invoke-Checked {
   if ($LASTEXITCODE -ne 0) { throw "Command failed with exit code $LASTEXITCODE." }
 }
 
-if (-not (Get-Command "wails" -ErrorAction SilentlyContinue)) { throw "Required command not found: wails" }
+if (-not (Get-Command "wails" -ErrorAction SilentlyContinue)) {
+  throw "Required command not found: wails. Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
+}
 if (-not (Get-Command "go" -ErrorAction SilentlyContinue)) { throw "Required command not found: go" }
 if (-not (Get-Command "npm" -ErrorAction SilentlyContinue)) { throw "Required command not found: npm" }
 
@@ -49,8 +52,10 @@ function Reset-WailsBindings {
     [System.IO.Directory]::Delete(('\\?\' + $ResolvedWailsJS), $true)
   }
   New-Item -ItemType Directory -Path $WailsJSDir -Force | Out-Null
-  & icacls $WailsJSDir /inheritance:e | Out-Null
-  & icacls $WailsJSDir /grant '*S-1-1-0:(OI)(CI)F' | Out-Null
+  if ($IsWindows -or $env:OS -match "Windows") {
+    & icacls $WailsJSDir /inheritance:e | Out-Null
+    & icacls $WailsJSDir /grant '*S-1-1-0:(OI)(CI)F' | Out-Null
+  }
 }
 
 if (-not $SkipTests) {
@@ -75,20 +80,46 @@ try {
   }
 } finally { Pop-Location }
 
-Write-Step "Building frontend"
-Push-Location $FrontendDir
-try {
-  Invoke-Checked { npm install }
-  Invoke-Checked { npm run build }
-} finally { Pop-Location }
-
-Write-Step "Building icoo_desktop"
+Write-Step "Building icoo_desktop with wails build"
 Push-Location $ProjectRoot
 try {
   if (-not (Test-Path $OutputDir)) {
-    New-Item -ItemType Directory -Path $OutputDir | Out-Null
+    New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
   }
-  Invoke-Checked { go build -ldflags "-s -w -X 'main.Version=$Version'" -o $DesktopOutput . }
+
+  # wails build embeds frontend/dist (via //go:embed) and produces a production binary.
+  # frontend:install / frontend:build come from wails.json unless -SkipFrontend.
+  $ldflags = "-s -w -X main.Version=$Version"
+  # On Windows, force .exe so tooling and packaging always find the same path.
+  $outputName = "icoo_desktop"
+  if ($env:OS -match "Windows" -or $IsWindows) {
+    $outputName = "icoo_desktop.exe"
+  }
+  $wailsArgs = @(
+    "build",
+    "-clean",
+    "-ldflags", $ldflags,
+    "-o", $outputName
+  )
+  if ($SkipFrontend) {
+    $wailsArgs += "-s"
+  }
+
+  Invoke-Checked { & wails @wailsArgs }
+
+  # Normalize legacy output without extension (some Wails versions omit .exe).
+  $legacyNoExt = Join-Path $OutputDir "icoo_desktop"
+  if ((Test-Path -LiteralPath $legacyNoExt -PathType Leaf) -and -not (Test-Path -LiteralPath $DesktopOutput -PathType Leaf)) {
+    Move-Item -LiteralPath $legacyNoExt -Destination $DesktopOutput -Force
+  }
+  if ((Test-Path -LiteralPath $legacyNoExt -PathType Leaf) -and (Test-Path -LiteralPath $DesktopOutput -PathType Leaf)) {
+    # Prefer the .exe path; drop the extensionless duplicate.
+    Remove-Item -LiteralPath $legacyNoExt -Force -ErrorAction SilentlyContinue
+  }
+
+  if (-not (Test-Path -LiteralPath $DesktopOutput -PathType Leaf)) {
+    throw "wails build finished but icoo_desktop.exe was not found under build\bin"
+  }
 } finally { Pop-Location }
 
 if ([string]::IsNullOrWhiteSpace($BridgePath)) {
@@ -108,15 +139,31 @@ if ([string]::IsNullOrWhiteSpace($BridgePath)) {
 if (-not [string]::IsNullOrWhiteSpace($BridgePath) -and (Test-Path $BridgePath)) {
   Write-Step "Bundling bridge"
   if (-not (Test-Path $OutputDir)) {
-    New-Item -ItemType Directory -Path $OutputDir | Out-Null
+    New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
   }
   Copy-Item -LiteralPath $BridgePath -Destination $BundledBridgeOutput -Force
 } else {
   Write-Warning "bridge.exe not found. Desktop can still connect to a remote bridge URL, but local wake will fail until bridge.exe is placed next to icoo_desktop.exe."
 }
 
-Write-Step "Build completed"
+# Bundle process plugins when present next to bridge or in package tree.
+$PluginCandidates = @(
+  (Join-Path $RootDir "plugins\grokbuild\build\plugin-grokbuild.exe"),
+  (Join-Path $RootDir "bridge\build\plugin-grokbuild.exe"),
+  (Join-Path $RootDir "icoo_proxy\plugin-grokbuild.exe")
+)
+foreach ($plugin in $PluginCandidates) {
+  if (Test-Path -LiteralPath $plugin -PathType Leaf) {
+    Write-Step "Bundling plugin-grokbuild"
+    Copy-Item -LiteralPath $plugin -Destination (Join-Path $OutputDir "plugin-grokbuild.exe") -Force
+    break
+  }
+}
+
+Write-Step "Build completed (wails build)"
 Write-Host "Version: $Version" -ForegroundColor Green
 Write-Host "Desktop: $DesktopOutput" -ForegroundColor Green
-Write-Host "Bridge:  $BundledBridgeOutput" -ForegroundColor Green
-Write-Host "  (Run with bridge.exe in same directory or configure remote URL)" -ForegroundColor DarkGray
+if (Test-Path $BundledBridgeOutput) {
+  Write-Host "Bridge:  $BundledBridgeOutput" -ForegroundColor Green
+}
+Write-Host "  Production binary built via: wails build" -ForegroundColor DarkGray

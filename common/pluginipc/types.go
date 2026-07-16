@@ -60,6 +60,27 @@ type HandshakeResult struct {
 	Capabilities       []string `json:"capabilities"`
 	SupportedIngress   []string `json:"supported_ingress"`
 	UpstreamKind       string   `json:"upstream_kind,omitempty"`
+	// AdminBaseURL is an optional loopback HTTP base for plugin-provided UI
+	// (e.g. http://127.0.0.1:19283). Host reverse-proxies under /api/v1/plugins/:id/ui/.
+	AdminBaseURL string `json:"admin_base_url,omitempty"`
+	// UIPages lists extension pages the desktop shell can mount in the sidebar.
+	UIPages []UIPage `json:"ui_pages,omitempty"`
+}
+
+// UIPage describes a desktop extension page contributed by a plugin.
+type UIPage struct {
+	// ID is stable within the plugin (e.g. "credentials").
+	ID string `json:"id"`
+	// Title is the nav label.
+	Title string `json:"title"`
+	// Path is relative to the plugin admin UI root (e.g. "/" or "/credentials").
+	Path string `json:"path"`
+	// Icon is a desktop icon key (optional; e.g. "key", "plugin").
+	Icon string `json:"icon,omitempty"`
+	// Group is the sidebar group name (e.g. "插件").
+	Group string `json:"group,omitempty"`
+	// Description is optional nav tooltip/subtitle.
+	Description string `json:"description,omitempty"`
 }
 
 // ProxyRequest is shared by proxy.complete and proxy.stream.open params.

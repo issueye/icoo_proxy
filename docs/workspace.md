@@ -71,10 +71,14 @@ go test ./common/...
 go test ./bridge/...
 go test ./desktop
 go test ./plugins/mock/...
+go test ./plugins/grokbuild/...
 
 cd bridge;  .\build.ps1
 cd desktop; .\build.ps1 -BridgePath ..\bridge\build\bridge.exe
+
+# One-shot: bridge + desktop + plugins (plugin-grokbuild, mockplugin)
 .\build-all.ps1
+# .\build-all.ps1 -SkipPlugins
 ```
 
 ## Adding shared code

@@ -31,6 +31,19 @@ func (c *ProxyController) Handle(protocol constants.Protocol) gin.HandlerFunc {
 
 func (c *ProxyController) HandleDynamic() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		// Admin/API paths that missed a registered route should return a JSON
+		// 404 so the desktop client can surface a clear message (not a bare
+		// status from NoRoute).
+		path := ctx.Request.URL.Path
+		if strings.HasPrefix(path, "/api/") {
+			ctx.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"code":    "NOT_FOUND",
+					"message": "api route not found: " + path + " (restart bridge with a build that includes this endpoint)",
+				},
+			})
+			return
+		}
 		if ctx.Request.Method != http.MethodPost {
 			ctx.Status(http.StatusNotFound)
 			return

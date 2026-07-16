@@ -20,7 +20,12 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (res) => res.data?.data,
   (err) => {
+    // Preserve HTTP status on the Error so callers (e.g. plugins API) can
+    // distinguish 404 / 401 / 502 without parsing message text alone.
     const msg = err.response?.data?.error?.message || err.message;
-    throw new Error(msg);
+    const wrapped = new Error(msg);
+    wrapped.response = err.response;
+    wrapped.status = err.response?.status;
+    throw wrapped;
   },
 );

@@ -6,8 +6,16 @@
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "http://127.0.0.1:5173",
+  "wailsjsdir": "./frontend",
   "author": {
     "name": "issueye",
     "email": "issueye@yeah.net"
+  },
+  "info": {
+    "companyName": "icoo",
+    "productName": "icoo Proxy",
+    "productVersion": "2.0.1",
+    "copyright": "Copyright icoo",
+    "comments": "Local-first LLM API bridge desktop console"
   }
 }

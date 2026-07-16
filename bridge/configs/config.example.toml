@@ -30,9 +30,10 @@ max_concurrent_streams = 32
 heartbeat_interval_seconds = 5
 shutdown_plugin_timeout_seconds = 5
 
-# Example (disabled): GrokBuild compatibility plugin
+# Example: GrokBuild / SuperGrok process plugin (default off)
+# Build: go build -o plugin-grokbuild.exe ./plugins/grokbuild/cmd/plugin-grokbuild
 # [plugins.entries.grokbuild]
-# enabled = false
-# executable = "plugin-grokbuild.exe"
+# enabled = true
+# executable = "plugin-grokbuild.exe"   # place next to bridge.exe or absolute path
 # data_dir = ".data/plugins/grokbuild"
-# admin_enabled = false
+# admin_enabled = false                 # loopback UI is owned by the plugin process

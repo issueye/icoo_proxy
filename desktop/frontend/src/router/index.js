@@ -12,6 +12,8 @@ import UedSpecView from "../views/UedSpecView.vue";
 
 import ModelAliasesView from "../views/ModelAliasesView.vue";
 import ModelsView from "../views/ModelsView.vue";
+import PluginExtensionView from "../views/PluginExtensionView.vue";
+import PluginsView from "../views/PluginsView.vue";
 
 export default createRouter({
   history: createWebHashHistory(),
@@ -67,9 +69,23 @@ export default createRouter({
       component: SettingsView,
     },
     {
+      path: "/plugins",
+      name: "plugins",
+      component: PluginsView,
+    },
+    {
       path: "/ued",
       name: "ued",
       component: UedSpecView,
     },
+    {
+      // Extension pages contributed by process plugins (iframe shell).
+      path: "/ext/:pluginId/:pageId?",
+      name: "plugin-extension",
+      component: PluginExtensionView,
+      props: true,
+    },
   ],
 });
+
+

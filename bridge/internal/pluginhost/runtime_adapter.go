@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/issueye/icoo_proxy/bridge/internal/service"
+	"github.com/issueye/icoo_proxy/common/pluginipc"
 )
 
 // Ensure Manager satisfies service.PluginRuntime.
@@ -29,6 +30,10 @@ func (m *Manager) List() []service.PluginRuntimeInstance {
 			view.PluginVersion = inst.Handshake.PluginVersion
 			view.Capabilities = append([]string(nil), inst.Handshake.Capabilities...)
 			view.SupportedIngress = append([]string(nil), inst.Handshake.SupportedIngress...)
+			view.AdminBaseURL = inst.Handshake.AdminBaseURL
+			if len(inst.Handshake.UIPages) > 0 {
+				view.UIPages = append([]pluginipc.UIPage(nil), inst.Handshake.UIPages...)
+			}
 		}
 		out = append(out, view)
 	}

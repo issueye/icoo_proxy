@@ -126,6 +126,14 @@ type StreamWriter struct {
 	maxChunk int
 }
 
+// StreamID returns the open stream identifier.
+func (w *StreamWriter) StreamID() string {
+	if w == nil {
+		return ""
+	}
+	return w.streamID
+}
+
 // WriteChunk sends stream.chunk (auto-splits over max chunk size).
 func (w *StreamWriter) WriteChunk(data []byte) error {
 	max := w.maxChunk

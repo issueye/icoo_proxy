@@ -58,12 +58,20 @@ func New(controllers controller.Controllers, middlewares middleware.Middlewares)
 	api.GET("/ui-prefs", controllers.UIPreference.Get)
 	api.PUT("/ui-prefs", controllers.UIPreference.Save)
 
+	// Static plugin collection routes MUST be registered before "/plugins/:id/..."
+	// so Gin does not treat "ui-pages" as an :id value.
 	api.GET("/plugins", controllers.Plugin.List)
+	api.GET("/plugins/ui-pages", controllers.Plugin.ListUIPages)
 	api.POST("/plugins/:id/start", controllers.Plugin.Start)
 	api.POST("/plugins/:id/stop", controllers.Plugin.Stop)
 	api.POST("/plugins/:id/restart", controllers.Plugin.Restart)
 	api.GET("/plugins/:id/health", controllers.Plugin.Health)
 	api.GET("/plugins/:id/models", controllers.Plugin.Models)
+	// Plugin-provided extension UI (iframe target).
+	// Gin forbids registering both "/ui/" and "/ui/*filepath" (conflict on '').
+	// Cover exact "/ui" plus catch-all nested paths under "/ui/*filepath".
+	api.Any("/plugins/:id/ui", controllers.Plugin.ProxyUI)
+	api.Any("/plugins/:id/ui/*filepath", controllers.Plugin.ProxyUI)
 
 	engine.NoRoute(controllers.Proxy.HandleDynamic())
 

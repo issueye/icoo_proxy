@@ -4,5 +4,6 @@ use (
 	./bridge
 	./common
 	./desktop
+	./plugins/grokbuild
 	./plugins/mock
 )

@@ -66,6 +66,7 @@
                 <svg v-else-if="item.icon === 'traffic'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
                 <svg v-else-if="item.icon === 'settings'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
                 <svg v-else-if="item.icon === 'ued'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" /><path d="M4 9h16" /><path d="M9 20V9" /></svg>
+                <svg v-else-if="item.icon === 'plugin' || item.icon === 'key'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4" /><path d="M12 18v4" /><path d="m4.93 4.93 2.83 2.83" /><path d="m16.24 16.24 2.83 2.83" /><path d="M2 12h4" /><path d="M18 12h4" /><path d="m4.93 19.07 2.83-2.83" /><path d="m16.24 7.76 2.83-2.83" /></svg>
               </span>
               <span class="app-nav-copy">
                 <span class="app-nav-text">{{ item.label }}</span>
@@ -145,19 +146,23 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
-import { RouterLink, RouterView, useRoute } from "vue-router";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { WindowHide, WindowMinimise } from "./lib/wailsRuntime";
 import { useServerConnection } from "./composables/useServerConnection";
+import { ListPluginUIPages } from "./lib/apiClient";
 import UButton from "./components/ued/UButton.vue";
 import UMessage from "./components/ued/UMessage.vue";
 import UModal from "./components/ued/UModal.vue";
 
 const route = useRoute();
+const router = useRouter();
 const sidebarCollapsed = ref(false);
 const serverInfoOpen = ref(false);
 const serverInfoLoading = ref(false);
 const serverInfo = ref({});
+const pluginPages = ref([]);
+let pluginPollTimer = null;
 
 const {
   status: serverStatus,
@@ -169,44 +174,148 @@ const {
   wake,
 } = useServerConnection();
 
-const navGroups = computed(() => [
+const baseNavGroups = [
   {
     name: "运行",
     items: [
-      { to: "/", label: "网关概览",  icon: "overview" },
-      { to: "/chat", label: "聊天", icon: "chat" },
-      { to: "/traffic", label: "流量监控", icon: "traffic" },
+      { to: "/", label: "网关概览",  icon: "overview", description: "运行状态与概览" },
+      { to: "/chat", label: "聊天", icon: "chat", description: "快速对话" },
+      { to: "/traffic", label: "流量监控", icon: "traffic", description: "请求与用量" },
     ],
   },
   {
     name: "配置",
     items: [
-      { to: "/suppliers", label: "供应商", icon: "supplier" },
-      { to: "/models", label: "模型管理", icon: "models" },
-      { to: "/routing-rules", label: "路由规则", icon: "rules" },
-      { to: "/model-aliases", label: "模型路由", icon: "model" },
-      { to: "/endpoints", label: "端点", icon: "endpoint" },
-      { to: "/auth-keys", label: "授权 Key", icon: "key" },
+      { to: "/suppliers", label: "供应商", icon: "supplier", description: "上游供应配置" },
+      { to: "/models", label: "模型管理", icon: "models", description: "模型目录" },
+      { to: "/routing-rules", label: "路由规则", icon: "rules", description: "匹配与转发" },
+      { to: "/model-aliases", label: "模型路由", icon: "model", description: "别名映射" },
+      { to: "/endpoints", label: "端点", icon: "endpoint", description: "入口路径" },
+      { to: "/auth-keys", label: "授权 Key", icon: "key", description: "本地 API Key" },
     ],
   },
   {
     name: "系统",
     items: [
-      { to: "/settings", label: "项目设置", icon: "settings" },
-      { to: "/ued", label: "组件规范", icon: "ued" },
+      { to: "/plugins", label: "插件", icon: "plugin", description: "进程插件与扩展页" },
+      { to: "/settings", label: "项目设置", icon: "settings", description: "运行参数" },
+      { to: "/ued", label: "组件规范", icon: "ued", description: "UI 组件库" },
     ],
   },
-]);
+];
+
+const navGroups = computed(() => {
+  const groups = baseNavGroups.map((g) => ({
+    name: g.name,
+    items: g.items.map((item) => ({ ...item })),
+  }));
+  if (!pluginPages.value.length) return groups;
+
+  const byGroup = new Map();
+  for (const page of pluginPages.value) {
+    const groupName = page.group || "插件";
+    if (!byGroup.has(groupName)) byGroup.set(groupName, []);
+    const pageId = page.id || "home";
+    const to = `/ext/${encodeURIComponent(page.plugin_id)}/${encodeURIComponent(pageId)}`;
+    byGroup.get(groupName).push({
+      to,
+      label: page.title || page.plugin_id,
+      icon: page.icon || "plugin",
+      description: page.description || "插件扩展页",
+      embedPath: page.embed_url,
+      pluginId: page.plugin_id,
+      pageId,
+    });
+  }
+  for (const [name, items] of byGroup.entries()) {
+    const existing = groups.find((g) => g.name === name);
+    if (existing) existing.items.push(...items);
+    else groups.push({ name, items });
+  }
+  return groups;
+});
 
 const navItems = computed(() => navGroups.value.flatMap((group) => group.items));
 
-const currentNavItem = computed(() => navItems.value.find((item) => item.to === route.path));
+const currentNavItem = computed(() => {
+  const exact = navItems.value.find((item) => item.to === route.path);
+  if (exact) return exact;
+  if (route.name === "plugin-extension") {
+    return navItems.value.find(
+      (item) =>
+        item.pluginId === route.params.pluginId &&
+        (item.pageId === route.params.pageId || (!route.params.pageId && item.pageId === "home")),
+    );
+  }
+  return null;
+});
 
-const currentTitle = computed(() => currentNavItem.value?.label || "本地 AI 网关管理台");
+const currentTitle = computed(() => currentNavItem.value?.label || route.meta?.title || "本地 AI 网关管理台");
 
 const currentGroupName = computed(() => (
-  navGroups.value.find((group) => group.items.some((item) => item.to === route.path))?.name || "控制台"
+  navGroups.value.find((group) => group.items.some((item) => item.to === route.path || item === currentNavItem.value))?.name || "控制台"
 ));
+
+async function refreshPluginPages() {
+  if (serverStatus.value !== "connected") {
+    pluginPages.value = [];
+    return;
+  }
+  try {
+    const pages = await ListPluginUIPages();
+    pluginPages.value = Array.isArray(pages) ? pages : pages?.items || [];
+    // Keep route meta in sync for iframe src.
+    for (const page of pluginPages.value) {
+      const pageId = page.id || "home";
+      const namePath = `/ext/${page.plugin_id}/${pageId}`;
+      const matched = router.getRoutes().find((r) => r.path === "/ext/:pluginId/:pageId?");
+      if (matched && route.path === namePath) {
+        route.meta.title = page.title;
+        route.meta.embedPath = page.embed_url;
+      }
+    }
+  } catch {
+    pluginPages.value = [];
+  }
+}
+
+watch(
+  () => serverStatus.value,
+  () => {
+    refreshPluginPages();
+  },
+);
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (route.name === "plugin-extension") {
+      const item = currentNavItem.value;
+      if (item?.embedPath) {
+        route.meta.embedPath = item.embedPath;
+        route.meta.title = item.label;
+      } else {
+        const page = pluginPages.value.find(
+          (p) => p.plugin_id === route.params.pluginId && (p.id === route.params.pageId || (!route.params.pageId && (p.id === "home" || p.id === "credentials"))),
+        );
+        if (page) {
+          route.meta.embedPath = page.embed_url;
+          route.meta.title = page.title;
+        }
+      }
+    }
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  refreshPluginPages();
+  pluginPollTimer = setInterval(refreshPluginPages, 15000);
+});
+
+onUnmounted(() => {
+  if (pluginPollTimer) clearInterval(pluginPollTimer);
+});
 
 const serverStatusLabel = computed(() => {
   switch (serverStatus.value) {

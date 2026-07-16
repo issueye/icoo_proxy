@@ -391,6 +391,45 @@ paths:
           $ref: "#/components/responses/Paged"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/ui-pages:
+    get:
+      operationId: listPluginUIPages
+      tags: [Plugins]
+      summary: List desktop extension pages advertised by running plugins
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/{id}/ui:
+    get:
+      operationId: proxyPluginUIRoot
+      tags: [Plugins]
+      summary: Reverse-proxy plugin loopback admin UI (iframe target)
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Plugin UI HTML or asset
+        "502":
+          $ref: "#/components/responses/Error"
+  /api/v1/plugins/{id}/ui/{filepath}:
+    get:
+      operationId: proxyPluginUIPath
+      tags: [Plugins]
+      summary: Reverse-proxy nested plugin UI paths
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - name: filepath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Plugin UI asset
+        "502":
+          $ref: "#/components/responses/Error"
   /api/v1/plugins/{id}/start:
     post:
       operationId: startPlugin
