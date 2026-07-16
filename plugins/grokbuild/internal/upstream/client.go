@@ -45,6 +45,14 @@ func New(baseURL string) *Client {
 	}
 }
 
+// SetHTTPClient replaces the underlying HTTP client (e.g. after proxy change).
+func (c *Client) SetHTTPClient(cli *http.Client) {
+	if c == nil || cli == nil {
+		return
+	}
+	c.http = cli
+}
+
 // PostResponses posts a JSON body to /responses.
 func (c *Client) PostResponses(ctx context.Context, accessToken, model string, body []byte, stream bool) (*http.Response, error) {
 	if strings.TrimSpace(accessToken) == "" {

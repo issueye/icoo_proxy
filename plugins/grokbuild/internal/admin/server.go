@@ -6,29 +6,57 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/netx"
 	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/oauth"
 	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/store"
 	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/upstream"
 )
 
-// Server is a loopback-only admin UI + JSON API for credentials / OAuth / billing.
+// ProxyApplier updates live HTTP clients when the user changes proxy settings.
+type ProxyApplier func(proxyURL string) error
+
+// Server is a loopback-only admin UI + JSON API for credentials / OAuth / billing / proxy.
 type Server struct {
-	store    *store.Store
-	sessions *oauth.SessionManager
-	upstream *upstream.Client
-	refresh  *oauth.Refresher
-	ln       net.Listener
-	srv      *http.Server
+	store      *store.Store
+	settings   *store.SettingsStore
+	sessions   *oauth.SessionManager
+	upstream   *upstream.Client
+	refresh    *oauth.Refresher
+	applyProxy ProxyApplier
+	mu         sync.RWMutex
+	httpProxy  string // last applied explicit proxy (may be empty = env/direct)
+	ln         net.Listener
+	srv        *http.Server
 }
 
-func Start(st *store.Store, sessions *oauth.SessionManager, up *upstream.Client, refresh *oauth.Refresher) (*Server, string, error) {
+type StartOpts struct {
+	Store      *store.Store
+	Settings   *store.SettingsStore
+	Sessions   *oauth.SessionManager
+	Upstream   *upstream.Client
+	Refresh    *oauth.Refresher
+	ApplyProxy ProxyApplier
+	HTTPProxy  string // initial proxy already applied by main
+}
+
+func Start(opts StartOpts) (*Server, string, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, "", err
 	}
-	s := &Server{store: st, sessions: sessions, upstream: up, refresh: refresh, ln: ln}
+	s := &Server{
+		store:      opts.Store,
+		settings:   opts.Settings,
+		sessions:   opts.Sessions,
+		upstream:   opts.Upstream,
+		refresh:    opts.Refresh,
+		applyProxy: opts.ApplyProxy,
+		httpProxy:  strings.TrimSpace(opts.HTTPProxy),
+		ln:         ln,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/api/credentials", s.handleCredentials)
@@ -36,19 +64,26 @@ func Start(st *store.Store, sessions *oauth.SessionManager, up *upstream.Client,
 	mux.HandleFunc("/api/oauth/device/start", s.handleDeviceStart)
 	mux.HandleFunc("/api/oauth/device/status", s.handleDeviceStatus)
 	mux.HandleFunc("/api/billing", s.handleBilling)
+	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/settings/proxy-test", s.handleProxyTest)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		list, _ := st.List()
+		list, _ := s.store.List()
 		enabled := 0
 		for _, c := range list {
 			if c.Enabled && strings.TrimSpace(c.AccessToken) != "" {
 				enabled++
 			}
 		}
+		s.mu.RLock()
+		proxy := s.httpProxy
+		s.mu.RUnlock()
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok":                 true,
 			"plugin":             "grokbuild",
 			"credentials_total":  len(list),
 			"credentials_active": enabled,
+			"http_proxy":         proxy,
+			"http_proxy_effective": netx.EffectiveProxyDescription(proxy),
 		})
 	})
 	s.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
@@ -71,6 +106,126 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write([]byte(indexHTML))
+}
+
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		var cfg store.Settings
+		if s.settings != nil {
+			if loaded, err := s.settings.Load(); err == nil {
+				cfg = loaded
+			}
+		}
+		s.mu.RLock()
+		live := s.httpProxy
+		s.mu.RUnlock()
+		// Prefer live applied value if settings file empty (env/flag seed).
+		if strings.TrimSpace(cfg.HTTPProxy) == "" {
+			cfg.HTTPProxy = live
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"http_proxy":           cfg.HTTPProxy,
+			"http_proxy_effective": netx.EffectiveProxyDescription(cfg.HTTPProxy),
+			"examples": []string{
+				"http://127.0.0.1:7890",
+				"socks5://127.0.0.1:7891",
+				"http://user:pass@127.0.0.1:7890",
+			},
+		})
+	case http.MethodPut, http.MethodPost:
+		var body struct {
+			HTTPProxy string `json:"http_proxy"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		proxyURL := strings.TrimSpace(body.HTTPProxy)
+		// Validate by building transport (empty is allowed = env/direct).
+		if proxyURL != "" {
+			if _, err := netx.NewTransport(proxyURL); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+		if s.applyProxy != nil {
+			if err := s.applyProxy(proxyURL); err != nil {
+				http.Error(w, "apply proxy failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		if s.settings != nil {
+			if err := s.settings.Save(store.Settings{HTTPProxy: proxyURL}); err != nil {
+				http.Error(w, "save settings failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		s.mu.Lock()
+		s.httpProxy = proxyURL
+		s.mu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":                   true,
+			"http_proxy":           proxyURL,
+			"http_proxy_effective": netx.EffectiveProxyDescription(proxyURL),
+		})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleProxyTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		HTTPProxy string `json:"http_proxy"`
+		URL       string `json:"url"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	proxyURL := strings.TrimSpace(body.HTTPProxy)
+	if proxyURL == "" {
+		s.mu.RLock()
+		proxyURL = s.httpProxy
+		s.mu.RUnlock()
+	}
+	target := strings.TrimSpace(body.URL)
+	if target == "" {
+		target = "https://auth.x.ai/.well-known/openid-configuration"
+	}
+	cli, err := netx.NewHTTPClient(proxyURL, 12*time.Second)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	start := time.Now()
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := cli.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":      false,
+			"error":   err.Error(),
+			"proxy":   netx.EffectiveProxyDescription(proxyURL),
+			"url":     target,
+			"elapsed": time.Since(start).String(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":      resp.StatusCode >= 200 && resp.StatusCode < 500,
+		"status":  resp.StatusCode,
+		"proxy":   netx.EffectiveProxyDescription(proxyURL),
+		"url":     target,
+		"elapsed": time.Since(start).String(),
+	})
 }
 
 func (s *Server) handleDeviceStart(w http.ResponseWriter, r *http.Request) {

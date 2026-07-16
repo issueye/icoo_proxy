@@ -66,12 +66,20 @@ type Client struct {
 
 func NewClient() *Client {
 	return &Client{
-		HTTP:     &http.Client{Timeout: DefaultHTTPTimeout},
-		ClientID: DefaultClientID,
-		Scope:    DefaultScope,
-		TokenURL: DefaultTokenEndpoint,
+		HTTP:      &http.Client{Timeout: DefaultHTTPTimeout},
+		ClientID:  DefaultClientID,
+		Scope:     DefaultScope,
+		TokenURL:  DefaultTokenEndpoint,
 		DeviceURL: DefaultDeviceAuthURL,
 	}
+}
+
+// SetHTTPClient replaces the underlying HTTP client (e.g. after proxy change).
+func (c *Client) SetHTTPClient(cli *http.Client) {
+	if c == nil || cli == nil {
+		return
+	}
+	c.HTTP = cli
 }
 
 // Discover fills TokenURL / DeviceURL from OIDC discovery when possible.

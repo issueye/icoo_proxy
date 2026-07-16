@@ -42,6 +42,7 @@ const indexHTML = `<!doctype html>
       <button class="tab active" data-tab="login" type="button">Device Login</button>
       <button class="tab" data-tab="manual" type="button">手动/导入</button>
       <button class="tab" data-tab="billing" type="button">额度</button>
+      <button class="tab" data-tab="network" type="button">代理</button>
     </div>
 
     <div id="panel-login">
@@ -88,6 +89,19 @@ const indexHTML = `<!doctype html>
       </div>
       <pre id="billing-out" class="muted">点击拉取额度…</pre>
     </div>
+
+    <div id="panel-network" style="display:none">
+      <p class="sub">配置访问 auth.x.ai / cli-chat-proxy.grok.com 的出站代理。支持 HTTP 与 SOCKS5。留空则使用系统环境变量 HTTP_PROXY / HTTPS_PROXY，或直连。</p>
+      <label>代理 URL</label>
+      <input id="http-proxy" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7891" />
+      <p class="muted" id="proxy-effective">当前生效：-</p>
+      <div class="row">
+        <button id="save-proxy" type="button">保存代理</button>
+        <button class="secondary" id="test-proxy" type="button">测试连通性</button>
+        <button class="secondary" id="clear-proxy" type="button">清空（环境/直连）</button>
+      </div>
+      <pre id="proxy-test-out" class="muted" style="margin-top:12px">尚未测试</pre>
+    </div>
   </div>
 
   <div class="card">
@@ -102,6 +116,24 @@ const indexHTML = `<!doctype html>
     const msg = document.getElementById('msg');
     let pollTimer = null;
 
+    // When embedded via bridge reverse-proxy the page lives under
+    //   /api/v1/plugins/<id>/ui/
+    // Absolute "/api/..." would hit the bridge (NOT_FOUND). Prefix with the
+    // embed base; when opened on the plugin's loopback admin directly, base is "".
+    const API_BASE = (() => {
+      const path = location.pathname || '';
+      const marker = '/ui';
+      const i = path.lastIndexOf(marker);
+      if (i < 0) return '';
+      let base = path.slice(0, i + marker.length);
+      // Drop anything after /ui (e.g. /ui/index.html)
+      return base.replace(/\/+$/, '');
+    })();
+    function api(path) {
+      const p = path.startsWith('/') ? path : '/' + path;
+      return API_BASE + p;
+    }
+
     document.querySelectorAll('.tab').forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
@@ -110,11 +142,55 @@ const indexHTML = `<!doctype html>
         document.getElementById('panel-login').style.display = tab === 'login' ? '' : 'none';
         document.getElementById('panel-manual').style.display = tab === 'manual' ? '' : 'none';
         document.getElementById('panel-billing').style.display = tab === 'billing' ? '' : 'none';
+        document.getElementById('panel-network').style.display = tab === 'network' ? '' : 'none';
+        if (tab === 'network') loadSettings();
       };
     });
 
+    async function loadSettings() {
+      try {
+        const res = await fetch(api('/api/settings'));
+        const data = await res.json();
+        document.getElementById('http-proxy').value = data.http_proxy || '';
+        document.getElementById('proxy-effective').textContent = '当前生效：' + (data.http_proxy_effective || '-');
+      } catch (e) {
+        document.getElementById('proxy-effective').textContent = '加载失败：' + e;
+      }
+    }
+    document.getElementById('save-proxy').onclick = async () => {
+      const http_proxy = document.getElementById('http-proxy').value.trim();
+      const res = await fetch(api('/api/settings'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ http_proxy })
+      });
+      const text = await res.text();
+      if (!res.ok) { msg.textContent = text; return; }
+      let data = {};
+      try { data = JSON.parse(text); } catch {}
+      msg.textContent = '代理已保存并立即生效';
+      document.getElementById('proxy-effective').textContent = '当前生效：' + (data.http_proxy_effective || http_proxy || '(none)');
+    };
+    document.getElementById('clear-proxy').onclick = async () => {
+      document.getElementById('http-proxy').value = '';
+      document.getElementById('save-proxy').click();
+    };
+    document.getElementById('test-proxy').onclick = async () => {
+      const el = document.getElementById('proxy-test-out');
+      el.textContent = '测试中…';
+      const http_proxy = document.getElementById('http-proxy').value.trim();
+      const res = await fetch(api('/api/settings/proxy-test'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ http_proxy })
+      });
+      const text = await res.text();
+      try { el.textContent = JSON.stringify(JSON.parse(text), null, 2); }
+      catch { el.textContent = text; }
+    };
+
     async function load() {
-      const res = await fetch('/api/credentials');
+      const res = await fetch(api('/api/credentials'));
       const data = await res.json();
       const tb = document.getElementById('list');
       tb.innerHTML = '';
@@ -132,7 +208,7 @@ const indexHTML = `<!doctype html>
       });
       tb.querySelectorAll('button.danger').forEach(btn => {
         btn.onclick = async () => {
-          await fetch('/api/credentials?id=' + encodeURIComponent(btn.dataset.id), { method: 'DELETE' });
+          await fetch(api('/api/credentials?id=' + encodeURIComponent(btn.dataset.id)), { method: 'DELETE' });
           load();
         };
       });
@@ -141,7 +217,7 @@ const indexHTML = `<!doctype html>
     document.getElementById('start-login').onclick = async () => {
       msg.textContent = '请求设备码…';
       if (pollTimer) clearInterval(pollTimer);
-      const res = await fetch('/api/oauth/device/start', { method: 'POST' });
+      const res = await fetch(api('/api/oauth/device/start'), { method: 'POST' });
       if (!res.ok) { msg.textContent = await res.text(); return; }
       const sess = await res.json();
       document.getElementById('login-box').style.display = '';
@@ -153,7 +229,7 @@ const indexHTML = `<!doctype html>
       document.getElementById('login-status').textContent = '状态: ' + (sess.status || 'pending');
       msg.textContent = '请在浏览器完成授权';
       pollTimer = setInterval(async () => {
-        const r = await fetch('/api/oauth/device/status?id=' + encodeURIComponent(sess.id));
+        const r = await fetch(api('/api/oauth/device/status?id=' + encodeURIComponent(sess.id)));
         if (!r.ok) return;
         const st = await r.json();
         document.getElementById('login-status').textContent = '状态: ' + st.status + (st.error ? ' · ' + st.error : '');
@@ -175,13 +251,13 @@ const indexHTML = `<!doctype html>
         priority: Number(document.getElementById('priority').value || 0),
         enabled: true
       };
-      const res = await fetch('/api/credentials', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const res = await fetch(api('/api/credentials'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
       msg.textContent = res.ok ? '已保存' : await res.text();
       if (res.ok) { document.getElementById('token').value=''; document.getElementById('refresh').value=''; load(); }
     };
     document.getElementById('import-btn').onclick = async () => {
       const body = { raw: document.getElementById('import-json').value, label: 'imported' };
-      const res = await fetch('/api/credentials/import', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const res = await fetch(api('/api/credentials/import'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
       if (!res.ok) { msg.textContent = await res.text(); return; }
       const data = await res.json();
       msg.textContent = '已导入 ' + (data.imported||0) + ' 条';
@@ -190,7 +266,7 @@ const indexHTML = `<!doctype html>
     document.getElementById('load-billing').onclick = async () => {
       const el = document.getElementById('billing-out');
       el.textContent = '加载中…';
-      const res = await fetch('/api/billing');
+      const res = await fetch(api('/api/billing'));
       const text = await res.text();
       try { el.textContent = JSON.stringify(JSON.parse(text), null, 2); }
       catch { el.textContent = text; }

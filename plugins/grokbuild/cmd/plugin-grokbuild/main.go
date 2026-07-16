@@ -10,12 +10,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/issueye/icoo_proxy/common/pluginipc"
 	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/admin"
+	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/netx"
 	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/oauth"
 	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/proxyhandler"
 	"github.com/issueye/icoo_proxy/plugins/grokbuild/internal/store"
@@ -30,6 +32,7 @@ func main() {
 	endpoint := flag.String("endpoint", os.Getenv("ICOO_PLUGIN_ENDPOINT"), "IPC endpoint")
 	dataDir := flag.String("data-dir", ".", "plugin data directory")
 	pluginID := flag.String("plugin-id", "grokbuild", "plugin id")
+	httpProxyFlag := flag.String("http-proxy", "", "outbound HTTP/SOCKS5 proxy (overrides settings.json when set)")
 	flag.Parse()
 
 	token := os.Getenv("ICOO_PLUGIN_TOKEN")
@@ -56,8 +59,40 @@ func main() {
 	log.Printf("plugin-grokbuild listening on %s", *endpoint)
 
 	st := store.New(*dataDir)
+	settingsStore := store.NewSettingsStore(*dataDir)
+	settings, _ := settingsStore.Load()
+
+	// Priority: --http-proxy flag > ICOO_PLUGIN_HTTP_PROXY env > settings.json > process env proxies.
+	httpProxy := firstNonEmpty(
+		*httpProxyFlag,
+		os.Getenv("ICOO_PLUGIN_HTTP_PROXY"),
+		settings.HTTPProxy,
+	)
+
 	up := upstream.New(os.Getenv("GROK_UPSTREAM_BASE"))
 	oauthClient := oauth.NewClient()
+
+	applyProxy := func(proxyURL string) error {
+		oauthHTTP, err := netx.NewHTTPClient(proxyURL, oauth.DefaultHTTPTimeout)
+		if err != nil {
+			return err
+		}
+		oauthClient.SetHTTPClient(oauthHTTP)
+		// Upstream streams need no overall client timeout.
+		upHTTP, err := netx.NewHTTPClient(proxyURL, 0)
+		if err != nil {
+			return err
+		}
+		up.SetHTTPClient(upHTTP)
+		log.Printf("outbound proxy applied: %s", netx.EffectiveProxyDescription(proxyURL))
+		return nil
+	}
+	if err := applyProxy(httpProxy); err != nil {
+		log.Printf("proxy init warning: %v (falling back to env/direct)", err)
+		_ = applyProxy("")
+		httpProxy = ""
+	}
+
 	// Bound discovery so a blocked network cannot stall Accept/handshake.
 	discCtx, discCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	if err := oauthClient.Discover(discCtx); err != nil {
@@ -87,13 +122,21 @@ func main() {
 	// Background pre-refresh keeps access tokens warm before expiry.
 	go oauth.StartPreRefresh(ctx, st, refresher, oauth.PreRefreshConfig{})
 
-	adminSrv, adminURL, err := admin.Start(st, sessions, up, refresher)
+	adminSrv, adminURL, err := admin.Start(admin.StartOpts{
+		Store:      st,
+		Settings:   settingsStore,
+		Sessions:   sessions,
+		Upstream:   up,
+		Refresh:    refresher,
+		ApplyProxy: applyProxy,
+		HTTPProxy:  httpProxy,
+	})
 	if err != nil {
 		log.Fatal("admin ui:", err)
 	}
 	defer adminSrv.Close()
 
-	log.Printf("plugin-grokbuild admin=%s; waiting for host dial", adminURL)
+	log.Printf("plugin-grokbuild admin=%s proxy=%s; waiting for host dial", adminURL, netx.EffectiveProxyDescription(httpProxy))
 	conn, err := ln.Accept()
 	if err != nil {
 		log.Fatal("accept:", err)
@@ -104,8 +147,8 @@ func main() {
 		HostToken: token,
 		Handshake: pluginipc.HandshakeResult{
 			PluginID:         *pluginID,
-			PluginVersion:    "0.3.1",
-			Capabilities:     []string{"proxy.complete", "proxy.stream", "models.list", "health", "ui", "oauth.device", "billing", "oauth.prerefresh"},
+			PluginVersion:    "0.3.2",
+			Capabilities:     []string{"proxy.complete", "proxy.stream", "models.list", "health", "ui", "oauth.device", "billing", "oauth.prerefresh", "settings.proxy"},
 			SupportedIngress: []string{"anthropic", "openai-responses", "openai-chat"},
 			UpstreamKind:     "grok-build-responses",
 			AdminBaseURL:     adminURL,
@@ -116,7 +159,7 @@ func main() {
 					Path:        "/",
 					Icon:        "key",
 					Group:       "插件",
-					Description: "Device Login / 凭据池 / 额度",
+					Description: "Device Login / 凭据池 / 代理 / 额度",
 				},
 			},
 		},
@@ -183,8 +226,17 @@ func main() {
 		return &pluginipc.ModelsListResult{Models: models}, nil
 	})
 
-	log.Printf("plugin-grokbuild v0.3.1 ready ipc=%s admin=%s", *endpoint, adminURL)
+	log.Printf("plugin-grokbuild v0.3.2 ready ipc=%s admin=%s", *endpoint, adminURL)
 	<-ctx.Done()
 	_ = srv.Close()
 	time.Sleep(50 * time.Millisecond)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }

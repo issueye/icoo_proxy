@@ -132,12 +132,15 @@ try {
     Copy-Item -LiteralPath $plugin -Destination (Join-Path $PackageDir $name) -Force
   }
   $ExampleCfg = Join-Path $PackageDir "config.example.grokbuild.toml"
-  $SrcExample = Join-Path $RootDir "icoo_proxy\config.example.grokbuild.toml"
-  if (-not (Test-Path $SrcExample)) {
-    $SrcExample = Join-Path $RootDir "bridge\configs\config.example.toml"
-  }
-  if (Test-Path (Join-Path $RootDir "icoo_proxy\config.example.grokbuild.toml")) {
-    Copy-Item -LiteralPath (Join-Path $RootDir "icoo_proxy\config.example.grokbuild.toml") -Destination $ExampleCfg -Force
+  $SrcCandidates = @(
+    (Join-Path $RootDir "plugins\grokbuild\config.example.toml"),
+    (Join-Path $RootDir "bridge\configs\config.example.toml")
+  )
+  foreach ($SrcExample in $SrcCandidates) {
+    if ((Test-Path -LiteralPath $SrcExample) -and ($SrcExample -ne $ExampleCfg)) {
+      Copy-Item -LiteralPath $SrcExample -Destination $ExampleCfg -Force
+      break
+    }
   }
 } catch {
   throw "Failed to package executables. Close running icoo_desktop/bridge.exe from $PackageDir, then run build-all.ps1 again. Original error: $($_.Exception.Message)"
