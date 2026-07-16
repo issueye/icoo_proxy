@@ -18,6 +18,47 @@ type PluginRuntime interface {
 	Health(ctx context.Context, id string) (*pluginipc.HealthResult, error)
 	ListModels(ctx context.Context, id string) (*pluginipc.ModelsListResult, error)
 	Client(id string) (*pluginipc.Client, error)
+	// Dynamic catalog (desktop install / enable / discover).
+	Discover() []PluginDiscoverCandidate
+	Register(ctx context.Context, id string, in PluginRegisterInput, autoStart bool) error
+	Unregister(ctx context.Context, id string) error
+	SetEnabled(ctx context.Context, id string, enabled bool) error
+	InstallCandidate(ctx context.Context, id string, enabled bool) error
+}
+
+// PluginDiscoverCandidate is a plugin binary found on disk.
+type PluginDiscoverCandidate struct {
+	ID               string   `json:"id"`
+	Name             string   `json:"name,omitempty"`
+	Version          string   `json:"version,omitempty"`
+	Executable       string   `json:"executable"`
+	ManifestPath     string   `json:"manifest_path,omitempty"`
+	Capabilities     []string `json:"capabilities,omitempty"`
+	SupportedIngress []string `json:"supported_ingress,omitempty"`
+	Registered       bool     `json:"registered"`
+	Source           string   `json:"source"`
+}
+
+// PluginRegisterInput is the body for POST /plugins (manual install).
+type PluginRegisterInput struct {
+	ID           string   `json:"id"`
+	Executable   string   `json:"executable"`
+	Args         []string `json:"args,omitempty"`
+	DataDir      string   `json:"data_dir,omitempty"`
+	Enabled      bool     `json:"enabled"`
+	AdminEnabled bool     `json:"admin_enabled,omitempty"`
+	AutoStart    bool     `json:"auto_start,omitempty"`
+}
+
+// PluginInstallInput installs a discovered candidate by id.
+type PluginInstallInput struct {
+	ID      string `json:"id"`
+	Enabled bool   `json:"enabled"`
+}
+
+// PluginEnabledInput toggles enabled flag.
+type PluginEnabledInput struct {
+	Enabled bool `json:"enabled"`
 }
 
 // PluginRuntimeInstance is a stable DTO so service does not import pluginhost types.
@@ -76,6 +117,12 @@ type PluginService interface {
 	Models(ctx context.Context, id string) ([]FetchedModel, error)
 	// AdminBaseURL returns the plugin loopback UI base when running.
 	AdminBaseURL(id string) (string, error)
+	// Dynamic plug/unplug (desktop).
+	Discover(ctx context.Context) ([]PluginDiscoverCandidate, error)
+	Register(ctx context.Context, in PluginRegisterInput) error
+	Unregister(ctx context.Context, id string) error
+	SetEnabled(ctx context.Context, id string, enabled bool) error
+	Install(ctx context.Context, in PluginInstallInput) error
 }
 
 type pluginService struct {
@@ -213,6 +260,57 @@ func (s *pluginService) Restart(ctx context.Context, id string) error {
 		return errPluginRuntimeUnavailable
 	}
 	return s.runtime.Restart(ctx, id)
+}
+
+func (s *pluginService) Discover(ctx context.Context) ([]PluginDiscoverCandidate, error) {
+	_ = ctx
+	if s.runtime == nil {
+		return []PluginDiscoverCandidate{}, nil
+	}
+	items := s.runtime.Discover()
+	if items == nil {
+		return []PluginDiscoverCandidate{}, nil
+	}
+	return items, nil
+}
+
+func (s *pluginService) Register(ctx context.Context, in PluginRegisterInput) error {
+	if s.runtime == nil {
+		return errPluginRuntimeUnavailable
+	}
+	id := strings.TrimSpace(in.ID)
+	if id == "" {
+		return fmt.Errorf("plugin id is required")
+	}
+	if strings.TrimSpace(in.Executable) == "" {
+		return fmt.Errorf("executable is required")
+	}
+	return s.runtime.Register(ctx, id, in, in.AutoStart || in.Enabled)
+}
+
+func (s *pluginService) Unregister(ctx context.Context, id string) error {
+	if s.runtime == nil {
+		return errPluginRuntimeUnavailable
+	}
+	return s.runtime.Unregister(ctx, id)
+}
+
+func (s *pluginService) SetEnabled(ctx context.Context, id string, enabled bool) error {
+	if s.runtime == nil {
+		return errPluginRuntimeUnavailable
+	}
+	return s.runtime.SetEnabled(ctx, id, enabled)
+}
+
+func (s *pluginService) Install(ctx context.Context, in PluginInstallInput) error {
+	if s.runtime == nil {
+		return errPluginRuntimeUnavailable
+	}
+	id := strings.TrimSpace(in.ID)
+	if id == "" {
+		return fmt.Errorf("plugin id is required")
+	}
+	return s.runtime.InstallCandidate(ctx, id, in.Enabled)
 }
 
 func (s *pluginService) Health(ctx context.Context, id string) (ProviderHealthResult, error) {

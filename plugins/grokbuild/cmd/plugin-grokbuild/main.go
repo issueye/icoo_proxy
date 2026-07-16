@@ -23,6 +23,10 @@ import (
 )
 
 func main() {
+	// Ensure plugin.log (host redirects stdout/stderr) gets timestamps early.
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	log.SetOutput(os.Stderr)
+
 	endpoint := flag.String("endpoint", os.Getenv("ICOO_PLUGIN_ENDPOINT"), "IPC endpoint")
 	dataDir := flag.String("data-dir", ".", "plugin data directory")
 	pluginID := flag.String("plugin-id", "grokbuild", "plugin id")
@@ -40,10 +44,27 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// CRITICAL: open the IPC listener BEFORE any network/admin init.
+	// The host dials with a short timeout; OAuth discovery / admin bind must not
+	// delay Listen/Accept or dial fails with "open \\.\pipe\icoo-plugin-...".
+	log.Printf("plugin-grokbuild starting ipc=%s data_dir=%s", *endpoint, *dataDir)
+	ln, err := pluginipc.Listen(ctx, pluginipc.ListenConfig{Endpoint: *endpoint})
+	if err != nil {
+		log.Fatal("listen:", err)
+	}
+	defer ln.Close()
+	log.Printf("plugin-grokbuild listening on %s", *endpoint)
+
 	st := store.New(*dataDir)
 	up := upstream.New(os.Getenv("GROK_UPSTREAM_BASE"))
 	oauthClient := oauth.NewClient()
-	_ = oauthClient.Discover(context.Background())
+	// Bound discovery so a blocked network cannot stall Accept/handshake.
+	discCtx, discCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	if err := oauthClient.Discover(discCtx); err != nil {
+		log.Printf("oauth discover skipped/failed (using defaults): %v", err)
+	}
+	discCancel()
+
 	refresher := oauth.NewRefresher(oauthClient)
 	sessions := oauth.NewSessionManager(oauthClient, func(sessionID string, ts oauth.TokenSet) (string, error) {
 		id := "oauth-" + sessionID
@@ -72,22 +93,18 @@ func main() {
 	}
 	defer adminSrv.Close()
 
-	ln, err := pluginipc.Listen(ctx, pluginipc.ListenConfig{Endpoint: *endpoint})
-	if err != nil {
-		log.Fatal("listen:", err)
-	}
-	defer ln.Close()
-
+	log.Printf("plugin-grokbuild admin=%s; waiting for host dial", adminURL)
 	conn, err := ln.Accept()
 	if err != nil {
 		log.Fatal("accept:", err)
 	}
+	log.Printf("plugin-grokbuild host connected")
 
 	srv := pluginipc.NewServer(conn, pluginipc.ServerOptions{
 		HostToken: token,
 		Handshake: pluginipc.HandshakeResult{
 			PluginID:         *pluginID,
-			PluginVersion:    "0.3.0",
+			PluginVersion:    "0.3.1",
 			Capabilities:     []string{"proxy.complete", "proxy.stream", "models.list", "health", "ui", "oauth.device", "billing", "oauth.prerefresh"},
 			SupportedIngress: []string{"anthropic", "openai-responses", "openai-chat"},
 			UpstreamKind:     "grok-build-responses",
@@ -166,7 +183,7 @@ func main() {
 		return &pluginipc.ModelsListResult{Models: models}, nil
 	})
 
-	log.Printf("plugin-grokbuild v0.3.0 ipc=%s admin=%s", *endpoint, adminURL)
+	log.Printf("plugin-grokbuild v0.3.1 ready ipc=%s admin=%s", *endpoint, adminURL)
 	<-ctx.Done()
 	_ = srv.Close()
 	time.Sleep(50 * time.Millisecond)

@@ -59,12 +59,17 @@ func New(controllers controller.Controllers, middlewares middleware.Middlewares)
 	api.PUT("/ui-prefs", controllers.UIPreference.Save)
 
 	// Static plugin collection routes MUST be registered before "/plugins/:id/..."
-	// so Gin does not treat "ui-pages" as an :id value.
+	// so Gin does not treat "ui-pages" / "discover" / "install" as :id values.
 	api.GET("/plugins", controllers.Plugin.List)
+	api.POST("/plugins", controllers.Plugin.Register)
 	api.GET("/plugins/ui-pages", controllers.Plugin.ListUIPages)
+	api.GET("/plugins/discover", controllers.Plugin.Discover)
+	api.POST("/plugins/install", controllers.Plugin.Install)
 	api.POST("/plugins/:id/start", controllers.Plugin.Start)
 	api.POST("/plugins/:id/stop", controllers.Plugin.Stop)
 	api.POST("/plugins/:id/restart", controllers.Plugin.Restart)
+	api.PUT("/plugins/:id/enabled", controllers.Plugin.SetEnabled)
+	api.DELETE("/plugins/:id", controllers.Plugin.Unregister)
 	api.GET("/plugins/:id/health", controllers.Plugin.Health)
 	api.GET("/plugins/:id/models", controllers.Plugin.Models)
 	// Plugin-provided extension UI (iframe target).

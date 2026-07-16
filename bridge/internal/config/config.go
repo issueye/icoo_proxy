@@ -48,12 +48,12 @@ type PluginsConfig struct {
 
 // PluginEntry configures one process plugin.
 type PluginEntry struct {
-	Enabled              bool
-	Executable           string // absolute or relative to data dir / binary dir
-	Args                 []string
-	DataDir              string // empty => <data_dir>/plugins/<id>
-	AdminEnabled         bool   // optional loopback admin inside plugin
-	MaxConcurrentStreams int    // 0 => use global default
+	Enabled              bool     `json:"enabled"`
+	Executable           string   `json:"executable"` // absolute or relative to data dir / binary dir
+	Args                 []string `json:"args,omitempty"`
+	DataDir              string   `json:"data_dir,omitempty"` // empty => <data_dir>/plugins/<id>
+	AdminEnabled         bool     `json:"admin_enabled,omitempty"`
+	MaxConcurrentStreams int      `json:"max_concurrent_streams,omitempty"`
 }
 
 type LogConfig struct {

@@ -44,13 +44,20 @@ func (m *Manager) List() []service.PluginRuntimeInstance {
 func (m *Manager) ListInstances() []*Instance {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]*Instance, 0, len(m.plugins)+len(m.cfg.Plugins.Entries))
+	out := make([]*Instance, 0, len(m.plugins)+len(m.entries))
 	seen := make(map[string]struct{}, len(m.plugins))
 	for id, inst := range m.plugins {
+		// Prefer live process state; refresh Entry from catalog when present.
+		if e, ok := m.entries[id]; ok {
+			cp := *inst
+			cp.Entry = e
+			out = append(out, &cp)
+		} else {
+			out = append(out, inst)
+		}
 		seen[id] = struct{}{}
-		out = append(out, inst)
 	}
-	for id, entry := range m.cfg.Plugins.Entries {
+	for id, entry := range m.entries {
 		if _, ok := seen[id]; ok {
 			continue
 		}

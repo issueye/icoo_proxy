@@ -27,6 +27,46 @@ export async function ListPluginUIPages() {
   }
 }
 
+export async function DiscoverPlugins() {
+  try {
+    return await client.get(`${API_PREFIX}/plugins/discover`);
+  } catch (err) {
+    throw withPluginApiHint(err);
+  }
+}
+
+export async function InstallPlugin(payload) {
+  try {
+    return await client.post(`${API_PREFIX}/plugins/install`, payload);
+  } catch (err) {
+    throw withPluginApiHint(err);
+  }
+}
+
+export async function RegisterPlugin(payload) {
+  try {
+    return await client.post(`${API_PREFIX}/plugins`, payload);
+  } catch (err) {
+    throw withPluginApiHint(err);
+  }
+}
+
+export async function UnregisterPlugin(id) {
+  try {
+    return await client.delete(`${API_PREFIX}/plugins/${encodeURIComponent(id)}`);
+  } catch (err) {
+    throw withPluginApiHint(err);
+  }
+}
+
+export async function SetPluginEnabled(id, enabled) {
+  try {
+    return await client.put(`${API_PREFIX}/plugins/${encodeURIComponent(id)}/enabled`, { enabled });
+  } catch (err) {
+    throw withPluginApiHint(err);
+  }
+}
+
 export function StartPlugin(id) {
   return client.post(`${API_PREFIX}/plugins/${encodeURIComponent(id)}/start`);
 }

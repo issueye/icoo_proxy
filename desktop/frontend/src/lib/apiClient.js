@@ -41,6 +41,11 @@ export {
 export {
   ListPlugins,
   ListPluginUIPages,
+  DiscoverPlugins,
+  InstallPlugin,
+  RegisterPlugin,
+  UnregisterPlugin,
+  SetPluginEnabled,
   StartPlugin,
   StopPlugin,
   RestartPlugin,

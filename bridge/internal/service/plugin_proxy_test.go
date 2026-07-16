@@ -39,6 +39,17 @@ func (s *stubPluginRuntime) Client(id string) (*pluginipc.Client, error) {
 	}
 	return s.client, nil
 }
+func (s *stubPluginRuntime) Discover() []PluginDiscoverCandidate { return nil }
+func (s *stubPluginRuntime) Register(ctx context.Context, id string, in PluginRegisterInput, autoStart bool) error {
+	return nil
+}
+func (s *stubPluginRuntime) Unregister(ctx context.Context, id string) error { return nil }
+func (s *stubPluginRuntime) SetEnabled(ctx context.Context, id string, enabled bool) error {
+	return nil
+}
+func (s *stubPluginRuntime) InstallCandidate(ctx context.Context, id string, enabled bool) error {
+	return nil
+}
 
 type pluginRouteResolver struct {
 	route domain.Route

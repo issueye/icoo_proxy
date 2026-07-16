@@ -20,6 +20,39 @@ func (c *PluginController) List(ctx *gin.Context) {
 	writePagedResult(ctx, items, err)
 }
 
+func (c *PluginController) Discover(ctx *gin.Context) {
+	items, err := c.service.Discover(ctx.Request.Context())
+	writePagedResult(ctx, items, err)
+}
+
+func (c *PluginController) Register(ctx *gin.Context) {
+	var input service.PluginRegisterInput
+	if !bindJSON(ctx, &input) {
+		return
+	}
+	writeResult(ctx, gin.H{"registered": true, "id": input.ID}, c.service.Register(ctx.Request.Context(), input))
+}
+
+func (c *PluginController) Install(ctx *gin.Context) {
+	var input service.PluginInstallInput
+	if !bindJSON(ctx, &input) {
+		return
+	}
+	writeResult(ctx, gin.H{"installed": true, "id": input.ID}, c.service.Install(ctx.Request.Context(), input))
+}
+
+func (c *PluginController) Unregister(ctx *gin.Context) {
+	writeResult(ctx, gin.H{"unregistered": true}, c.service.Unregister(ctx.Request.Context(), pathID(ctx)))
+}
+
+func (c *PluginController) SetEnabled(ctx *gin.Context) {
+	var input service.PluginEnabledInput
+	if !bindJSON(ctx, &input) {
+		return
+	}
+	writeResult(ctx, gin.H{"enabled": input.Enabled}, c.service.SetEnabled(ctx.Request.Context(), pathID(ctx), input.Enabled))
+}
+
 func (c *PluginController) Start(ctx *gin.Context) {
 	writeResult(ctx, gin.H{"started": true}, c.service.Start(ctx.Request.Context(), pathID(ctx)))
 }

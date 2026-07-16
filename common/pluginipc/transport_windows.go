@@ -11,9 +11,11 @@ import (
 	"github.com/Microsoft/go-winio"
 )
 
-// DefaultWindowsPipeSDDL grants full access only to the pipe owner (creating user).
-// OW = Owner Rights SID.
-const DefaultWindowsPipeSDDL = "D:P(A;;GA;;;OW)"
+// DefaultWindowsPipeSDDL allows the creating owner, interactive users, admins,
+// and SYSTEM. OW-only descriptors have been observed to reject same-user dials
+// from a parent process (desktop → bridge → plugin) on some Windows builds.
+// Pipes remain local-only (named pipe namespace); not exposed on the network.
+const DefaultWindowsPipeSDDL = "D:P(A;;GA;;;OW)(A;;GA;;;IU)(A;;GA;;;BA)(A;;GA;;;SY)"
 
 // Listen creates a Windows named pipe listener.
 func Listen(ctx context.Context, cfg ListenConfig) (net.Listener, error) {
@@ -52,26 +54,35 @@ func Dial(ctx context.Context, cfg DialConfig) (net.Conn, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	// Retry briefly: plugin may still be starting the listener.
-	deadline := time.Now().Add(10 * time.Second)
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+	// Retry until ctx deadline (or a 30s default). Plugin may still be starting.
+	deadline := time.Now().Add(30 * time.Second)
+	if d, ok := ctx.Deadline(); ok {
 		deadline = d
 	}
 	var last error
 	for time.Now().Before(deadline) {
 		if err := ctx.Err(); err != nil {
+			if last != nil {
+				return nil, fmt.Errorf("pluginipc dial pipe: %w", last)
+			}
 			return nil, err
 		}
-		conn, err := winio.DialPipeContext(ctx, cfg.Endpoint)
+		// Per-attempt timeout so a single hung DialPipe does not eat the whole budget.
+		attemptCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		conn, err := winio.DialPipeContext(attemptCtx, cfg.Endpoint)
+		cancel()
 		if err == nil {
 			return conn, nil
 		}
 		last = err
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("pluginipc dial pipe: %w", last)
 		case <-time.After(50 * time.Millisecond):
 		}
+	}
+	if last == nil {
+		last = context.DeadlineExceeded
 	}
 	return nil, fmt.Errorf("pluginipc dial pipe: %w", last)
 }
