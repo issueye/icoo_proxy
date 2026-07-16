@@ -1,0 +1,8 @@
+go 1.23
+
+use (
+	./bridge
+	./common
+	./desktop
+	./plugins/mock
+)

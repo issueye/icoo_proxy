@@ -6,8 +6,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$BridgeDir = Join-Path $RootDir "icoo_llm_bridge"
-$DesktopDir = Join-Path $RootDir "icoo_desktop"
+$BridgeDir = Join-Path $RootDir "bridge"
+$DesktopDir = Join-Path $RootDir "desktop"
 $PackageDir = Join-Path $RootDir "icoo_proxy"
 
 function Write-Step {
@@ -35,10 +35,10 @@ function Invoke-ProjectBuild {
 }
 
 if (-not (Test-Path $BridgeDir)) {
-  throw "icoo_llm_bridge directory not found: $BridgeDir"
+  throw "bridge directory not found: $BridgeDir"
 }
 if (-not (Test-Path $DesktopDir)) {
-  throw "icoo_desktop directory not found: $DesktopDir"
+  throw "desktop directory not found: $DesktopDir"
 }
 
 $CommonArgs = @()
@@ -46,7 +46,7 @@ if ($SkipTests) {
   $CommonArgs += "-SkipTests"
 }
 
-Write-Step "[1/2] Building icoo_llm_bridge"
+Write-Step "[1/2] Building bridge (icoo/bridge)"
 Invoke-ProjectBuild -ProjectDir $BridgeDir -BuildArgs $CommonArgs
 
 $BridgeOutput = Join-Path $BridgeDir "build\bridge.exe"
@@ -54,7 +54,7 @@ if (-not (Test-Path $BridgeOutput)) {
   throw "bridge.exe not found after build: $BridgeOutput"
 }
 
-Write-Step "[2/2] Building icoo_desktop"
+Write-Step "[2/2] Building desktop (icoo/desktop)"
 $DesktopArgs = @($CommonArgs + @("-BridgePath", $BridgeOutput))
 Invoke-ProjectBuild -ProjectDir $DesktopDir -BuildArgs $DesktopArgs
 

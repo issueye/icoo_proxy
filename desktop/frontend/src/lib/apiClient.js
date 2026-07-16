@@ -1,0 +1,50 @@
+// Compatibility barrel. Keep this public surface stable for stores and views.
+export {
+  ChatWithSupplier,
+  CheckSupplier,
+  DeleteCatalogModel,
+  DeleteSupplier,
+  FetchModelsFromProvider,
+  GetSuppliersPage,
+  ListModelCatalog,
+  ListSupplierHealth,
+  ListSuppliers,
+  SaveCatalogModel,
+  SaveSupplier,
+} from "./api/providers_models";
+export {
+  DeleteAuthKey,
+  DeleteEndpoint,
+  DeleteModelAlias,
+  GetAuthKeySecret,
+  GetAuthKeysPage,
+  GetEndpointsPage,
+  ListAuthKeys,
+  ListEndpoints,
+  ListModelAliases,
+  ListRoutePolicies,
+  ListRoutingRules,
+  SaveAuthKey,
+  SaveEndpoint,
+  SaveModelAlias,
+  SaveRoutePolicy,
+} from "./api/routes_endpoints_keys";
+export {
+  ClearTrafficRequests,
+  GetOverview,
+  GetTrafficPage,
+  GetUiPrefs,
+  ReloadProxy,
+  SaveUiPrefs,
+  State,
+} from "./api/runtime_traffic";
+export {
+  GetProjectSettings,
+  SaveProjectSettings,
+  getAppVersion,
+  getServerConfig,
+  getServerURL,
+  saveServerConfig,
+  serverStatus,
+  wakeServer,
+} from "./api/wails_settings";

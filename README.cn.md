@@ -2,9 +2,9 @@
 
 本地优先的 LLM API 转换网关和桌面管理端。
 
-`icoo_proxy` 对下游暴露 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 兼容接口，并根据供应商、模型和路由策略把请求转发到不同上游。后端服务位于 `icoo_llm_bridge`，桌面端位于 `icoo_desktop`。
+`icoo_proxy` 对下游暴露 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages 兼容接口，并根据供应商、模型和路由策略把请求转发到不同上游。后端服务位于 `bridge`（模块 `icoo/bridge`），桌面端位于 `desktop`（模块 `icoo/desktop`），公共库位于 `common`（模块 `icoo/common`）。仓库使用 Go workspace（`go.work`）组织多模块。
 
-English documentation: [README.md](README.md)
+English documentation: [README.md](README.md) · Workspace 说明：[docs/workspace.md](docs/workspace.md)
 
 ## 功能特性
 
@@ -25,8 +25,11 @@ English documentation: [README.md](README.md)
 
 ```text
 .
-├── icoo_desktop/        # Wails 桌面端和 Vue 前端
-├── icoo_llm_bridge/     # Go 后端服务
+├── go.work               # Go workspace 根
+├── common/              # 公共模块 icoo/common（pluginipc 等）
+├── bridge/              # 后端模块 icoo/bridge
+├── desktop/             # 桌面端模块 icoo/desktop（Wails + Vue）
+├── plugins/             # 进程插件（如 mock）
 ├── icoo_proxy/          # 打包输出目录
 └── build-all.ps1        # 一键构建脚本
 ```
@@ -47,14 +50,14 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ## 构建网关
 
 ```powershell
-cd icoo_llm_bridge
+cd bridge
 .\build.ps1
 ```
 
 输出文件：
 
 ```text
-icoo_llm_bridge\build\bridge.exe
+bridge\build\bridge.exe
 ```
 
 只想快速构建发布程序，可以跳过测试：
@@ -66,7 +69,7 @@ icoo_llm_bridge\build\bridge.exe
 ## 运行网关
 
 ```powershell
-cd icoo_llm_bridge
+cd bridge
 .\build\bridge.exe
 ```
 
@@ -85,21 +88,21 @@ Invoke-RestMethod http://127.0.0.1:18181/api/v1/runtime/state
 先构建网关，然后构建桌面端并把 `bridge.exe` 打包进去：
 
 ```powershell
-cd icoo_desktop
-.\build.ps1 -BridgePath ..\icoo_llm_bridge\build\bridge.exe
+cd desktop
+.\build.ps1 -BridgePath ..\bridge\build\bridge.exe
 ```
 
 输出文件：
 
 ```text
-icoo_desktop\build\bin\icoo_desktop.exe
-icoo_desktop\build\bin\bridge.exe
+desktop\build\bin\icoo_desktop.exe
+desktop\build\bin\bridge.exe
 ```
 
 仅开发前端时：
 
 ```powershell
-cd icoo_desktop\frontend
+cd desktop\frontend
 npm install
 npm run dev
 ```
@@ -202,16 +205,34 @@ GET  /api/v1/traffic
 运行后端测试：
 
 ```powershell
-cd icoo_llm_bridge
-go test ./...
+# 仓库根目录（go.work）
+go test ./common/...
+go test ./bridge/...
 ```
 
-运行前端构建：
+运行桌面端测试和前端质量检查：
 
 ```powershell
-cd icoo_desktop\frontend
+cd desktop
+go test .
+
+cd frontend
+npm ci
+npm run lint
+npm run format:check
+npm test
 npm run build
 ```
+
+验证 OpenAPI 与打包产物：
+
+```powershell
+.\scripts\Test-OpenAPI.ps1
+.\build-all.ps1
+.\scripts\Test-Package.ps1 -PackageDir .\icoo_proxy
+```
+
+管理接口规范位于 [`docs/openapi.yaml`](docs/openapi.yaml)，发布变化记录在 [`CHANGELOG.md`](CHANGELOG.md)。Bridge 和桌面端共用根目录 [`VERSION`](VERSION) 作为版本来源。
 
 ## 当前状态
 
@@ -247,4 +268,4 @@ icoo_proxy\
 
 ## 许可证
 
-当前仓库还没有包含许可证文件。公开分发前请补充许可证。
+本项目采用 [Apache License 2.0](LICENSE) 许可证。

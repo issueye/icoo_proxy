@@ -2,9 +2,9 @@
 
 Local-first LLM API bridge and desktop console.
 
-`icoo_proxy` exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages compatible endpoints, then routes each request to configured upstream providers. The backend service lives in `icoo_llm_bridge`, and the desktop app lives in `icoo_desktop`.
+`icoo_proxy` exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages compatible endpoints, then routes each request to configured upstream providers. The backend service lives in `bridge` (`icoo/bridge`), the desktop app in `desktop` (`icoo/desktop`), and shared libraries in `common` (`icoo/common`). The monorepo uses a Go workspace (`go.work`).
 
-Chinese documentation: [README.cn.md](README.cn.md)
+Chinese documentation: [README.cn.md](README.cn.md) · Workspace guide: [docs/workspace.md](docs/workspace.md)
 
 ## Features
 
@@ -25,8 +25,11 @@ Chinese documentation: [README.cn.md](README.cn.md)
 
 ```text
 .
-├── icoo_desktop/        # Wails desktop app and Vue frontend
-├── icoo_llm_bridge/     # Go backend service
+├── go.work               # Go workspace root
+├── common/              # Shared module icoo/common (pluginipc, …)
+├── bridge/              # Backend module icoo/bridge
+├── desktop/             # Wails + Vue module icoo/desktop
+├── plugins/             # Process plugins (e.g. mock)
 ├── icoo_proxy/          # Packaged executable output directory
 └── build-all.ps1        # All-in-one build script
 ```
@@ -47,14 +50,14 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ## Build The Bridge
 
 ```powershell
-cd icoo_llm_bridge
+cd bridge
 .\build.ps1
 ```
 
 The output is:
 
 ```text
-icoo_llm_bridge\build\bridge.exe
+bridge\build\bridge.exe
 ```
 
 Skip tests when you only need a fast build:
@@ -66,7 +69,7 @@ Skip tests when you only need a fast build:
 ## Run The Bridge
 
 ```powershell
-cd icoo_llm_bridge
+cd bridge
 .\build\bridge.exe
 ```
 
@@ -85,21 +88,21 @@ By default, local loopback requests can use admin APIs without an API key. Confi
 Build the desktop app and bundle the bridge:
 
 ```powershell
-cd icoo_desktop
-.\build.ps1 -BridgePath ..\icoo_llm_bridge\build\bridge.exe
+cd desktop
+.\build.ps1 -BridgePath ..\bridge\build\bridge.exe
 ```
 
 The output is:
 
 ```text
-icoo_desktop\build\bin\icoo_desktop.exe
-icoo_desktop\build\bin\bridge.exe
+desktop\build\bin\icoo_desktop.exe
+desktop\build\bin\bridge.exe
 ```
 
 For frontend-only development:
 
 ```powershell
-cd icoo_desktop\frontend
+cd desktop\frontend
 npm install
 npm run dev
 ```
@@ -202,16 +205,34 @@ GET  /api/v1/traffic
 Run backend tests:
 
 ```powershell
-cd icoo_llm_bridge
-go test ./...
+# from repo root (go.work)
+go test ./common/...
+go test ./bridge/...
 ```
 
-Run frontend build:
+Run desktop tests and frontend quality checks:
 
 ```powershell
-cd icoo_desktop\frontend
+cd desktop
+go test .
+
+cd frontend
+npm ci
+npm run lint
+npm run format:check
+npm test
 npm run build
 ```
+
+Validate the OpenAPI contract and packaged artifacts:
+
+```powershell
+.\scripts\Test-OpenAPI.ps1
+.\build-all.ps1
+.\scripts\Test-Package.ps1 -PackageDir .\icoo_proxy
+```
+
+The management API contract is at [`docs/openapi.yaml`](docs/openapi.yaml), release history is tracked in [`CHANGELOG.md`](CHANGELOG.md), and both binaries read their release version from the root [`VERSION`](VERSION) file.
 
 ## Current Status
 
@@ -247,4 +268,4 @@ Start `icoo_desktop.exe`; the desktop app can launch the bundled `bridge.exe` wh
 
 ## License
 
-No license file is currently included. Add one before public distribution.
+This project is licensed under the [Apache License 2.0](LICENSE).

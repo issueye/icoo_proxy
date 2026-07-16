@@ -1,0 +1,643 @@
+openapi: 3.1.0
+info:
+  title: icoo_llm_bridge Management API
+  version: 2.0.1
+  description: |
+    Local-first management API used by icoo_desktop. Proxy-compatible LLM
+    request and response schemas are intentionally documented separately from
+    this management contract.
+servers:
+  - url: http://127.0.0.1:18181
+    description: Default local Bridge
+tags:
+  - name: Runtime
+    description: Bridge health, readiness, and runtime diagnostics.
+  - name: Providers
+    description: Upstream provider configuration and direct health probes.
+  - name: Models
+    description: Provider model assignments and the shared model catalog.
+  - name: Routing
+    description: Ingress endpoint and protocol routing configuration.
+  - name: Access
+    description: Local API key lifecycle and secret reveal operations.
+  - name: Traffic
+    description: Recorded proxy traffic and token accounting.
+  - name: Preferences
+    description: Desktop UI preferences stored by the Bridge.
+  - name: Plugins
+    description: Process-plugin lifecycle, health, and model discovery over IPC.
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      tags: [Runtime]
+      security: []
+      summary: Process health
+      responses:
+        "200":
+          description: Process is running
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [service, status]
+                properties:
+                  service:
+                    type: string
+                  status:
+                    const: ok
+  /readyz:
+    get:
+      operationId: getReadiness
+      tags: [Runtime]
+      security: []
+      summary: Dependency readiness
+      responses:
+        "200":
+          description: Bridge is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [service, ready]
+                properties:
+                  service:
+                    type: string
+                  ready:
+                    const: true
+  /api/v1/runtime/state:
+    get:
+      operationId: getRuntimeState
+      tags: [Runtime]
+      summary: Get runtime state and diagnostics
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/providers:
+    get:
+      operationId: listProviders
+      tags: [Providers]
+      summary: List providers
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          $ref: "#/components/responses/Paged"
+    post:
+      operationId: createProvider
+      tags: [Providers]
+      summary: Create a provider
+      requestBody:
+        $ref: "#/components/requestBodies/Provider"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/providers/{provider_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProviderID"
+    put:
+      operationId: updateProvider
+      tags: [Providers]
+      summary: Update a provider
+      description: A blank api_key preserves the stored provider secret.
+      requestBody:
+        $ref: "#/components/requestBodies/Provider"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+    delete:
+      operationId: deleteProvider
+      tags: [Providers]
+      summary: Delete a provider
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/providers/{provider_id}/check:
+    post:
+      operationId: checkProvider
+      tags: [Providers]
+      summary: Run a minimal provider health probe
+      parameters:
+        - $ref: "#/components/parameters/ProviderID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/providers/{provider_id}/chat:
+    post:
+      operationId: chatWithProvider
+      tags: [Providers]
+      summary: Send a direct provider chat probe
+      parameters:
+        - $ref: "#/components/parameters/ProviderID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderChatRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/providers/{provider_id}/models:
+    parameters:
+      - $ref: "#/components/parameters/ProviderID"
+    get:
+      operationId: listProviderModels
+      tags: [Models]
+      summary: List provider models
+      responses:
+        "200":
+          $ref: "#/components/responses/Paged"
+    post:
+      operationId: createProviderModel
+      tags: [Models]
+      summary: Add a provider model
+      requestBody:
+        $ref: "#/components/requestBodies/Model"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/providers/{provider_id}/fetch-models:
+    post:
+      operationId: fetchProviderModels
+      tags: [Models]
+      summary: Fetch models from the provider
+      parameters:
+        - $ref: "#/components/parameters/ProviderID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/providers/{provider_id}/models/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ProviderID"
+      - $ref: "#/components/parameters/ResourceID"
+    put:
+      operationId: updateProviderModel
+      tags: [Models]
+      summary: Update a provider model
+      requestBody:
+        $ref: "#/components/requestBodies/Model"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+    delete:
+      operationId: deleteProviderModel
+      tags: [Models]
+      summary: Delete a provider model
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/model-catalog:
+    get:
+      operationId: listModelCatalog
+      tags: [Models]
+      summary: List catalog models
+      responses:
+        "200":
+          $ref: "#/components/responses/Paged"
+    post:
+      operationId: createCatalogModel
+      tags: [Models]
+      summary: Create a catalog model
+      requestBody:
+        $ref: "#/components/requestBodies/Model"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/model-catalog/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+    put:
+      operationId: updateCatalogModel
+      tags: [Models]
+      summary: Update a catalog model
+      requestBody:
+        $ref: "#/components/requestBodies/Model"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+    delete:
+      operationId: deleteCatalogModel
+      tags: [Models]
+      summary: Delete a catalog model
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/ingress-endpoints:
+    get:
+      operationId: listIngressEndpoints
+      tags: [Routing]
+      summary: List ingress endpoints
+      responses:
+        "200":
+          $ref: "#/components/responses/Paged"
+    post:
+      operationId: createIngressEndpoint
+      tags: [Routing]
+      summary: Create an ingress endpoint
+      requestBody:
+        $ref: "#/components/requestBodies/GenericObject"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/ingress-endpoints/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+    put:
+      operationId: updateIngressEndpoint
+      tags: [Routing]
+      summary: Update an ingress endpoint
+      requestBody:
+        $ref: "#/components/requestBodies/GenericObject"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+    delete:
+      operationId: deleteIngressEndpoint
+      tags: [Routing]
+      summary: Delete an ingress endpoint
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/routing-rules:
+    get:
+      operationId: listRoutingRules
+      tags: [Routing]
+      summary: List routing rules
+      responses:
+        "200":
+          $ref: "#/components/responses/Paged"
+    post:
+      operationId: createRoutingRule
+      tags: [Routing]
+      summary: Create a routing rule
+      requestBody:
+        $ref: "#/components/requestBodies/GenericObject"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/routing-rules/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+    put:
+      operationId: updateRoutingRule
+      tags: [Routing]
+      summary: Update a routing rule
+      requestBody:
+        $ref: "#/components/requestBodies/GenericObject"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+    delete:
+      operationId: deleteRoutingRule
+      tags: [Routing]
+      summary: Delete a routing rule
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/api-keys:
+    get:
+      operationId: listApiKeys
+      tags: [Access]
+      summary: List local API keys
+      responses:
+        "200":
+          $ref: "#/components/responses/Paged"
+    post:
+      operationId: saveApiKey
+      tags: [Access]
+      summary: Create or update a local API key
+      requestBody:
+        $ref: "#/components/requestBodies/GenericObject"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/api-keys/{id}:
+    delete:
+      operationId: deleteApiKey
+      tags: [Access]
+      summary: Delete a local API key
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/api-keys/{id}/secret:
+    get:
+      operationId: revealApiKeySecret
+      tags: [Access]
+      summary: Reveal a local API key secret
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/traffic:
+    get:
+      operationId: listTraffic
+      tags: [Traffic]
+      summary: List traffic records
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          $ref: "#/components/responses/Paged"
+    delete:
+      operationId: clearTraffic
+      tags: [Traffic]
+      summary: Clear traffic records
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/ui-prefs:
+    get:
+      operationId: getUiPreferences
+      tags: [Preferences]
+      summary: Get UI preferences
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+    put:
+      operationId: updateUiPreferences
+      tags: [Preferences]
+      summary: Save UI preferences
+      requestBody:
+        $ref: "#/components/requestBodies/GenericObject"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/v1/plugins:
+    get:
+      operationId: listPlugins
+      tags: [Plugins]
+      summary: List configured process plugins and runtime status
+      responses:
+        "200":
+          $ref: "#/components/responses/Paged"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/{id}/start:
+    post:
+      operationId: startPlugin
+      tags: [Plugins]
+      summary: Start a process plugin
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/{id}/stop:
+    post:
+      operationId: stopPlugin
+      tags: [Plugins]
+      summary: Stop a process plugin
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/{id}/restart:
+    post:
+      operationId: restartPlugin
+      tags: [Plugins]
+      summary: Restart a process plugin
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/{id}/health:
+    get:
+      operationId: getPluginHealth
+      tags: [Plugins]
+      summary: Probe plugin.health over IPC
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/{id}/models:
+    get:
+      operationId: listPluginModels
+      tags: [Plugins]
+      summary: List models from plugin models.list (does not write catalog)
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+  parameters:
+    ProviderID:
+      name: provider_id
+      in: path
+      required: true
+      schema:
+        type: string
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 20
+  requestBodies:
+    Provider:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProviderInput"
+    Model:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ModelInput"
+    GenericObject:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+  responses:
+    Success:
+      description: Successful response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+    Paged:
+      description: Paginated response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PagedEnvelope"
+    Error:
+      description: Request failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Unauthorized:
+      description: Missing or invalid admin API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    Envelope:
+      type: object
+      required: [data]
+      properties:
+        data: {}
+    PagedEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [items, total, page, page_size]
+          properties:
+            items:
+              type: array
+              items: {}
+            total:
+              type: integer
+            page:
+              type: integer
+            page_size:
+              type: integer
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    ProviderInput:
+      type: object
+      required: [name, protocol]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        protocol:
+          type: string
+          enum: [anthropic, openai-chat, openai-responses]
+        vendor:
+          type: string
+          description: Use "plugin" for process-plugin providers (requires plugin_id).
+        plugin_id:
+          type: string
+          description: Process plugin id when vendor is plugin (e.g. grokbuild).
+        base_url:
+          type: string
+          description: HTTP base URL, or plugin://<plugin_id> for plugin vendors.
+        models_url:
+          type: string
+        proxy_url:
+          type: string
+        api_key:
+          type: string
+          writeOnly: true
+        only_stream:
+          type: boolean
+        enabled:
+          type: boolean
+        description:
+          type: string
+    ModelInput:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        family:
+          type: string
+        icon:
+          type: string
+        max_tokens:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+        description:
+          type: string
+    ProviderChatRequest:
+      type: object
+      required: [messages]
+      properties:
+        model:
+          type: string
+        messages:
+          type: array
+          items:
+            type: object
+            required: [role, content]
+            properties:
+              role:
+                type: string
+              content:
+                type: string
+        max_tokens:
+          type: integer
+          minimum: 1
+        temperature:
+          type: number
