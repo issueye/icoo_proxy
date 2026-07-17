@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/issueye/icoo_proxy/common/pluginipc"
 )
 
 // ProxyUI reverse-proxies /api/v1/plugins/:id/ui/* to the plugin admin HTTP base.
@@ -14,7 +15,7 @@ import (
 // without opening a separate browser origin for each plugin port.
 func (c *PluginController) ProxyUI(ctx *gin.Context) {
 	id := pathID(ctx)
-	base, err := c.service.AdminBaseURL(id)
+	base, adminToken, err := c.service.AdminProxyTarget(id)
 	if err != nil {
 		ctx.JSON(http.StatusBadGateway, gin.H{
 			"error": gin.H{"code": "PLUGIN_UI_UNAVAILABLE", "message": err.Error()},
@@ -69,6 +70,10 @@ func (c *PluginController) ProxyUI(ctx *gin.Context) {
 		// Avoid leaking host admin credentials to the plugin process.
 		req.Header.Del("Authorization")
 		req.Header.Del("X-Api-Key")
+		// Inject host-held plugin admin token (never sent to the browser).
+		if adminToken != "" {
+			req.Header.Set(pluginipc.HeaderPluginAdminToken, adminToken)
+		}
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, e error) {
 		w.Header().Set("Content-Type", "application/json")

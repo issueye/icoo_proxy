@@ -151,6 +151,8 @@ func (c *Container) Shutdown(ctx context.Context) error {
 		pctx, cancel := context.WithTimeout(ctx, pto)
 		_ = c.Plugins.StopAll(pctx)
 		cancel()
+		// Close Job Object last so any residual plugin process is killed on Windows.
+		c.Plugins.Close()
 	}
 	return httpErr
 }

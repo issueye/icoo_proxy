@@ -9,7 +9,8 @@
 | `common/` | `github.com/issueye/icoo_proxy/common` | Shared pure libraries |
 | `bridge/` | `github.com/issueye/icoo_proxy/bridge` | LLM bridge HTTP service (Gin/GORM host) |
 | `desktop/` | `github.com/issueye/icoo_proxy/desktop` | Wails + Vue desktop console |
-| `plugins/mock/` | `github.com/issueye/icoo_proxy/plugins/mock` | Mock process plugin |
+| `plugins/mock/` | `github.com/issueye/icoo_proxy/plugins/mock` | Mock process plugin (SDK sample) |
+| `plugins/grokbuild (RunPlugin + PrepareHandshake)/` | `github.com/issueye/icoo_proxy/plugins/grokbuild` | Grok Build / SuperGrok process plugin |
 
 ```text
 icoo_proxy/
@@ -20,13 +21,14 @@ icoo_proxy/
 │   ├── idgen/
 │   ├── view/                # API envelope DTOs
 │   ├── ai_llm_proxy/        # protocol converter matrix
-│   └── pluginipc/           # process-plugin IPC
+│   └── pluginipc/           # process-plugin IPC + Client/Server SDK
 ├── bridge/
 │   ├── cmd/bridge/
 │   └── internal/            # app, config, controller, service, entity, repo, pluginhost…
 ├── desktop/
 └── plugins/
-    └── mock/
+    ├── mock/                # SDK sample plugin (RunPlugin)
+    └── grokbuild/
 ```
 
 ## Layering

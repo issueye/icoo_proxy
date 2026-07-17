@@ -11,7 +11,7 @@ Shared Go libraries for the `icoo_proxy` monorepo. Modules that depend on this p
 | `idgen` | `.../common/idgen` | ID helpers |
 | `view` | `.../common/view` | Admin API response / pagination DTOs |
 | `ai_llm_proxy` | `.../common/ai_llm_proxy` | Multi-protocol request/response/stream conversion |
-| `pluginipc` | `.../common/pluginipc` | Process-plugin IPC (named pipe / UDS + JSON-RPC) |
+| `pluginipc` | `.../common/pluginipc` | Process-plugin IPC (pipe/UDS + JSON-RPC) **and Client/Server SDK** (`Connect`, `RunPlugin`, helpers) |
 
 ## Rules
 
@@ -19,6 +19,7 @@ Shared Go libraries for the `icoo_proxy` monorepo. Modules that depend on this p
 2. Plugins may import `constants`, `pluginipc`, and (if needed) `ai_llm_proxy` / `domain`.
 3. Plugins **must not** import `bridge/internal/...`.
 4. Prefer adding new pure helpers here over duplicating them in bridge or plugins.
+5. Plugin IPC usage guide: [`docs/plugin-ipc-sdk.md`](../docs/plugin-ipc-sdk.md); wire contract: [`docs/plugin-ipc-contract.md`](../docs/plugin-ipc-contract.md).
 
 ## Local consume
 

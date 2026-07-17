@@ -1,6 +1,8 @@
 # Plugin IPC Contract (v1)
 
 > Frozen for implementation. Full design: [docs/design/2026-07-16-process-plugin-architecture.md](./design/2026-07-16-process-plugin-architecture.md)
+>
+> **Go SDK 使用指南（Client/Server 便捷层）：** [docs/plugin-ipc-sdk.md](./plugin-ipc-sdk.md)
 
 ## Module graph
 

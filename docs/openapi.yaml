@@ -25,7 +25,11 @@ tags:
   - name: Preferences
     description: Desktop UI preferences stored by the Bridge.
   - name: Plugins
-    description: Process-plugin lifecycle, health, and model discovery over IPC.
+    description: |
+      Process-plugin lifecycle, health, model discovery, and UI reverse-proxy over IPC.
+      Host reliability: plugins.auto_restart (default true), plugins.auto_restart_fail_threshold (default 3).
+      Plugin admin HTTP uses ephemeral handshake admin_token injected by the UI reverse-proxy
+      as X-ICOO-Plugin-Admin-Token (never returned from management list/ui-pages APIs).
 security:
   - bearerAuth: []
   - apiKeyAuth: []
@@ -440,9 +444,59 @@ paths:
       operationId: listPlugins
       tags: [Plugins]
       summary: List configured process plugins and runtime status
+      description: |
+        Returns runtime status for TOML + registry catalog entries.
+        `admin_token` from handshake is host-internal and never included in this response.
+        Host reliability knobs (`plugins.auto_restart`, `plugins.auto_restart_fail_threshold`)
+        are configuration-only and not exposed here.
       responses:
         "200":
           $ref: "#/components/responses/Paged"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: registerPlugin
+      tags: [Plugins]
+      summary: Manually register a process plugin into the runtime catalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginRegisterRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/discover:
+    get:
+      operationId: discoverPlugins
+      tags: [Plugins]
+      summary: Discover plugin packages on disk (plugins/<id>/info.toml)
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/install:
+    post:
+      operationId: installPlugin
+      tags: [Plugins]
+      summary: Install a discovered plugin candidate into the runtime catalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginInstallRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
   /api/v1/plugins/ui-pages:
@@ -450,38 +504,148 @@ paths:
       operationId: listPluginUIPages
       tags: [Plugins]
       summary: List desktop extension pages advertised by running plugins
+      description: |
+        Pages are embedded via bridge reverse-proxy (`embed_url`).
+        Plugin admin secrets are injected server-side and never returned here.
       responses:
         "200":
           $ref: "#/components/responses/Success"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/{id}:
+    delete:
+      operationId: unregisterPlugin
+      tags: [Plugins]
+      summary: Unregister a plugin (stop + registry tombstone)
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/plugins/{id}/enabled:
+    put:
+      operationId: setPluginEnabled
+      tags: [Plugins]
+      summary: Enable or disable a process plugin
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginEnabledRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /api/v1/plugins/{id}/ui:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
     get:
       operationId: proxyPluginUIRoot
       tags: [Plugins]
       summary: Reverse-proxy plugin loopback admin UI (iframe target)
-      parameters:
-        - $ref: "#/components/parameters/ResourceID"
+      description: |
+        Bridge injects `X-ICOO-Plugin-Admin-Token` toward the plugin and strips
+        host `Authorization` / `X-Api-Key`. Token is never exposed to the browser.
       responses:
         "200":
           description: Plugin UI HTML or asset
         "502":
           $ref: "#/components/responses/Error"
+    post:
+      operationId: proxyPluginUIRootWrite
+      tags: [Plugins]
+      summary: Reverse-proxy plugin admin UI root (non-GET methods)
+      responses:
+        "200":
+          description: Plugin UI response
+        "502":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: proxyPluginUIRootPut
+      tags: [Plugins]
+      summary: Reverse-proxy plugin admin UI root PUT
+      responses:
+        "200":
+          description: Plugin UI response
+        "502":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: proxyPluginUIRootDelete
+      tags: [Plugins]
+      summary: Reverse-proxy plugin admin UI root DELETE
+      responses:
+        "200":
+          description: Plugin UI response
+        "502":
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: proxyPluginUIRootPatch
+      tags: [Plugins]
+      summary: Reverse-proxy plugin admin UI root PATCH
+      responses:
+        "200":
+          description: Plugin UI response
+        "502":
+          $ref: "#/components/responses/Error"
   /api/v1/plugins/{id}/ui/{filepath}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+      - name: filepath
+        in: path
+        required: true
+        schema:
+          type: string
     get:
       operationId: proxyPluginUIPath
       tags: [Plugins]
       summary: Reverse-proxy nested plugin UI paths
-      parameters:
-        - $ref: "#/components/parameters/ResourceID"
-        - name: filepath
-          in: path
-          required: true
-          schema:
-            type: string
       responses:
         "200":
           description: Plugin UI asset
+        "502":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: proxyPluginUIPathWrite
+      tags: [Plugins]
+      summary: Reverse-proxy nested plugin UI POST
+      responses:
+        "200":
+          description: Plugin UI response
+        "502":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: proxyPluginUIPathPut
+      tags: [Plugins]
+      summary: Reverse-proxy nested plugin UI PUT
+      responses:
+        "200":
+          description: Plugin UI response
+        "502":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: proxyPluginUIPathDelete
+      tags: [Plugins]
+      summary: Reverse-proxy nested plugin UI DELETE
+      responses:
+        "200":
+          description: Plugin UI response
+        "502":
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: proxyPluginUIPathPatch
+      tags: [Plugins]
+      summary: Reverse-proxy nested plugin UI PATCH
+      responses:
+        "200":
+          description: Plugin UI response
         "502":
           $ref: "#/components/responses/Error"
   /api/v1/plugins/{id}/start:
@@ -627,6 +791,41 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
+
+    PluginRegisterRequest:
+      type: object
+      required: [id, executable]
+      properties:
+        id:
+          type: string
+        executable:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+        data_dir:
+          type: string
+        enabled:
+          type: boolean
+        admin_enabled:
+          type: boolean
+        auto_start:
+          type: boolean
+    PluginInstallRequest:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        enabled:
+          type: boolean
+    PluginEnabledRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
     Envelope:
       type: object
       required: [data]

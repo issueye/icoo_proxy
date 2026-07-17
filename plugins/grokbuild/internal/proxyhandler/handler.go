@@ -2,8 +2,6 @@ package proxyhandler
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -65,7 +63,7 @@ func (h *Handler) Complete(ctx context.Context, req pluginipc.ProxyRequest) (*pl
 		Body:       req.Body,
 	})
 	if err != nil {
-		return nil, pluginipc.NewRPCError(pluginipc.CodeUnsupportedIngress, err.Error(), nil)
+		return nil, pluginipc.RPCUnsupportedIngress(err)
 	}
 
 	usable, err := h.Store.ListUsable()
@@ -128,16 +126,11 @@ func (h *Handler) Complete(ctx context.Context, req pluginipc.ProxyRequest) (*pl
 				return nil, convErr
 			}
 			usage := h.Converter.ExtractUsage(constants.ProtocolOpenAIResponses, raw)
-			return &pluginipc.ProxyResponse{
-				Status:  http.StatusOK,
-				Headers: map[string]string{"content-type": "application/json"},
-				Body:    down,
-				Usage: &pluginipc.Usage{
-					InputTokens:  int64(usage.InputTokens),
-					OutputTokens: int64(usage.OutputTokens),
-					TotalTokens:  int64(usage.TotalTokens),
-				},
-			}, nil
+			return pluginipc.OKJSON(down, &pluginipc.Usage{
+				InputTokens:  int64(usage.InputTokens),
+				OutputTokens: int64(usage.OutputTokens),
+				TotalTokens:  int64(usage.TotalTokens),
+			}), nil
 		}
 
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
@@ -156,17 +149,16 @@ func (h *Handler) Complete(ctx context.Context, req pluginipc.ProxyRequest) (*pl
 	if lastBody == nil {
 		lastBody = []byte(`{"error":{"message":"upstream failed"}}`)
 	}
-	return &pluginipc.ProxyResponse{
-		Status:  lastStatus,
-		Headers: map[string]string{"content-type": "application/json"},
-		Body:    lastBody,
-	}, nil
+	return pluginipc.JSONStatus(lastStatus, lastBody, nil), nil
 }
 
+// PrepareStream implements pluginipc.StreamHandler (prepare + run closure).
+// Failover is only attempted before open succeeds; run uses the host-provided
+// cancelable context so stream.cancel can abort upstream conversion.
 func (h *Handler) PrepareStream(ctx context.Context, req pluginipc.ProxyRequest) (
 	open *pluginipc.StreamOpenResult,
 	errResp *pluginipc.ProxyResponse,
-	run func(w *pluginipc.StreamWriter),
+	run func(ctx context.Context, w *pluginipc.StreamWriter),
 	err error,
 ) {
 	ingress := constants.Protocol(req.Ingress)
@@ -177,7 +169,7 @@ func (h *Handler) PrepareStream(ctx context.Context, req pluginipc.ProxyRequest)
 		Body:       forceStreamTrue(req.Body),
 	})
 	if err != nil {
-		return nil, nil, nil, pluginipc.NewRPCError(pluginipc.CodeUnsupportedIngress, err.Error(), nil)
+		return nil, nil, nil, pluginipc.RPCUnsupportedIngress(err)
 	}
 
 	// For streams: pick credential at prepare time; failover only on open failure
@@ -230,42 +222,28 @@ func (h *Handler) PrepareStream(ctx context.Context, req pluginipc.ProxyRequest)
 		retryAfter := parseRetryAfter(r.Header.Get("Retry-After"))
 		_ = h.Store.MarkFailure(cred.ID, r.StatusCode, retryAfter, truncate(string(raw), 200))
 		if !canFailover(r.StatusCode) {
-			return nil, &pluginipc.ProxyResponse{
-				Status:  r.StatusCode,
-				Headers: map[string]string{"content-type": "application/json"},
-				Body:    raw,
-			}, nil, nil
+			return nil, pluginipc.JSONStatus(r.StatusCode, raw, nil), nil, nil
 		}
 	}
 	if resp == nil {
-		return nil, &pluginipc.ProxyResponse{
-			Status:  http.StatusBadGateway,
-			Headers: map[string]string{"content-type": "application/json"},
-			Body:    []byte(`{"error":{"message":"all credentials failed for stream open"}}`),
-		}, nil, nil
+		return nil, pluginipc.JSONStatus(http.StatusBadGateway, []byte(`{"error":{"message":"all credentials failed for stream open"}}`), nil), nil, nil
 	}
 
-	streamID := newStreamID()
-	open = &pluginipc.StreamOpenResult{
-		StreamID: streamID,
-		Status:   http.StatusOK,
-		Headers:  map[string]string{"content-type": "text/event-stream"},
-	}
+	streamID := pluginipc.NewStreamID("gb")
+	open = pluginipc.SSEOpen(streamID)
 
-	run = func(w *pluginipc.StreamWriter) {
+	run = func(runCtx context.Context, w *pluginipc.StreamWriter) {
 		defer resp.Body.Close()
-		runCtx := context.Background()
-		if ctx != nil {
-			runCtx = ctx
+		if runCtx == nil {
+			runCtx = context.Background()
 		}
-		sw := &streamWriteAdapter{w: w}
 		result, convErr := h.Converter.ConvertStream(ai_llm_proxy.StreamInput{
 			Context:    runCtx,
 			Downstream: ingress,
 			Upstream:   constants.ProtocolOpenAIResponses,
 			Model:      req.Model,
 			Reader:     resp.Body,
-			Writer:     sw,
+			Writer:     w.AsWriter(),
 		})
 		if convErr != nil {
 			_ = h.Store.MarkFailure(chosen.ID, 0, 0, convErr.Error())
@@ -303,26 +281,13 @@ func parseRetryAfter(v string) int {
 	return n
 }
 
+// unauthorized keeps the historical {"error":{"message":"..."}} body shape used by
+// grokbuild clients (SDK Unauthorized adds type/code fields).
 func unauthorized(msg string) *pluginipc.ProxyResponse {
 	body, _ := json.Marshal(map[string]any{
 		"error": map[string]string{"message": msg},
 	})
-	return &pluginipc.ProxyResponse{
-		Status:  http.StatusUnauthorized,
-		Headers: map[string]string{"content-type": "application/json"},
-		Body:    body,
-	}
-}
-
-type streamWriteAdapter struct {
-	w *pluginipc.StreamWriter
-}
-
-func (a *streamWriteAdapter) Write(p []byte) (int, error) {
-	if err := a.w.WriteChunk(append([]byte(nil), p...)); err != nil {
-		return 0, err
-	}
-	return len(p), nil
+	return pluginipc.JSONStatus(http.StatusUnauthorized, body, nil)
 }
 
 func forceStreamTrue(body []byte) []byte {
@@ -336,12 +301,6 @@ func forceStreamTrue(body []byte) []byte {
 		return body
 	}
 	return out
-}
-
-func newStreamID() string {
-	var b [8]byte
-	_, _ = rand.Read(b[:])
-	return "gb-" + hex.EncodeToString(b[:])
 }
 
 func truncate(s string, n int) string {
@@ -359,4 +318,3 @@ func jsonEscape(s string) string {
 	}
 	return s
 }
-

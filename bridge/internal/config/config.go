@@ -42,6 +42,11 @@ type PluginsConfig struct {
 	HeartbeatInterval time.Duration
 	// ShutdownPluginTimeout is 0 for default 5s.
 	ShutdownPluginTimeout time.Duration
+	// AutoRestart restarts plugins after process exit or consecutive heartbeat failures.
+	// Default true when loaded via defaults().
+	AutoRestart bool
+	// AutoRestartFailThreshold is consecutive Ping failures before restart (0 => 3).
+	AutoRestartFailThreshold int
 	// Entries maps plugin_id -> config. Empty / disabled by default.
 	Entries map[string]PluginEntry
 }

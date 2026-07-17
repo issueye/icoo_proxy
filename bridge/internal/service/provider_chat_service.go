@@ -279,35 +279,28 @@ func (s *providerChatService) chatPluginProvider(
 		return ProviderChatResult{}, fmt.Errorf("plugin %q unavailable: %w", pluginID, err)
 	}
 
-	headers := map[string]string{"content-type": "application/json"}
-	if protocol == constants.ProtocolAnthropic {
-		headers["anthropic-version"] = "2023-06-01"
-	}
-	req := pluginipc.ProxyRequest{
+	req := pluginipc.NewProxyRequest(pluginipc.ProxyRequestInput{
 		Ingress: protocol.String(),
 		Path:    providerChatIngressPath(protocol),
 		Method:  http.MethodPost,
-		Headers: headers,
+		Headers: map[string]string{"content-type": "application/json"},
 		Body:    body,
 		Model:   model,
 		Stream:  false,
-	}
+	})
 
 	start := time.Now()
 	resp, err := cli.Complete(ctx, req)
 	duration := time.Since(start).Milliseconds()
 	if err != nil {
-		_, msg := mapPluginCallError(err)
+		_, msg := pluginipc.MapCallError(err)
 		return ProviderChatResult{}, fmt.Errorf("plugin chat failed: %s", msg)
 	}
 	if resp == nil {
 		return ProviderChatResult{}, fmt.Errorf("empty plugin response")
 	}
-	status := resp.Status
-	if status == 0 {
-		status = http.StatusOK
-	}
-	if !isHTTPSuccess(status) {
+	status := resp.StatusOrOK()
+	if !resp.Success() {
 		return ProviderChatResult{}, errors.New(upstreamErrorMessage(status, resp.Body))
 	}
 

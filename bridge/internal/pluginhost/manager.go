@@ -26,21 +26,29 @@ type Manager struct {
 	entries  map[string]config.PluginEntry // runtime catalog (TOML + registry overlay)
 	removed  map[string]struct{}           // uninstall tombstones (do not re-seed from TOML)
 	registry *Registry
+	closed   bool
 }
 
 // Instance is one running (or configured) plugin process.
 type Instance struct {
-	ID           string
-	Entry        config.PluginEntry
-	Endpoint     string
-	Token        string
-	Client       *pluginipc.Client
-	Handshake    *pluginipc.HandshakeResult
-	Cmd          *exec.Cmd
-	Status       string // stopped | starting | running | unhealthy | error
-	LastError    string
-	StartedAt    time.Time
-	cancelHeart  context.CancelFunc
+	ID          string
+	Entry       config.PluginEntry
+	Endpoint    string
+	Token       string
+	Client      *pluginipc.Client
+	Handshake   *pluginipc.HandshakeResult
+	Cmd         *exec.Cmd
+	Status      string // stopped | starting | running | unhealthy | error
+	LastError   string
+	StartedAt   time.Time
+	cancelHeart context.CancelFunc
+
+	// Reliability bookkeeping (host-side only).
+	failCount       int
+	lastRestart     time.Time
+	restartAttempts int
+	watchGen        uint64 // bumped on each Start/Stop to ignore stale watchers
+	stopping        bool   // true while Stop is tearing down (suppress auto-restart)
 }
 
 // NewManager creates a plugin host manager (does not spawn yet).
@@ -116,9 +124,23 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 	}
 
 	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return fmt.Errorf("pluginhost: manager closed")
+	}
 	if inst, ok := m.plugins[id]; ok && inst.Status == "running" && inst.Client != nil {
 		m.mu.Unlock()
 		return nil
+	}
+	// Invalidate any previous process watcher for this id.
+	var prevGen uint64
+	if prev, ok := m.plugins[id]; ok {
+		prevGen = prev.watchGen
+		prev.stopping = true
+		if prev.cancelHeart != nil {
+			prev.cancelHeart()
+			prev.cancelHeart = nil
+		}
 	}
 	m.mu.Unlock()
 
@@ -186,6 +208,7 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 		Cmd:       cmd,
 		Status:    "starting",
 		StartedAt: time.Now(),
+		watchGen:  prevGen + 1,
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -205,43 +228,38 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 		}
 	}
 
-	// Dial with timeout. Plugins must Listen promptly; keep this generous enough
-	// for cold-start AV scans / first-run, but fail with process/log diagnostics.
-	dialCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
-	conn, err := pluginipc.Dial(dialCtx, pluginipc.DialConfig{Endpoint: endpoint})
-	if err != nil {
-		detail := m.failPluginStart(inst, cmd, logPath, err)
-		return fmt.Errorf("pluginhost: dial %s: %s", id, detail)
-	}
-
+	// Dial + handshake via SDK. Plugins must Listen promptly; timeouts stay generous
+	// enough for cold-start AV scans / first-run, but fail with process/log diagnostics.
 	maxFrame := int(m.cfg.EffectiveMaxFrameBytes())
 	maxStreams := entry.MaxConcurrentStreams
 	if maxStreams <= 0 {
 		maxStreams = m.cfg.Plugins.MaxConcurrentStreams
 	}
-	client := pluginipc.NewClient(conn, pluginipc.ClientOptions{
+	client, hs, err := pluginipc.Connect(context.WithoutCancel(ctx), pluginipc.ConnectConfig{
+		Endpoint:             endpoint,
+		Token:                token,
+		HostVersion:          pluginipc.DefaultHostVersion,
+		DialTimeout:          30 * time.Second,
+		HandshakeTimeout:     15 * time.Second,
 		MaxFrameBytes:        maxFrame,
 		MaxConcurrentStreams: maxStreams,
 	})
-
-	hsCtx, hsCancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
-	defer hsCancel()
-	hs, err := client.Handshake(hsCtx, token, "icoo_llm_bridge")
 	if err != nil {
-		_ = client.Close()
 		detail := m.failPluginStart(inst, cmd, logPath, err)
-		return fmt.Errorf("pluginhost: handshake %s: %s", id, detail)
+		return fmt.Errorf("pluginhost: connect %s: %s", id, detail)
 	}
 
 	inst.Client = client
 	inst.Handshake = hs
 	inst.Status = "running"
 	inst.LastError = ""
+	inst.failCount = 0
+	inst.stopping = false
 
 	heartCtx, heartCancel := context.WithCancel(context.Background())
 	inst.cancelHeart = heartCancel
 	go m.heartbeatLoop(heartCtx, id)
+	go m.watchProcess(id, inst.watchGen, cmd)
 
 	m.mu.Lock()
 	m.plugins[id] = inst
@@ -314,58 +332,231 @@ func (m *Manager) heartbeatLoop(ctx context.Context, id string) {
 			pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			err := inst.Client.Ping(pingCtx)
 			cancel()
+
+			shouldRestart := false
 			m.mu.Lock()
-			if cur := m.plugins[id]; cur != nil {
-				if err != nil {
-					cur.Status = "unhealthy"
-					cur.LastError = err.Error()
-				} else if cur.Status == "unhealthy" {
+			cur := m.plugins[id]
+			if cur == nil || cur.Client == nil || cur.stopping {
+				m.mu.Unlock()
+				return
+			}
+			if err != nil {
+				cur.failCount++
+				cur.Status = "unhealthy"
+				cur.LastError = err.Error()
+				threshold := m.cfg.Plugins.AutoRestartFailThreshold
+				if threshold <= 0 {
+					threshold = 3
+				}
+				if m.cfg.Plugins.AutoRestart && cur.failCount >= threshold {
+					shouldRestart = true
+					// Close half-open client so hot path stops using it.
+					cli := cur.Client
+					cur.Client = nil
+					m.mu.Unlock()
+					_ = cli.Close()
+				} else {
+					m.mu.Unlock()
+				}
+			} else {
+				if cur.Status == "unhealthy" {
 					cur.Status = "running"
 					cur.LastError = ""
 				}
+				cur.failCount = 0
+				m.mu.Unlock()
 			}
-			m.mu.Unlock()
+
+			if shouldRestart {
+				m.logger.Warn("plugin unhealthy; auto-restarting",
+					"plugin_id", id, "fail_count", thresholdOr(m.cfg.Plugins.AutoRestartFailThreshold, 3))
+				m.scheduleAutoRestart(id, "heartbeat failures")
+			}
 		}
 	}
+}
+
+// watchProcess waits for the child process and converges instance status.
+// Auto-restarts enabled plugins when the process exits unexpectedly.
+func (m *Manager) watchProcess(id string, gen uint64, cmd *exec.Cmd) {
+	if cmd == nil {
+		return
+	}
+	err := cmd.Wait()
+	exitMsg := "process exited"
+	if err != nil {
+		exitMsg = "process exited: " + err.Error()
+	} else if cmd.ProcessState != nil {
+		exitMsg = "process exited: " + cmd.ProcessState.String()
+	}
+
+	m.mu.Lock()
+	inst := m.plugins[id]
+	if inst == nil || inst.watchGen != gen {
+		// Stale watcher (Stop/Start already replaced this generation).
+		m.mu.Unlock()
+		return
+	}
+	stopping := inst.stopping
+	if inst.cancelHeart != nil {
+		inst.cancelHeart()
+		inst.cancelHeart = nil
+	}
+	cli := inst.Client
+	inst.Client = nil
+	if stopping {
+		// Expected teardown via Stop; status already handled there.
+		m.mu.Unlock()
+		if cli != nil {
+			_ = cli.Close()
+		}
+		return
+	}
+	inst.Status = "error"
+	inst.LastError = exitMsg
+	entryEnabled := false
+	if e, ok := m.entries[id]; ok {
+		entryEnabled = e.Enabled
+		inst.Entry = e
+	} else {
+		entryEnabled = inst.Entry.Enabled
+	}
+	auto := m.cfg.Plugins.AutoRestart && entryEnabled
+	m.mu.Unlock()
+
+	if cli != nil {
+		_ = cli.Close()
+	}
+	m.logger.Warn("plugin process exited", "plugin_id", id, "error", exitMsg)
+	if auto {
+		m.scheduleAutoRestart(id, exitMsg)
+	}
+}
+
+func (m *Manager) scheduleAutoRestart(id, reason string) {
+	delay := m.nextRestartDelay(id)
+	if delay < 0 {
+		m.logger.Error("plugin auto-restart suppressed", "plugin_id", id, "reason", reason)
+		return
+	}
+	m.logger.Info("plugin auto-restart scheduled", "plugin_id", id, "delay", delay.String(), "reason", reason)
+	time.AfterFunc(delay, func() {
+		m.mu.RLock()
+		closed := m.closed
+		entry, ok := m.entries[id]
+		m.mu.RUnlock()
+		if closed || !ok || !entry.Enabled {
+			return
+		}
+		// Stop may be a no-op if already dead; Restart = Stop + Start.
+		if err := m.Restart(context.Background(), id); err != nil {
+			m.logger.Error("plugin auto-restart failed", "plugin_id", id, "error", err)
+			return
+		}
+		m.mu.Lock()
+		if inst := m.plugins[id]; inst != nil {
+			inst.lastRestart = time.Now()
+			inst.restartAttempts++
+			inst.failCount = 0
+		}
+		m.mu.Unlock()
+		m.logger.Info("plugin auto-restarted", "plugin_id", id)
+	})
+}
+
+// nextRestartDelay returns backoff delay, or <0 when restarts are suppressed.
+func (m *Manager) nextRestartDelay(id string) time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.closed {
+		return -1
+	}
+	inst := m.plugins[id]
+	attempts := 0
+	var last time.Time
+	if inst != nil {
+		attempts = inst.restartAttempts
+		last = inst.lastRestart
+	}
+	// Cooldown: never restart more often than min backoff after last restart.
+	base := time.Second
+	if attempts <= 0 {
+		// first auto-restart
+	} else if attempts == 1 {
+		base = 2 * time.Second
+	} else if attempts == 2 {
+		base = 5 * time.Second
+	} else {
+		base = 30 * time.Second
+	}
+	if !last.IsZero() {
+		since := time.Since(last)
+		if since < base {
+			return base - since
+		}
+	}
+	// Cap runaway restarts: after many attempts keep 30s spacing (still try).
+	return base
+}
+
+func thresholdOr(v, def int) int {
+	if v <= 0 {
+		return def
+	}
+	return v
 }
 
 // Stop gracefully shuts down a plugin.
 func (m *Manager) Stop(ctx context.Context, id string) error {
 	m.mu.Lock()
 	inst := m.plugins[id]
-	m.mu.Unlock()
 	if inst == nil {
+		m.mu.Unlock()
 		return nil
 	}
-	if inst.cancelHeart != nil {
-		inst.cancelHeart()
+	inst.stopping = true
+	inst.watchGen++ // invalidate in-flight watcher auto-restart
+	heartCancel := inst.cancelHeart
+	inst.cancelHeart = nil
+	cli := inst.Client
+	inst.Client = nil
+	cmd := inst.Cmd
+	m.mu.Unlock()
+
+	if heartCancel != nil {
+		heartCancel()
 	}
 	timeout := m.cfg.Plugins.ShutdownPluginTimeout
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	if inst.Client != nil {
+	if cli != nil {
 		sctx, cancel := context.WithTimeout(ctx, timeout)
-		_ = inst.Client.Shutdown(sctx)
+		_ = cli.Shutdown(sctx)
 		cancel()
-		_ = inst.Client.Close()
+		_ = cli.Close()
 	}
-	if inst.Cmd != nil && inst.Cmd.Process != nil {
+	if cmd != nil && cmd.Process != nil {
 		done := make(chan error, 1)
-		go func() { done <- inst.Cmd.Wait() }()
+		go func() { done <- cmd.Wait() }()
 		select {
 		case <-done:
 		case <-time.After(timeout):
-			_ = inst.Cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 		case <-ctx.Done():
-			_ = inst.Cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 		}
 	}
 	m.mu.Lock()
-	inst.Status = "stopped"
-	inst.Client = nil
+	if cur := m.plugins[id]; cur != nil {
+		cur.Status = "stopped"
+		cur.Client = nil
+		cur.Cmd = nil
+		cur.stopping = false
+		cur.failCount = 0
+	}
 	m.mu.Unlock()
 	return nil
 }
@@ -385,6 +576,22 @@ func (m *Manager) StopAll(ctx context.Context) error {
 		}
 	}
 	return first
+}
+
+// Close releases host-side resources (Windows Job Object). Safe to call multiple times.
+// Prefer StopAll first for graceful plugin shutdown; Close is a last-resort kill-on-job-close.
+func (m *Manager) Close() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.closed = true
+	job := m.job
+	m.job = nil
+	m.mu.Unlock()
+	if job != nil {
+		job.close()
+	}
 }
 
 // Get returns a snapshot of a plugin instance.

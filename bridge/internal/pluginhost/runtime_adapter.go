@@ -31,6 +31,7 @@ func (m *Manager) List() []service.PluginRuntimeInstance {
 			view.Capabilities = append([]string(nil), inst.Handshake.Capabilities...)
 			view.SupportedIngress = append([]string(nil), inst.Handshake.SupportedIngress...)
 			view.AdminBaseURL = inst.Handshake.AdminBaseURL
+			view.AdminToken = inst.Handshake.AdminToken
 			if len(inst.Handshake.UIPages) > 0 {
 				view.UIPages = append([]pluginipc.UIPage(nil), inst.Handshake.UIPages...)
 			}

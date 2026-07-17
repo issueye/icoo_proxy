@@ -21,6 +21,9 @@ type Conn struct {
 
 	streamMu sync.Mutex
 	streams  map[string]chan streamEvent
+	// orphanStreams buffers stream notifications that arrive before the host
+	// registers the stream id (open-result vs AfterWrite race).
+	orphanStreams map[string][]streamEvent
 
 	handlers   map[string]Handler
 	handlersMu sync.RWMutex
@@ -62,6 +65,7 @@ func NewConn(raw net.Conn, opts ConnOptions) *Conn {
 		maxFrameBytes: max,
 		pending:       make(map[string]chan *Message),
 		streams:       make(map[string]chan streamEvent),
+		orphanStreams: make(map[string][]streamEvent),
 		handlers:      make(map[string]Handler),
 		onNotify:      opts.OnNotification,
 		done:          make(chan struct{}),
@@ -318,12 +322,6 @@ func (c *Conn) routeStreamNotify(msg *Message) {
 	if sid.StreamID == "" {
 		return
 	}
-	c.streamMu.Lock()
-	ch, ok := c.streams[sid.StreamID]
-	c.streamMu.Unlock()
-	if !ok {
-		return
-	}
 	kind := "chunk"
 	switch msg.Method {
 	case MethodStreamEnd:
@@ -331,8 +329,23 @@ func (c *Conn) routeStreamNotify(msg *Message) {
 	case MethodStreamError:
 		kind = "error"
 	}
+	ev := streamEvent{kind: kind, params: msg.Params}
+
+	c.streamMu.Lock()
+	ch, ok := c.streams[sid.StreamID]
+	if !ok {
+		// Buffer until registerStream (open-result processing on host).
+		buf := c.orphanStreams[sid.StreamID]
+		if len(buf) < 64 {
+			c.orphanStreams[sid.StreamID] = append(buf, ev)
+		}
+		c.streamMu.Unlock()
+		return
+	}
+	c.streamMu.Unlock()
+
 	select {
-	case ch <- streamEvent{kind: kind, params: msg.Params}:
+	case ch <- ev:
 	case <-c.done:
 	}
 }
@@ -399,10 +412,21 @@ func (c *Conn) handleRequest(msg *Message) {
 }
 
 // registerStream creates a receive channel for stream notifications.
+// Any orphan events buffered before registration are drained into the channel.
 func (c *Conn) registerStream(streamID string) chan streamEvent {
 	ch := make(chan streamEvent, 64)
 	c.streamMu.Lock()
 	c.streams[streamID] = ch
+	if orphans := c.orphanStreams[streamID]; len(orphans) > 0 {
+		for _, ev := range orphans {
+			select {
+			case ch <- ev:
+			default:
+				// Drop if buffer is somehow full; better than blocking demux.
+			}
+		}
+		delete(c.orphanStreams, streamID)
+	}
 	c.streamMu.Unlock()
 	return ch
 }
@@ -414,5 +438,6 @@ func (c *Conn) unregisterStream(streamID string) {
 		delete(c.streams, streamID)
 		close(ch)
 	}
+	delete(c.orphanStreams, streamID)
 	c.streamMu.Unlock()
 }

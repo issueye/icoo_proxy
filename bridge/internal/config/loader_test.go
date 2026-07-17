@@ -14,6 +14,8 @@ max_request_body_bytes = 1048576
 max_frame_bytes = 0
 max_concurrent_streams = 16
 heartbeat_interval_seconds = 3
+auto_restart = false
+auto_restart_fail_threshold = 5
 [plugins.entries.grokbuild]
 enabled = false
 executable = "plugin-grokbuild.exe"
@@ -28,6 +30,12 @@ data_dir = ".data/plugins/grokbuild"
 	}
 	if cfg.Plugins.MaxConcurrentStreams != 16 {
 		t.Fatalf("streams=%d", cfg.Plugins.MaxConcurrentStreams)
+	}
+	if cfg.Plugins.AutoRestart {
+		t.Fatal("auto_restart should be false from fixture")
+	}
+	if cfg.Plugins.AutoRestartFailThreshold != 5 {
+		t.Fatalf("threshold=%d", cfg.Plugins.AutoRestartFailThreshold)
 	}
 	e, ok := cfg.Plugins.Entries["grokbuild"]
 	if !ok {
@@ -86,5 +94,23 @@ chain_log_max_body_bytes = 1234
 				t.Fatalf("chain log max body bytes = %d", cfg.Log.ChainLogMaxBodyBytes)
 			}
 		})
+	}
+}
+
+
+func TestLoadAutoRestartDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("host = \"127.0.0.1\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Plugins.AutoRestart {
+		t.Fatal("default auto_restart should be true")
+	}
+	if cfg.Plugins.AutoRestartFailThreshold != 3 {
+		t.Fatalf("default threshold=%d", cfg.Plugins.AutoRestartFailThreshold)
 	}
 }

@@ -19,6 +19,18 @@ Inspired by community proxy designs such as [GreyGunG/grokbuild-proxy](https://g
 | Billing | Admin 页拉取 `/billing` 与 `/billing?format=credits` |
 | Desktop UI | Loopback admin UI；handshake 声明扩展页 |
 
+## IPC bootstrap (SDK)
+
+This plugin uses the **pluginipc Server SDK**:
+
+- `pluginipc.RunPlugin` — Listen → AfterListen → Accept → PrepareHandshake → Serve
+- Custom flag `--http-proxy` is registered **before** `RunPlugin`
+- Admin loopback URL / `AdminToken` / `UIPages` are injected via `PrepareHandshake`.
+Admin HTTP requires `X-ICOO-Plugin-Admin-Token` (bridge reverse-proxy injects it; browser never sees it).
+- Stream/complete handlers live in `internal/proxyhandler` (`RegisterProxyStreamEx` shape)
+
+See monorepo guide: [`docs/plugin-ipc-sdk.md`](../../docs/plugin-ipc-sdk.md).
+
 ## Build
 
 ```powershell

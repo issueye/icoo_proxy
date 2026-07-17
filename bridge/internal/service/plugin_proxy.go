@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/issueye/icoo_proxy/common/constants"
@@ -56,19 +55,15 @@ func (s *proxyService) handlePluginRoute(
 		return
 	}
 
-	headers := collectDownstreamHeaders(r)
-	headers = pluginipc.FilterHeaders(headers)
-	headers = pluginipc.EnsureAnthropicVersion(downstream.String(), headers)
-
-	req := pluginipc.ProxyRequest{
+	req := pluginipc.NewProxyRequest(pluginipc.ProxyRequestInput{
 		Ingress: downstream.String(),
 		Path:    r.URL.Path,
 		Method:  r.Method,
-		Headers: headers,
+		Headers: pluginipc.HeadersFromHTTP(r.Header),
 		Body:    body,
 		Model:   route.Model,
 		Stream:  wantsStream,
-	}
+	})
 
 	if wantsStream {
 		s.handlePluginStream(w, r, cli, req, requestID, downstream, route, pluginID, start, requestedModel, body)
@@ -77,7 +72,7 @@ func (s *proxyService) handlePluginRoute(
 
 	resp, err := cli.Complete(r.Context(), req)
 	if err != nil {
-		status, msg := mapPluginCallError(err)
+		status, msg := pluginipc.MapCallError(err)
 		s.writeProxyError(w, downstream, status, msg)
 		s.recordPluginTraffic(r, requestID, downstream, route, pluginID, status, start, msg, domain.TokenUsage{}, requestedModel, body)
 		return
@@ -89,12 +84,9 @@ func (s *proxyService) handlePluginRoute(
 		return
 	}
 
-	status := resp.Status
-	if status == 0 {
-		status = http.StatusOK
-	}
+	status := resp.StatusOrOK()
 	usage := usageFromPlugin(resp.Usage)
-	if !isHTTPSuccess(status) {
+	if !resp.Success() {
 		// Prefer plugin error body when present.
 		if len(resp.Body) > 0 {
 			writePluginHTTPResponse(w, status, resp.Headers, resp.Body)
@@ -124,41 +116,28 @@ func (s *proxyService) handlePluginStream(
 ) {
 	stream, err := cli.OpenStream(r.Context(), req)
 	if err != nil {
-		status, msg := mapPluginCallError(err)
+		status, msg := pluginipc.MapCallError(err)
 		s.writeProxyError(w, downstream, status, msg)
 		s.recordPluginTraffic(r, requestID, downstream, route, pluginID, status, start, msg, domain.TokenUsage{}, requestedModel, body)
 		return
 	}
 	defer stream.Close()
 
-	status := stream.Status()
-	if status == 0 {
-		status = http.StatusOK
-	}
-
 	// Non-2xx open: never commit SSE (design Issue 18).
-	if !isHTTPSuccess(status) {
-		// Drain optional error body from synthetic events.
-		var errBody []byte
-		for {
-			ev, err := stream.Recv(r.Context())
-			if err != nil {
-				break
-			}
-			if ev.Kind == "chunk" && ev.Chunk != nil {
-				errBody = append(errBody, ev.Chunk.Data...)
-			}
-			if ev.Kind == "end" || ev.Kind == "error" {
-				break
-			}
-		}
+	if !stream.OK() {
+		headers, errBody, status := stream.ErrorBody(r.Context())
 		if len(errBody) > 0 {
-			writePluginHTTPResponse(w, status, stream.Headers(), errBody)
+			writePluginHTTPResponse(w, status, headers, errBody)
 		} else {
 			s.writeProxyError(w, downstream, status, "plugin stream open failed")
 		}
 		s.recordPluginTraffic(r, requestID, downstream, route, pluginID, status, start, "plugin stream open failed", domain.TokenUsage{}, requestedModel, body)
 		return
+	}
+
+	status := stream.Status()
+	if status == 0 {
+		status = http.StatusOK
 	}
 
 	// Cancel upstream stream when client disconnects.
@@ -205,6 +184,8 @@ func (s *proxyService) handlePluginStream(
 				continue
 			}
 			if _, err := writer.Write(ev.Chunk.Data); err != nil {
+				// Downstream gone — cancel plugin stream so upstream work stops.
+				_ = stream.Cancel(context.WithoutCancel(ctx))
 				errorStatus, message := proxyOperationErrorStatus(ctx, err, http.StatusBadGateway, "write downstream response failed")
 				s.recordPluginTraffic(r, requestID, downstream, route, pluginID, errorStatus, start, message, usage, requestedModel, body)
 				return
@@ -250,17 +231,6 @@ func (s *proxyService) recordPluginTraffic(
 	s.recordTraffic(r, requestID, downstream, patched, statusCode, start, message, usage, requestedModel, requestBody)
 }
 
-func collectDownstreamHeaders(r *http.Request) map[string]string {
-	out := make(map[string]string)
-	for k, vals := range r.Header {
-		if len(vals) == 0 {
-			continue
-		}
-		out[k] = vals[0]
-	}
-	return out
-}
-
 func writePluginHTTPResponse(w http.ResponseWriter, status int, headers map[string]string, body []byte) {
 	if headers != nil {
 		src := http.Header{}
@@ -287,23 +257,6 @@ func usageFromPlugin(u *pluginipc.Usage) domain.TokenUsage {
 		OutputTokens: int(u.OutputTokens),
 		TotalTokens:  int(u.TotalTokens),
 	}.Normalize()
-}
-
-func mapPluginCallError(err error) (int, string) {
-	if err == nil {
-		return http.StatusBadGateway, "plugin error"
-	}
-	if rpc, ok := err.(*pluginipc.RPCError); ok {
-		return pluginipc.HTTPStatus(rpc.Code), rpc.Message
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "too many streams") {
-		return http.StatusServiceUnavailable, msg
-	}
-	if strings.Contains(msg, "frame too large") {
-		return http.StatusRequestEntityTooLarge, msg
-	}
-	return http.StatusBadGateway, msg
 }
 
 // isPluginProvider reports whether the resolved route should use IPC plugins.

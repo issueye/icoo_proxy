@@ -32,11 +32,13 @@ type fileConfig struct {
 }
 
 type filePluginsConfig struct {
-	MaxFrameBytes             int64                      `toml:"max_frame_bytes"`
-	MaxConcurrentStreams      int                        `toml:"max_concurrent_streams"`
-	HeartbeatIntervalSeconds  int                        `toml:"heartbeat_interval_seconds"`
-	ShutdownPluginTimeoutSec  int                        `toml:"shutdown_plugin_timeout_seconds"`
-	Entries                   map[string]filePluginEntry `toml:"entries"`
+	MaxFrameBytes            int64                      `toml:"max_frame_bytes"`
+	MaxConcurrentStreams     int                        `toml:"max_concurrent_streams"`
+	HeartbeatIntervalSeconds int                        `toml:"heartbeat_interval_seconds"`
+	ShutdownPluginTimeoutSec int                        `toml:"shutdown_plugin_timeout_seconds"`
+	AutoRestart              *bool                      `toml:"auto_restart"`
+	AutoRestartFailThreshold int                        `toml:"auto_restart_fail_threshold"`
+	Entries                  map[string]filePluginEntry `toml:"entries"`
 }
 
 type filePluginEntry struct {
@@ -105,11 +107,13 @@ func defaults() Config {
 			UpRequestDir:   filepath.Join(dataDir, "up_request"),
 		},
 		Plugins: PluginsConfig{
-			MaxFrameBytes:         0, // follow MaxRequestBodyBytes
-			MaxConcurrentStreams:  32,
-			HeartbeatInterval:     5 * time.Second,
-			ShutdownPluginTimeout: 5 * time.Second,
-			Entries:               map[string]PluginEntry{},
+			MaxFrameBytes:            0, // follow MaxRequestBodyBytes
+			MaxConcurrentStreams:     32,
+			HeartbeatInterval:        5 * time.Second,
+			ShutdownPluginTimeout:    5 * time.Second,
+			AutoRestart:              true,
+			AutoRestartFailThreshold: 3,
+			Entries:                  map[string]PluginEntry{},
 		},
 	}
 }
@@ -195,6 +199,12 @@ func applyFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.Plugins.ShutdownPluginTimeoutSec > 0 {
 		cfg.Plugins.ShutdownPluginTimeout = time.Duration(fc.Plugins.ShutdownPluginTimeoutSec) * time.Second
+	}
+	if fc.Plugins.AutoRestart != nil {
+		cfg.Plugins.AutoRestart = *fc.Plugins.AutoRestart
+	}
+	if fc.Plugins.AutoRestartFailThreshold > 0 {
+		cfg.Plugins.AutoRestartFailThreshold = fc.Plugins.AutoRestartFailThreshold
 	}
 	if len(fc.Plugins.Entries) > 0 {
 		cfg.Plugins.Entries = make(map[string]PluginEntry, len(fc.Plugins.Entries))

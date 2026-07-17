@@ -63,6 +63,10 @@ type HandshakeResult struct {
 	// AdminBaseURL is an optional loopback HTTP base for plugin-provided UI
 	// (e.g. http://127.0.0.1:19283). Host reverse-proxies under /api/v1/plugins/:id/ui/.
 	AdminBaseURL string `json:"admin_base_url,omitempty"`
+	// AdminToken is an ephemeral secret for the plugin admin HTTP surface.
+	// The host injects it as HeaderPluginAdminToken when reverse-proxying UI.
+	// Must NOT be exposed in public management REST DTOs (PluginView / ui-pages).
+	AdminToken string `json:"admin_token,omitempty"`
 	// UIPages lists extension pages the desktop shell can mount in the sidebar.
 	UIPages []UIPage `json:"ui_pages,omitempty"`
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net"
+	"sync"
 )
 
 // Server is the plugin-side JSON-RPC server.
@@ -192,10 +193,34 @@ type streamOpenWireResult struct {
 // prepare returns a 2xx StreamOpenResult with stream_id, or a non-2xx errResp.
 // run is invoked only after the open result is written; it must not be nil for
 // successful opens if chunks are expected.
+//
+// Host stream.cancel cancels the run context. Plugins must honor ctx.Done()
+// inside run (e.g. abort upstream reads) for cancel to take effect.
 func (s *Server) RegisterProxyStream(
 	prepare func(ctx context.Context, req ProxyRequest) (open *StreamOpenResult, errResp *ProxyResponse, err error),
 	run func(ctx context.Context, req ProxyRequest, w *StreamWriter),
 ) {
+	// streamID → context.CancelFunc for active runs (and pending AfterWrite).
+	var cancels sync.Map
+
+	s.conn.RegisterHandler(MethodStreamCancel, func(ctx context.Context, params json.RawMessage, body []byte) (any, []byte, error) {
+		var p StreamCancelParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, nil, NewRPCError(CodeInvalidParams, err.Error(), nil)
+		}
+		if p.StreamID == "" {
+			return nil, nil, NewRPCError(CodeInvalidParams, "stream_id is required", nil)
+		}
+		if v, ok := cancels.LoadAndDelete(p.StreamID); ok {
+			if cancel, ok := v.(context.CancelFunc); ok && cancel != nil {
+				cancel()
+			}
+			return map[string]string{"status": "ok"}, nil, nil
+		}
+		// Idempotent: unknown / already finished streams are not hard errors.
+		return map[string]string{"status": "ok"}, nil, nil
+	})
+
 	s.conn.RegisterHandler(MethodStreamOpen, func(ctx context.Context, params json.RawMessage, body []byte) (any, []byte, error) {
 		var req ProxyRequest
 		if err := json.Unmarshal(params, &req); err != nil {
@@ -223,9 +248,16 @@ func (s *Server) RegisterProxyStream(
 			return pr, raw, nil
 		}
 
+		runCtx, cancel := context.WithCancel(ctx)
+		cancels.Store(open.StreamID, cancel)
+
 		return &streamOpenWireResult{
 			Open: open,
 			AfterWrite: func() {
+				defer func() {
+					cancel()
+					cancels.Delete(open.StreamID)
+				}()
 				if run == nil {
 					return
 				}
@@ -234,7 +266,7 @@ func (s *Server) RegisterProxyStream(
 					streamID: open.StreamID,
 					maxChunk: DefaultMaxStreamChunkBytes,
 				}
-				run(ctx, req, w)
+				run(runCtx, req, w)
 			},
 		}, nil, nil
 	})

@@ -75,7 +75,9 @@ type PluginRuntimeInstance struct {
 	SupportedIngress []string
 	StartedAt        string
 	AdminBaseURL     string
-	UIPages          []pluginipc.UIPage
+	// AdminToken is host-internal only; never serialize into PluginView JSON.
+	AdminToken string
+	UIPages    []pluginipc.UIPage
 }
 
 // PluginUIPageView is a desktop-facing extension page descriptor.
@@ -118,6 +120,9 @@ type PluginService interface {
 	Models(ctx context.Context, id string) ([]FetchedModel, error)
 	// AdminBaseURL returns the plugin loopback UI base when running.
 	AdminBaseURL(id string) (string, error)
+	// AdminProxyTarget returns loopback base + admin token for UI reverse-proxy inject.
+	// Token must never be returned from public list/ui-pages endpoints.
+	AdminProxyTarget(id string) (baseURL, adminToken string, err error)
 	// Dynamic plug/unplug (desktop).
 	Discover(ctx context.Context) ([]PluginDiscoverCandidate, error)
 	Register(ctx context.Context, in PluginRegisterInput) error
@@ -167,18 +172,23 @@ func (s *pluginService) ListUIPages(ctx context.Context) ([]PluginUIPageView, er
 }
 
 func (s *pluginService) AdminBaseURL(id string) (string, error) {
+	base, _, err := s.AdminProxyTarget(id)
+	return base, err
+}
+
+func (s *pluginService) AdminProxyTarget(id string) (string, string, error) {
 	if s.runtime == nil {
-		return "", errPluginRuntimeUnavailable
+		return "", "", errPluginRuntimeUnavailable
 	}
 	for _, item := range s.runtime.List() {
 		if item.ID == id {
 			if item.AdminBaseURL == "" {
-				return "", fmt.Errorf("plugin %q has no admin UI", id)
+				return "", "", fmt.Errorf("plugin %q has no admin UI", id)
 			}
-			return item.AdminBaseURL, nil
+			return item.AdminBaseURL, item.AdminToken, nil
 		}
 	}
-	return "", fmt.Errorf("plugin %q not found", id)
+	return "", "", fmt.Errorf("plugin %q not found", id)
 }
 
 func toPluginView(item PluginRuntimeInstance) PluginView {
