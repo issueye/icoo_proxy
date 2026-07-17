@@ -2,14 +2,14 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <UButton variant="primary" @click="openCreate">新增授权 Key</UButton>
-        <UButton variant="secondary" :loading="store.reloading" :disabled="store.reloading" @click="reloadProxy">
+        <UButton size="sm" variant="primary" @click="openCreate">新增授权 Key</UButton>
+        <UButton size="sm" variant="secondary" :loading="store.reloading" :disabled="store.reloading" @click="reloadProxy">
           {{ store.reloading ? "重载中..." : "重载代理" }}
         </UButton>
       </div>
     </Teleport>
 
-    <div class="section-grid grid-cols-3">
+    <div class="stat-grid stat-grid--3">
       <StatCard icon="key" label="授权 Key 总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
       <StatCard icon="endpoint" label="使用方式" value="Bearer / x-api-key" />
@@ -21,6 +21,7 @@
       action-width="118px"
       fixed
       fixed-field="freeze"
+      size="sm"
       table-class="auth-key-table"
       pagination
       class="grow"
@@ -45,8 +46,8 @@
           <USelect v-model="queryForm.status" label="状态" hide-label :options="statusOptions"
             class="table-query-form__field table-query-form__field--compact" />
           <div class="table-query-form__actions">
-            <UButton variant="secondary" @click="resetQuery">重置</UButton>
-            <UButton variant="primary" @click="submitQuery">查询</UButton>
+            <UButton size="sm" variant="secondary" @click="resetQuery">重置</UButton>
+            <UButton size="sm" variant="primary" @click="submitQuery">查询</UButton>
           </div>
         </div>
       </template>
@@ -59,7 +60,7 @@
         <UTag code size="xs">{{ row.secret_masked }}</UTag>
       </template>
       <template #cell-description="{ row }">
-        <p class="table-cell-wrap text-sm text-secondary" :title="row.description || '-'">{{ row.description || "-" }}</p>
+        <p class="table-cell-wrap text-xs text-secondary" :title="row.description || '-'">{{ row.description || "-" }}</p>
       </template>
       <template #cell-enabled="{ row }">
         <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
@@ -79,7 +80,7 @@
 
     <UModal v-model:open="modalOpen" :title="store.form.id ? '编辑授权 Key' : '新增授权 Key'" width="560px"
       @close="store.resetForm">
-      <form id="auth-key-form" class="space-y-3" @submit.prevent="submit">
+      <form id="auth-key-form" class="space-y-2" @submit.prevent="submit">
         <UInput v-model="store.form.name" label="名称" placeholder="本地开发 Key" />
         <div class="field-row items-end">
           <UInput v-model="store.form.secret" label="授权 Key" class="flex-1"
@@ -90,9 +91,9 @@
         <USwitch v-model="store.form.enabled" label="启用该 Key" />
       </form>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="closeModal">取消</UButton>
-          <UButton form="auth-key-form" variant="primary" native-type="submit" :loading="store.saving"
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" variant="secondary" @click="closeModal">取消</UButton>
+          <UButton size="sm" form="auth-key-form" variant="primary" native-type="submit" :loading="store.saving"
             :disabled="store.saving">
             {{ store.saving ? "保存中..." : "保存授权 Key" }}
           </UButton>

@@ -387,7 +387,7 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 6px;
+  padding: var(--ued-space-2, 3px);
   border-bottom: 1px solid var(--ued-color-divider);
   background: var(--ued-color-bg-card);
 }
@@ -395,12 +395,12 @@ onBeforeUnmount(() => {
 .ued-select__search-input {
   width: 100%;
   height: var(--ued-size-sm);
-  padding: 0 8px;
+  padding: 0 6px;
   border: 1px solid var(--ued-color-input);
   border-radius: var(--ued-radius-md);
   background: var(--ued-color-bg-card);
   color: var(--ued-color-text);
-  font-size: var(--ued-font-size-md);
+  font-size: var(--ued-font-size-sm);
   outline: none;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }

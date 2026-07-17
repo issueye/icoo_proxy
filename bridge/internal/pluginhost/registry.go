@@ -110,70 +110,68 @@ type DiscoverCandidate struct {
 	ID               string   `json:"id"`
 	Name             string   `json:"name,omitempty"`
 	Version          string   `json:"version,omitempty"`
+	Description      string   `json:"description,omitempty"`
 	Executable       string   `json:"executable"`
-	ManifestPath     string   `json:"manifest_path,omitempty"`
+	ManifestPath     string   `json:"manifest_path,omitempty"` // info.toml or legacy manifest path
 	Capabilities     []string `json:"capabilities,omitempty"`
 	SupportedIngress []string `json:"supported_ingress,omitempty"`
 	Registered       bool     `json:"registered"`
-	Source           string   `json:"source"` // bridge_dir | data_dir | path
+	Source           string   `json:"source"` // plugins_dir | bridge_dir | data_dir | cwd
 }
 
-// DiscoverPlugins scans known locations for plugin binaries / manifests.
+// DiscoverPlugins scans package plugins/ directories (preferred) then legacy locations.
+// Preferred layout:
+//
+//	plugins/<plugin_id>/info.toml
+//	plugins/<plugin_id>/<executable>
 func DiscoverPlugins(dataDir string, registered map[string]config.PluginEntry) []DiscoverCandidate {
+	EnsurePluginsPackageDirs()
 	seen := map[string]DiscoverCandidate{}
 
-	// 1) Next to bridge executable: plugin-*.exe and *.manifest.json
-	if self, err := os.Executable(); err == nil {
-		dir := filepath.Dir(self)
-		scanPluginDir(dir, "bridge_dir", seen)
+	// 1) Primary: package plugins/<id>/info.toml next to bridge and under cwd.
+	for _, root := range PluginsPackageRoots() {
+		scanPluginsTree(root, "plugins_dir", seen)
 	}
-	// 2) CWD
+
+	// 2) Legacy: flat binaries / plugin.manifest.json next to bridge and in cwd.
+	if self, err := os.Executable(); err == nil {
+		scanPluginDir(filepath.Dir(self), "bridge_dir", seen)
+	}
 	if cwd, err := os.Getwd(); err == nil {
 		scanPluginDir(cwd, "cwd", seen)
 	}
-	// 3) data_dir/plugins/<id>/
+
+	// 3) Runtime data_dir/plugins/<id>/ — may hold copies or legacy installs.
+	// Skip registry.json and non-plugin dirs without info/manifest.
 	pluginsRoot := filepath.Join(dataDir, "plugins")
 	if entries, err := os.ReadDir(pluginsRoot); err == nil {
 		for _, ent := range entries {
 			if !ent.IsDir() {
 				continue
 			}
+			// registry / credential dirs without info.toml are not candidates.
 			sub := filepath.Join(pluginsRoot, ent.Name())
+			if infoPath := filepath.Join(sub, InfoFileName); fileExists(infoPath) {
+				if c, ok := candidateFromInfoDir(sub, "data_dir"); ok {
+					mergeCandidate(seen, c)
+				}
+				continue
+			}
 			scanPluginDir(sub, "data_dir", seen)
-			// Also try plugin.manifest.json in subdir with exe nearby.
 			if man, err := pluginipc.LoadManifest(filepath.Join(sub, "plugin.manifest.json")); err == nil {
-				exe := man.Executable
-				if exe == "" {
-					exe = "plugin-" + man.PluginID
-					if isWindows() {
-						exe += ".exe"
-					}
-				}
-				if !filepath.IsAbs(exe) {
-					cand := filepath.Join(sub, exe)
-					if st, err := os.Stat(cand); err == nil && !st.IsDir() {
-						exe = cand
-					} else if self, err := os.Executable(); err == nil {
-						// fall back to bridge dir
-						alt := filepath.Join(filepath.Dir(self), filepath.Base(exe))
-						if st, err := os.Stat(alt); err == nil && !st.IsDir() {
-							exe = alt
-						}
-					}
-				}
+				exe := ResolvePluginExecutable(sub, man.Executable, man.PluginID)
 				c := DiscoverCandidate{
 					ID:               man.PluginID,
 					Name:             man.Name,
 					Version:          man.Version,
+					Description:      man.Disclaimer,
 					Executable:       exe,
 					ManifestPath:     filepath.Join(sub, "plugin.manifest.json"),
 					Capabilities:     append([]string(nil), man.Capabilities...),
 					SupportedIngress: append([]string(nil), man.SupportedIngress...),
 					Source:           "data_dir",
 				}
-				if prev, ok := seen[c.ID]; !ok || prev.ManifestPath == "" {
-					seen[c.ID] = c
-				}
+				mergeCandidate(seen, c)
 			}
 		}
 	}
@@ -181,7 +179,6 @@ func DiscoverPlugins(dataDir string, registered map[string]config.PluginEntry) [
 	out := make([]DiscoverCandidate, 0, len(seen))
 	for id, c := range seen {
 		_, c.Registered = registered[id]
-		// Prefer absolute executable path when resolvable.
 		if !filepath.IsAbs(c.Executable) {
 			if abs, err := filepath.Abs(c.Executable); err == nil {
 				if st, err := os.Stat(abs); err == nil && !st.IsDir() {
@@ -194,12 +191,86 @@ func DiscoverPlugins(dataDir string, registered map[string]config.PluginEntry) [
 	return out
 }
 
+// scanPluginsTree walks plugins/<id>/ directories for info.toml.
+func scanPluginsTree(root, source string, seen map[string]DiscoverCandidate) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	for _, ent := range entries {
+		if !ent.IsDir() {
+			continue
+		}
+		// Skip hidden / system-ish names.
+		name := ent.Name()
+		if name == "" || strings.HasPrefix(name, ".") {
+			continue
+		}
+		sub := filepath.Join(root, name)
+		if c, ok := candidateFromInfoDir(sub, source); ok {
+			mergeCandidate(seen, c)
+		}
+	}
+}
+
+func candidateFromInfoDir(dir, source string) (DiscoverCandidate, bool) {
+	infoPath := filepath.Join(dir, InfoFileName)
+	info, err := LoadPluginInfo(infoPath)
+	if err != nil {
+		return DiscoverCandidate{}, false
+	}
+	// Prefer directory name as id when info id missing was already filled;
+	// if info.id disagrees with folder name, info.toml wins.
+	exe := ResolvePluginExecutable(dir, info.Executable, info.ID)
+	return DiscoverCandidate{
+		ID:               info.ID,
+		Name:             info.Name,
+		Version:          info.Version,
+		Description:      info.Description,
+		Executable:       exe,
+		ManifestPath:     infoPath,
+		Capabilities:     append([]string(nil), info.Capabilities...),
+		SupportedIngress: append([]string(nil), info.SupportedIngress...),
+		Source:           source,
+	}, true
+}
+
+func mergeCandidate(seen map[string]DiscoverCandidate, c DiscoverCandidate) {
+	if c.ID == "" {
+		return
+	}
+	prev, ok := seen[c.ID]
+	if !ok {
+		seen[c.ID] = c
+		return
+	}
+	// Prefer info.toml / plugins_dir over bare binary or legacy sources.
+	preferNew := false
+	if strings.HasSuffix(strings.ToLower(c.ManifestPath), InfoFileName) &&
+		!strings.HasSuffix(strings.ToLower(prev.ManifestPath), InfoFileName) {
+		preferNew = true
+	}
+	if c.Source == "plugins_dir" && prev.Source != "plugins_dir" {
+		preferNew = true
+	}
+	if c.Description != "" && prev.Description == "" {
+		preferNew = true
+	}
+	if preferNew {
+		seen[c.ID] = c
+	}
+}
+
 func scanPluginDir(dir, source string, seen map[string]DiscoverCandidate) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
-	// manifests first
+	// Prefer info.toml in this dir (single-plugin layout without nesting).
+	if c, ok := candidateFromInfoDir(dir, source); ok {
+		mergeCandidate(seen, c)
+	}
+	// Legacy manifests.
 	for _, ent := range entries {
 		name := ent.Name()
 		if ent.IsDir() {
@@ -211,29 +282,18 @@ func scanPluginDir(dir, source string, seen map[string]DiscoverCandidate) {
 			if err != nil {
 				continue
 			}
-			exe := man.Executable
-			if exe == "" {
-				exe = "plugin-" + man.PluginID
-				if isWindows() {
-					exe += ".exe"
-				}
-			}
-			if !filepath.IsAbs(exe) {
-				cand := filepath.Join(dir, filepath.Base(exe))
-				if st, err := os.Stat(cand); err == nil && !st.IsDir() {
-					exe = cand
-				}
-			}
-			seen[man.PluginID] = DiscoverCandidate{
+			exe := ResolvePluginExecutable(dir, man.Executable, man.PluginID)
+			mergeCandidate(seen, DiscoverCandidate{
 				ID:               man.PluginID,
 				Name:             man.Name,
 				Version:          man.Version,
+				Description:      man.Disclaimer,
 				Executable:       exe,
 				ManifestPath:     path,
 				Capabilities:     append([]string(nil), man.Capabilities...),
 				SupportedIngress: append([]string(nil), man.SupportedIngress...),
 				Source:           source,
-			}
+			})
 		}
 	}
 	// bare binaries plugin-*.exe
@@ -249,24 +309,30 @@ func scanPluginDir(dir, source string, seen map[string]DiscoverCandidate) {
 		if isWindows() && !strings.HasSuffix(lower, ".exe") {
 			continue
 		}
-		// strip plugin- prefix and .exe
 		id := strings.TrimSuffix(strings.TrimPrefix(name, "plugin-"), ".exe")
 		id = strings.TrimSuffix(id, ".EXE")
 		if id == "" {
 			continue
 		}
-		if _, ok := seen[id]; ok {
-			// keep manifest-backed entry
+		if prev, ok := seen[id]; ok && prev.ManifestPath != "" {
 			continue
 		}
 		full := filepath.Join(dir, name)
-		seen[id] = DiscoverCandidate{
+		if abs, err := filepath.Abs(full); err == nil {
+			full = abs
+		}
+		mergeCandidate(seen, DiscoverCandidate{
 			ID:         id,
 			Name:       id,
 			Executable: full,
 			Source:     source,
-		}
+		})
 	}
+}
+
+func fileExists(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && !st.IsDir()
 }
 
 func isWindows() bool {

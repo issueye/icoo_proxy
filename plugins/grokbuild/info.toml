@@ -1,0 +1,12 @@
+# Packaged plugin metadata. Deploy as:
+#   plugins/grokbuild/info.toml
+#   plugins/grokbuild/plugin-grokbuild.exe
+id = "grokbuild"
+name = "GrokBuild / SuperGrok Proxy"
+version = "0.3.2"
+description = "非官方 Grok Build / SuperGrok 进程插件：Device Login、多账号凭据池、协议代理与额度探测。"
+executable = "plugin-grokbuild.exe"
+author = "icoo"
+disclaimer = "Unofficial community plugin. Use only accounts you legally control. May violate third-party ToS."
+capabilities = ["proxy.complete", "proxy.stream", "models.list", "health", "ui", "oauth.device", "billing"]
+supported_ingress = ["anthropic", "openai-responses", "openai-chat"]

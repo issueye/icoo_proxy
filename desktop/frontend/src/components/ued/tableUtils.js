@@ -105,7 +105,8 @@ export function estimateColumnWidth(column) {
   if (width) return width;
   if (column.isAction) return 180;
   if (column.isSelection) return 44;
-  if (column.ellipsis) return 220;
+  // Default columns use ellipsis; give a modest estimated width.
+  if (column.ellipsis !== false) return 200;
   return 160;
 }
 

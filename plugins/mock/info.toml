@@ -1,0 +1,8 @@
+id = "mock"
+name = "Mock Plugin"
+version = "0.1.0"
+description = "进程插件集成测试用 Mock：实现 proxy.complete / models.list / health。"
+executable = "mockplugin.exe"
+author = "icoo"
+capabilities = ["proxy.complete", "proxy.stream", "models.list", "health"]
+supported_ingress = ["anthropic", "openai-responses", "openai-chat"]

@@ -13,8 +13,8 @@ import (
 func TestDynamicRegisterPersistAndList(t *testing.T) {
 	tmp := t.TempDir()
 	dataDir := filepath.Join(tmp, "data")
-	// Fake plugin binary under data_dir/plugins/<id>/ so Discover can find it.
-	pluginDir := filepath.Join(dataDir, "plugins", "demo")
+	// Preferred layout: package plugins/<id>/info.toml + executable (under cwd).
+	pluginDir := filepath.Join(tmp, "plugins", "demo")
 	if err := os.MkdirAll(pluginDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -26,6 +26,15 @@ func TestDynamicRegisterPersistAndList(t *testing.T) {
 	if err := os.WriteFile(exe, []byte("not-a-real-binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	info := "id = \"demo\"\nname = \"Demo Plugin\"\nversion = \"1.0.0\"\ndescription = \"demo\"\nexecutable = \"" + exeName + "\"\n"
+	if err := os.WriteFile(filepath.Join(pluginDir, InfoFileName), []byte(info), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldWD, _ := os.Getwd()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWD) })
 
 	cfg := config.Config{
 		DataDir: dataDir,

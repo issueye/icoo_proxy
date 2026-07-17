@@ -52,7 +52,7 @@
               :to="item.to"
               class="app-nav-item"
               :class="{ 'app-nav-item--active': route.path === item.to }"
-              :title="sidebarCollapsed ? item.label : item.description"
+              :title="item.label"
             >
               <span class="app-nav-icon" aria-hidden="true">
                 <svg v-if="item.icon === 'overview'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
@@ -68,10 +68,7 @@
                 <svg v-else-if="item.icon === 'ued'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" /><path d="M4 9h16" /><path d="M9 20V9" /></svg>
                 <svg v-else-if="item.icon === 'plugin' || item.icon === 'key'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4" /><path d="M12 18v4" /><path d="m4.93 4.93 2.83 2.83" /><path d="m16.24 16.24 2.83 2.83" /><path d="M2 12h4" /><path d="M18 12h4" /><path d="m4.93 19.07 2.83-2.83" /><path d="m16.24 7.76 2.83-2.83" /></svg>
               </span>
-              <span class="app-nav-copy">
-                <span class="app-nav-text">{{ item.label }}</span>
-                <span class="app-nav-desc">{{ item.description }}</span>
-              </span>
+              <span class="app-nav-text">{{ item.label }}</span>
             </RouterLink>
           </section>
         </nav>
@@ -178,28 +175,28 @@ const baseNavGroups = [
   {
     name: "运行",
     items: [
-      { to: "/", label: "网关概览",  icon: "overview", description: "运行状态与概览" },
-      { to: "/chat", label: "聊天", icon: "chat", description: "快速对话" },
-      { to: "/traffic", label: "流量监控", icon: "traffic", description: "请求与用量" },
+      { to: "/", label: "网关概览", icon: "overview" },
+      { to: "/chat", label: "聊天", icon: "chat" },
+      { to: "/traffic", label: "流量监控", icon: "traffic" },
     ],
   },
   {
     name: "配置",
     items: [
-      { to: "/suppliers", label: "供应商", icon: "supplier", description: "上游供应配置" },
-      { to: "/models", label: "模型管理", icon: "models", description: "模型目录" },
-      { to: "/routing-rules", label: "路由规则", icon: "rules", description: "匹配与转发" },
-      { to: "/model-aliases", label: "模型路由", icon: "model", description: "别名映射" },
-      { to: "/endpoints", label: "端点", icon: "endpoint", description: "入口路径" },
-      { to: "/auth-keys", label: "授权 Key", icon: "key", description: "本地 API Key" },
+      { to: "/suppliers", label: "供应商", icon: "supplier" },
+      { to: "/models", label: "模型管理", icon: "models" },
+      { to: "/routing-rules", label: "路由规则", icon: "rules" },
+      { to: "/model-aliases", label: "模型路由", icon: "model" },
+      { to: "/endpoints", label: "端点", icon: "endpoint" },
+      { to: "/auth-keys", label: "授权 Key", icon: "key" },
     ],
   },
   {
     name: "系统",
     items: [
-      { to: "/plugins", label: "插件", icon: "plugin", description: "进程插件与扩展页" },
-      { to: "/settings", label: "项目设置", icon: "settings", description: "运行参数" },
-      { to: "/ued", label: "组件规范", icon: "ued", description: "UI 组件库" },
+      { to: "/plugins", label: "插件", icon: "plugin" },
+      { to: "/settings", label: "项目设置", icon: "settings" },
+      { to: "/ued", label: "组件规范", icon: "ued" },
     ],
   },
 ];
@@ -221,7 +218,6 @@ const navGroups = computed(() => {
       to,
       label: page.title || page.plugin_id,
       icon: page.icon || "plugin",
-      description: page.description || "插件扩展页",
       embedPath: page.embed_url,
       pluginId: page.plugin_id,
       pageId,

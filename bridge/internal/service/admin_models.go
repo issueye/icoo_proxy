@@ -135,9 +135,12 @@ type APIKeySecretView struct {
 type UIPrefsInput struct {
 	Theme      string `json:"theme"`
 	ButtonSize string `json:"buttonSize"`
+	// Density is the layout density mode: compact | comfortable.
+	Density string `json:"density"`
 }
 
 type UIPrefsView struct {
 	Theme      string `json:"theme"`
 	ButtonSize string `json:"buttonSize"`
+	Density    string `json:"density"`
 }

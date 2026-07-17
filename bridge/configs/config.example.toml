@@ -22,6 +22,10 @@ down_request_dir = ".data/down_request"
 up_request_dir = ".data/up_request"
 
 # Process plugins (default: none). Set enabled=true to spawn.
+# Preferred package layout (next to bridge.exe):
+#   plugins/<id>/info.toml
+#   plugins/<id>/<executable>
+# Runtime state (registry, credentials) still lives under data_dir/plugins/.
 # See docs/plugin-ipc-contract.md
 [plugins]
 # max_frame_bytes = 0 means follow max_request_body_bytes
@@ -31,9 +35,9 @@ heartbeat_interval_seconds = 5
 shutdown_plugin_timeout_seconds = 5
 
 # Example: GrokBuild / SuperGrok process plugin (default off)
-# Build: go build -o plugin-grokbuild.exe ./plugins/grokbuild/cmd/plugin-grokbuild
+# Prefer desktop 「发现插件」 from plugins/grokbuild/info.toml, or:
 # [plugins.entries.grokbuild]
 # enabled = true
-# executable = "plugin-grokbuild.exe"   # place next to bridge.exe or absolute path
+# executable = "plugins/grokbuild/plugin-grokbuild.exe"
 # data_dir = ".data/plugins/grokbuild"
-# admin_enabled = false                 # loopback UI is owned by the plugin process
+# admin_enabled = false

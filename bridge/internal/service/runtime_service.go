@@ -18,7 +18,7 @@ func NewRuntimeService(cfg config.Config, endpoints EndpointService) RuntimeServ
 }
 
 func (s *runtimeService) State(ctx context.Context) State {
-	paths := []string{"/healthz", "/readyz", "/api/v1/runtime/state"}
+	paths := []string{"/healthz", "/readyz", "/v1/models", "/api/v1/runtime/state"}
 	if s.endpoints != nil {
 		if items, err := s.endpoints.Enabled(ctx); err == nil {
 			for _, item := range items {

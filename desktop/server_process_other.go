@@ -2,6 +2,15 @@
 
 package main
 
-import "os/exec"
+import (
+	"os/exec"
+	"syscall"
+)
 
-func configureServerCommand(cmd *exec.Cmd) {}
+// configureServerCommand puts bridge in its own process group so StopServer can
+// kill the whole tree (bridge + plugins) via kill(-pid).
+func configureServerCommand(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
+}

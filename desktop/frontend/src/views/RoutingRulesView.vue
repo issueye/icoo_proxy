@@ -1,8 +1,9 @@
-﻿<template>
+<template>
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
         <UButton
+          size="sm"
           variant="secondary"
           :loading="store.loading"
           :disabled="store.loading"
@@ -13,21 +14,20 @@
       </div>
     </Teleport>
 
-    <!-- 统计卡片 -->
-    <div class="section-grid grid-cols-1 md:grid-cols-3">
+    <div class="stat-grid stat-grid--3">
       <StatCard icon="layers" label="协议总数" :value="String(store.routeDefinitions.length)" tone="info" />
       <StatCard icon="check" label="已启用策略" :value="String(store.enabledPolicyCount)" tone="success" />
       <StatCard icon="server" label="已配置上游" :value="String(store.configuredPolicyCount)" tone="info" />
     </div>
 
-    <!-- 协议映射默认路由规则列表 -->
-    <div class="section-grid">
-      <UTable
+    <UTable
         :columns="routeManagementColumns"
         :rows="store.routeManagementRows"
         row-key="key"
         action-width="74px"
         size="sm"
+        fixed
+        class="grow"
         table-class="route-management-table"
       >
         <template #empty>
@@ -70,18 +70,16 @@
             />
           </div>
         </template>
-      </UTable>
-    </div>
+    </UTable>
 
-    <!-- 路由策略编辑弹窗 -->
     <UModal
       v-model:open="policyModalOpen"
       :title="store.policyForm.id ? '编辑路由策略' : '新建路由策略'"
       width="560px"
       @close="store.resetPolicyForm"
     >
-      <form id="policy-form" class="space-y-3" @submit.prevent="submitPolicy">
-        <div class="grid gap-3 md:grid-cols-2">
+      <form id="policy-form" class="space-y-2" @submit.prevent="submitPolicy">
+        <div class="grid gap-2 md:grid-cols-2">
           <USelect
             v-model="store.policyForm.downstream_protocol"
             label="下游协议"
@@ -112,9 +110,10 @@
         />
       </form>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="closePolicyModal">取消</UButton>
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" variant="secondary" @click="closePolicyModal">取消</UButton>
           <UButton
+            size="sm"
             form="policy-form"
             variant="primary"
             native-type="submit"

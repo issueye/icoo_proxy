@@ -50,6 +50,8 @@ func NewManager(cfg config.Config, logger *slog.Logger) *Manager {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	// Ensure package plugins/ roots exist so tools can drop one-dir-per-plugin packages.
+	EnsurePluginsPackageDirs()
 	// Catalog: TOML seed → overlay registry entries → drop uninstall tombstones.
 	// Desktop Register/Unregister/SetEnabled rewrite registry.json so choices stick.
 	entries := make(map[string]config.PluginEntry)

@@ -9,8 +9,8 @@
 
 - **Flat & Neutral**：背景使用纯中性灰，无蓝色 tint
 - **1px Hairlines**：用发丝线边框定义层级，而非多层阴影
-- **Compact Controls**：控件高度 22-34px，适合密集操作
-- **Small Type Scale**：基础字号 13px，最小 11px
+- **Compact Controls**：控件高度 20–32px（默认 SM），适合密集操作
+- **Small Type Scale**：紧缩模式基础字号 12px，最小 10px
 - **Primary Color Unity**：焦点环、激活态、链接统一使用 `#2563eb`
 
 ---
@@ -60,14 +60,16 @@ font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
 font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 ```
 
-### 字号层级
+### 字号层级（紧缩 compact 默认）
 | Token | 尺寸 | 用途 |
 |-------|------|------|
-| `--ued-font-size-xs` | 11px | 辅助信息、状态栏 |
-| `--ued-font-size-sm` | 12px | 次要文本、描述 |
-| `--ued-font-size-base` | 13px | 正文默认 |
-| `--ued-font-size-lg` | 16px | 强调文本 |
-| `--ued-font-size-title` | 18px | 页面标题 |
+| `--ued-font-size-xs` | 10px | 辅助信息、状态栏 |
+| `--ued-font-size-sm` | 11px | 次要文本、描述 |
+| `--ued-font-size-base` | 12px | 正文默认 |
+| `--ued-font-size-lg` | 14px | 强调文本 |
+| `--ued-font-size-title` | 16px | 页面标题 |
+
+> 宽松（comfortable）模式在此基础上 +1px 左右，由 `uiPrefs` 运行时覆盖。
 
 ### 字重
 - `font-medium` (500)：按钮、标签
@@ -83,7 +85,7 @@ font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 ┌─────────────────────────────────────────────┐
 │  Title Bar (28px, dark)                      │
 ├──────────┬──────────────────────────────────┤
-│          │  Top Bar (38px, breadcrumb)       │
+│          │  Top Bar (36px, breadcrumb)       │
 │  Sidebar │──────────────────────────────────┤
 │  168px   │                                   │
 │  (可折叠  │  Main Content (scrollable)        │
@@ -97,9 +99,18 @@ font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 ### 内容区内边距
 ```css
 .app-content {
-  padding: 12px;
+  padding: var(--ued-space-page); /* compact: 8px · comfortable: 12px */
 }
 ```
+
+### 间距刻度（紧缩 baseline）
+| Token | 值 | 语义别名 |
+|-------|-----|---------|
+| space-1…3 | 2 / 3 / 4px | inline / chip |
+| space-4…5 | 6 / 8px | control / panel |
+| space-6…8 | 10 / 10 / 12px | section / card |
+| page / section / panel | 8px | 页面与块级 |
+| table row / header | 30 / 28px | 表格密度 |
 
 ---
 
@@ -323,22 +334,114 @@ font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 
 ## 8. 间距与尺寸
 
-### 间距
-- 页面内容区内边距：`12px`
-- 卡片/面板内边距：`12px` / `16px`
-- 元素间距：`8px` / `12px` / `16px`
+### 8.0 密度模式 Density
 
-### 控件高度
+界面提供两种全局密度，由 `uiPrefs.density` 写入 `document.documentElement[data-density]`，并覆盖间距 / 表格行高 / 字号基线：
+
+| 模式 | 值 | 特征 | 默认控件尺寸建议 |
+|------|-----|------|------------------|
+| **紧缩** | `compact` | 页面 8、表行 30、stack 6；全局 UED 收紧基线 | `buttonSize=sm` |
+| **宽松** | `comfortable` | 页面 12、表行 36、stack 8；相对更易读 | `buttonSize=md` |
+
+应用顺序：`theme` → `density` → `buttonSize`（控件高度在密度基线之上微调）。
+
+```js
+// stores/uiPrefs.js
+uiPrefs.setDensity("comfortable"); // or "compact"
+```
+
+设置页「外观 → 界面密度」可切换；持久化字段 `density`（`/api/v1/ui-prefs`）。
+
+### 8.1 间距刻度（Spacing Scale）
+
+以 **4px 为基准** 的紧凑刻度，统一使用 CSS 变量，禁止在业务样式中硬编码随机间距。
+
+| Token | 值 | 典型用途 |
+|-------|-----|----------|
+| `--ued-space-0` | 0 | 重置 |
+| `--ued-space-1` | 2px | 微偏移 |
+| `--ued-space-2` | 3px | 紧凑 inline |
+| `--ued-space-3` | 4px | 图标+文字、chip 行 |
+| `--ued-space-4` | 6px | **默认元素间距**、按钮组 |
+| `--ued-space-5` | 8px | **页面/面板默认** |
+| `--ued-space-6` | 10px | 区块 |
+| `--ued-space-7` | 10px | 表单元格（兼容档） |
+| `--ued-space-8` | 12px | 卡片内容 |
+| `--ued-space-10` | 14px | 空状态 |
+| `--ued-space-12` | 16px | 大区块 |
+| `--ued-space-16` | 24px | 页面级（少用） |
+
+### 8.2 语义别名（Semantic）
+
+| Token | 映射 | 场景 |
+|-------|------|------|
+| `--ued-space-page` | 8px | `.app-content` 内边距（紧缩） |
+| `--ued-space-section` | 8px | 页面块间距 |
+| `--ued-space-panel` | 8px | 面板 body |
+| `--ued-space-panel-sm` | 6px | 面板 header |
+| `--ued-space-stack` | 6px | 表单字段纵排 |
+| `--ued-space-inline` | 4px | 图标+文案、标签横排 |
+| `--ued-space-control` | 6px | 按钮组间距 |
+| `--ued-space-table-x` | 6px | 表格外壳左右外边距 |
+| `--ued-space-table-cell-x` | 8px | 表头/单元格水平内边距 |
+
+### 8.3 工具类
+
+**内边距**
+
+```html
+<div class="ued-p-6">四边 10px</div>
+<div class="ued-px-4 ued-py-2">左右 6 / 上下 3</div>
+<div class="ued-pt-4 ued-pb-6">上 6 / 下 10</div>
+```
+
+支持：`ued-p-{0,1,2,3,4,5,6,7,8,10,12,16}`，以及 `px` / `py` / `pt` / `pb` / `pl` / `pr` 同档位子集。
+
+**外边距**
+
+```html
+<div class="ued-m-4">四边 6px</div>
+<div class="ued-mx-auto">水平居中</div>
+<div class="ued-mt-6 ued-mb-4">上 10 / 下 6</div>
+```
+
+支持：`ued-m-*`、`ued-mx-*`、`ued-my-*`、`ued-mt-*`、`ued-mb-*`、`ued-ml-*`、`ued-mr-*`（含 `auto`）。
+
+**间隙 gap**
+
+```html
+<div class="ued-inline ued-gap-3">横排</div>
+<div class="ued-stack ued-gap-4">纵排</div>
+```
+
+- `ued-gap-{0,1,2,3,4,5,6,8,10,12}`
+- `ued-stack` / `ued-stack--sm|md|lg`：纵向 flex + 默认 stack 间距
+- `ued-inline` / `ued-inline--sm|md|lg`：横向 flex-wrap + 默认 inline 间距
+
+### 8.4 布局落点（现网约定 · 紧缩）
+
+| 区域 | 推荐 |
+|------|------|
+| 主内容区 `.app-content` | `padding: var(--ued-space-page)` → 8px |
+| 页面块间距 `.page-section` | `gap: var(--ued-space-section)` → 8px |
+| 面板 header / body | 6 / 8px（`--ued-space-panel-sm` / `--ued-space-panel`） |
+| 表单字段纵向 | `gap: var(--ued-space-stack)` → 6px |
+| 顶栏按钮组 | `gap: var(--ued-space-control)` → 6px |
+| 表格行 / 表头 | `--ued-table-row-height` 30px / header 28px |
+| 表格外壳左右 | `margin-inline: var(--ued-space-table-x)` → 8px |
+| 表格单元格水平 | `padding-inline: var(--ued-space-table-cell-x)` → 14px |
+
+### 8.5 控件高度（紧缩基线 / buttonSize=sm）
 | 尺寸 | 高度 | 用途 |
 |------|------|------|
-| xs | 22px | 紧凑标签 |
-| sm | 26px | 表格内操作 |
-| md | 28px | 默认按钮 |
-| lg | 34px | 强调按钮 |
+| xs | 20px | 紧凑标签 |
+| sm | 24px | 表格内操作 / 默认预设 |
+| md | 26px | 常规按钮 |
+| lg | 30px | 强调按钮 |
 
-### 圆角
-- 控件：`3px` / `4px`
-- 卡片/面板：`6px`
+### 8.6 圆角
+- 控件：`3px` / `4px`（`--ued-radius-sm` / `md`）
+- 卡片/面板：`6px`（`--ued-radius-card`）
 - 标签：`4px`
 - 胶囊：`9999px`
 
@@ -380,6 +483,7 @@ font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 - 前缀：`--ued-`
 - 颜色：`--ued-color-*`
 - 尺寸：`--ued-size-*`
+- 间距：`--ued-space-*`（刻度）/ `--ued-space-page` 等（语义）
 - 字体：`--ued-font-size-*`
 - 圆角：`--ued-radius-*`
 - 阴影：`--ued-shadow-*`
@@ -408,7 +512,8 @@ font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 2. **避免 scoped 样式**：视图层应避免 `<style scoped>`，全局样式统一放在 `main.css`
 3. **使用 UED 组件**：按钮、输入、表格等必须使用 `ued/` 组件库
 4. **遵循设计 Token**：颜色、间距、字号使用 CSS 变量，不硬编码
-5. **保持紧凑风格**：遵循 28px 按钮、13px 正文、6px 圆角的紧凑规范
+5. **间距只用刻度**：内边距/外边距/gap 使用 `--ued-space-*` 或 `ued-p-*` / `ued-m-*` / `ued-gap-*`，禁止随意 `13px`、`15px`
+6. **保持紧凑风格**：默认 `buttonSize=sm`（约 24–26px 控件）、12px 正文、6px 圆角
 
 ---
 

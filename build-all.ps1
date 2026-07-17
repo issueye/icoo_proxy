@@ -124,13 +124,47 @@ foreach ($StaleFile in $StaleFiles) {
 
 $PackageBridge = Join-Path $PackageDir "bridge.exe"
 $PackageDesktop = Join-Path $PackageDir "icoo_desktop.exe"
+$PackagePluginsDir = Join-Path $PackageDir "plugins"
 try {
   Copy-Item -LiteralPath $BridgeOutput -Destination $PackageBridge -Force
   Copy-Item -LiteralPath $DesktopOutput -Destination $PackageDesktop -Force
-  foreach ($plugin in $PluginOutputs) {
-    $name = Split-Path -Leaf $plugin
-    Copy-Item -LiteralPath $plugin -Destination (Join-Path $PackageDir $name) -Force
+
+  # Package plugins as one directory per plugin with info.toml:
+  #   plugins/<id>/info.toml
+  #   plugins/<id>/<executable>
+  if (-not (Test-Path $PackagePluginsDir)) {
+    New-Item -ItemType Directory -Path $PackagePluginsDir | Out-Null
   }
+
+  function Install-PluginPackage {
+    param(
+      [Parameter(Mandatory = $true)][string]$PluginId,
+      [Parameter(Mandatory = $true)][string]$SourceDir,
+      [Parameter(Mandatory = $true)][string]$BinaryPath
+    )
+    if (-not (Test-Path -LiteralPath $BinaryPath)) {
+      return
+    }
+    $destDir = Join-Path $PackagePluginsDir $PluginId
+    if (-not (Test-Path $destDir)) {
+      New-Item -ItemType Directory -Path $destDir | Out-Null
+    }
+    $infoSrc = Join-Path $SourceDir "info.toml"
+    if (Test-Path -LiteralPath $infoSrc) {
+      Copy-Item -LiteralPath $infoSrc -Destination (Join-Path $destDir "info.toml") -Force
+    }
+    Copy-Item -LiteralPath $BinaryPath -Destination (Join-Path $destDir (Split-Path -Leaf $BinaryPath)) -Force
+    # Also keep next to bridge for older configs that use relative executable names.
+    Copy-Item -LiteralPath $BinaryPath -Destination (Join-Path $PackageDir (Split-Path -Leaf $BinaryPath)) -Force
+  }
+
+  if (Test-Path (Join-Path $GrokPluginDir "build\plugin-grokbuild.exe")) {
+    Install-PluginPackage -PluginId "grokbuild" -SourceDir $GrokPluginDir -BinaryPath (Join-Path $GrokPluginDir "build\plugin-grokbuild.exe")
+  }
+  if (Test-Path (Join-Path $MockPluginDir "build\mockplugin.exe")) {
+    Install-PluginPackage -PluginId "mock" -SourceDir $MockPluginDir -BinaryPath (Join-Path $MockPluginDir "build\mockplugin.exe")
+  }
+
   $ExampleCfg = Join-Path $PackageDir "config.example.grokbuild.toml"
   $SrcCandidates = @(
     (Join-Path $RootDir "plugins\grokbuild\config.example.toml"),

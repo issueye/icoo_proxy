@@ -1,13 +1,13 @@
 <template>
   <UModal :open="open" :title="title" width="420px" @update:open="handleOpen">
-    <div class="space-y-2">
-      <p class="text-sm leading-6 text-secondary">{{ message }}</p>
-      <p v-if="description" class="text-xs leading-6 text-muted">{{ description }}</p>
+    <div class="space-y-1">
+      <p class="text-xs leading-5 text-secondary">{{ message }}</p>
+      <p v-if="description" class="text-xs leading-4 text-muted">{{ description }}</p>
     </div>
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <UButton variant="secondary" @click="handleCancel">{{ cancelText }}</UButton>
-        <UButton :variant="danger ? 'error' : 'primary'" :loading="loading" @click="$emit('confirm')">
+      <div class="flex justify-end gap-1.5">
+        <UButton size="sm" variant="secondary" @click="handleCancel">{{ cancelText }}</UButton>
+        <UButton size="sm" :variant="danger ? 'error' : 'primary'" :loading="loading" @click="$emit('confirm')">
           {{ confirmText }}
         </UButton>
       </div>

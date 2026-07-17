@@ -144,13 +144,20 @@ const normalizedSize = computed(() =>
 
 .ued-icon-button__icon,
 .ued-icon-button__spinner {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+}
+
+.ued-icon-button--xs .ued-icon-button__icon,
+.ued-icon-button--xs .ued-icon-button__spinner,
+.ued-icon-button--xs .ued-icon-button__icon svg {
+  width: 12px;
+  height: 12px;
 }
 
 .ued-icon-button__icon svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;

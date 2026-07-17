@@ -92,6 +92,7 @@ const emptyForm = () => ({
   name: "",
   protocol: "openai-responses",
   vendor: "openai",
+  plugin_id: "",
   base_url: "",
   models_url: "",
   proxy_url: "",
@@ -103,21 +104,35 @@ const emptyForm = () => ({
   models: [createEmptyModelItem()],
 });
 
-const buildProviderPayload = (form) => ({
-  id: form.id,
-  name: form.name,
-  protocol: form.protocol,
-  vendor: form.vendor,
-  base_url: form.base_url,
-  models_url: form.models_url,
-  proxy_url: form.proxy_url,
-  api_key: form.api_key,
-  only_stream: form.only_stream,
-  user_agent: form.user_agent,
-  enabled: form.enabled,
-  description: form.description,
-  models: null,
-});
+const isPluginVendorForm = (vendor) =>
+  String(vendor || "").trim().toLowerCase() === "plugin";
+
+const buildProviderPayload = (form) => {
+  const vendor = form.vendor || "openai";
+  const pluginId = isPluginVendorForm(vendor)
+    ? String(form.plugin_id || "").trim()
+    : "";
+  let baseURL = String(form.base_url || "").trim();
+  if (isPluginVendorForm(vendor) && pluginId && !baseURL) {
+    baseURL = `plugin://${pluginId}`;
+  }
+  return {
+    id: form.id,
+    name: form.name,
+    protocol: form.protocol,
+    vendor,
+    plugin_id: pluginId,
+    base_url: baseURL,
+    models_url: form.models_url,
+    proxy_url: form.proxy_url,
+    api_key: form.api_key,
+    only_stream: form.only_stream,
+    user_agent: form.user_agent,
+    enabled: form.enabled,
+    description: form.description,
+    models: null,
+  };
+};
 
 const emptyPolicyForm = () => ({
   id: "",
@@ -325,11 +340,18 @@ export const useSuppliersStore = defineStore("suppliers", {
       });
     },
     select(item) {
+      const vendor = item.vendor || "openai";
+      const pluginId =
+        item.plugin_id ||
+        (isPluginVendorForm(vendor)
+          ? String(item.base_url || "").replace(/^plugin:\/\//i, "").trim()
+          : "");
       this.form = {
         id: item.id,
         name: item.name,
         protocol: item.protocol,
-        vendor: item.vendor || "openai",
+        vendor,
+        plugin_id: pluginId,
         base_url: item.base_url,
         models_url: item.models_url || "",
         proxy_url: item.proxy_url || "",
@@ -345,11 +367,18 @@ export const useSuppliersStore = defineStore("suppliers", {
       this.form = emptyForm();
     },
     selectModelEditor(item) {
+      const vendor = item.vendor || "openai";
+      const pluginId =
+        item.plugin_id ||
+        (isPluginVendorForm(vendor)
+          ? String(item.base_url || "").replace(/^plugin:\/\//i, "").trim()
+          : "");
       this.modelForm = {
         id: item.id,
         name: item.name,
         protocol: item.protocol,
-        vendor: item.vendor || "openai",
+        vendor,
+        plugin_id: pluginId,
         base_url: item.base_url,
         models_url: item.models_url || "",
         proxy_url: item.proxy_url || "",

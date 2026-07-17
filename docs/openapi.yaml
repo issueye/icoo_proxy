@@ -68,6 +68,60 @@ paths:
                     type: string
                   ready:
                     const: true
+  /v1/models:
+    get:
+      operationId: listProxyModels
+      tags: [Models]
+      summary: OpenAI-compatible aggregated model list
+      description: |
+        Lists enabled models from enabled providers for tools and OpenAI SDKs.
+        Short model names and `provider/model` direct-route ids are both returned.
+        Auth matches proxy: local loopback may omit key when allow_local_without_auth is true;
+        otherwise Bearer / x-api-key with proxy scope.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+        - {}
+      responses:
+        "200":
+          description: Model list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [object, data]
+                properties:
+                  object:
+                    type: string
+                    const: list
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, object, created, owned_by]
+                      properties:
+                        id:
+                          type: string
+                        object:
+                          type: string
+                          const: model
+                        created:
+                          type: integer
+                          format: int64
+                        owned_by:
+                          type: string
+                        provider_id:
+                          type: string
+                        provider_name:
+                          type: string
+                        max_tokens:
+                          type: integer
+                        protocol:
+                          type: string
+                        vendor:
+                          type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /api/v1/runtime/state:
     get:
       operationId: getRuntimeState

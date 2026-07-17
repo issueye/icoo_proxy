@@ -2,14 +2,14 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <UButton variant="primary" @click="openCreate">新增端点</UButton>
-        <UButton variant="secondary" :loading="store.reloading" :disabled="store.reloading" @click="reloadProxy">
+        <UButton size="sm" variant="primary" @click="openCreate">新增端点</UButton>
+        <UButton size="sm" variant="secondary" :loading="store.reloading" :disabled="store.reloading" @click="reloadProxy">
           {{ store.reloading ? "重载中..." : "重载代理" }}
         </UButton>
       </div>
     </Teleport>
 
-    <div class="section-grid grid-cols-2 lg:grid-cols-4">
+    <div class="stat-grid stat-grid--3">
       <StatCard icon="endpoint" label="端点总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
       <StatCard icon="layers" label="自定义端点" :value="String(store.customCount)" />
@@ -21,6 +21,7 @@
       action-width="90px"
       fixed
       fixed-field="freeze"
+      size="sm"
       table-class="endpoint-table"
       pagination
       class="grow"
@@ -47,8 +48,8 @@
           <USelect v-model="queryForm.protocol" label="协议" hide-label :options="store.filterProtocolOptions"
             class="table-query-form__field table-query-form__field--compact" />
           <div class="table-query-form__actions">
-            <UButton variant="secondary" @click="resetQuery">重置</UButton>
-            <UButton variant="primary" @click="submitQuery">查询</UButton>
+            <UButton size="sm" variant="secondary" @click="resetQuery">重置</UButton>
+            <UButton size="sm" variant="primary" @click="submitQuery">查询</UButton>
           </div>
         </div>
       </template>
@@ -59,7 +60,7 @@
         <UTag variant="info" size="xs">{{ row.protocol }}</UTag>
       </template>
       <template #cell-description="{ row }">
-        <p class="table-cell-wrap text-sm text-secondary" :title="endpointDescriptionTitle(row)">
+        <p class="table-cell-wrap text-xs text-secondary" :title="endpointDescriptionTitle(row)">
           {{ row.description || "-" }} · 更新时间：{{ formatDateTime(row.updated_at) }}
         </p>
       </template>
@@ -83,16 +84,16 @@
     </UTable>
 
     <UModal v-model:open="modalOpen" :title="store.form.id ? '编辑端点' : '新增端点'" width="560px" @close="store.resetForm">
-      <form id="endpoint-form" class="space-y-3" @submit.prevent="submit">
+      <form id="endpoint-form" class="space-y-2" @submit.prevent="submit">
         <UInput v-model="store.form.path" label="路径" placeholder="/custom/v1/chat/completions" />
         <USelect v-model="store.form.protocol" label="协议" :options="store.protocolOptions" />
         <UInput v-model="store.form.description" label="说明" textarea placeholder="描述该端点用途" />
         <USwitch v-model="store.form.enabled" label="启用该端点" />
       </form>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="closeModal">取消</UButton>
-          <UButton form="endpoint-form" variant="primary" native-type="submit" :loading="store.saving"
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" variant="secondary" @click="closeModal">取消</UButton>
+          <UButton size="sm" form="endpoint-form" variant="primary" native-type="submit" :loading="store.saving"
             :disabled="store.saving">
             {{ store.saving ? "保存中..." : "保存端点" }}
           </UButton>

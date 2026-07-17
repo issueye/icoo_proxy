@@ -146,14 +146,14 @@ function updatePosition() {
 }
 
 .ued-tooltip__inner {
-  max-width: 320px;
-  padding: 6px 10px;
+  max-width: 280px;
+  padding: 4px 8px;
   border: 1px solid color-mix(in srgb, var(--ued-color-tooltip-fg) 8%, transparent);
   border-radius: var(--ued-radius-md);
   background: var(--ued-color-tooltip-bg);
   color: var(--ued-color-tooltip-fg);
-  font-size: var(--ued-font-size-sm);
-  line-height: 1.5;
+  font-size: var(--ued-font-size-xs);
+  line-height: 1.4;
   word-break: break-word;
   box-shadow: var(--ued-shadow-popup);
 }

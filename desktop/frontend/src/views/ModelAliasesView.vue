@@ -2,25 +2,27 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <UButton variant="primary" @click="openCreate">新建别名</UButton>
+        <UButton size="sm" variant="primary" @click="openCreate">新建别名</UButton>
       </div>
     </Teleport>
 
-    <div class="section-grid grid-cols-2 lg:grid-cols-4">
+    <div class="stat-grid stat-grid--4">
       <StatCard icon="model" label="别名总数" :value="String(store.items.length)" tone="info" />
       <StatCard icon="check" label="已启用" :value="String(store.enabledCount)" tone="success" />
       <StatCard icon="supplier" label="关联供应商" :value="String(store.supplierCount)" tone="info" />
       <StatCard icon="layers" label="常用协议" value="Anthropic / OpenAI" tone="info" />
     </div>
 
-    <div class="section-grid">
-      <UTable
+    <UTable
         :columns="tableColumns"
         :rows="store.items"
         row-key="id"
         :loading="store.loading"
         loading-text="正在加载别名…"
-        size="md"
+        size="sm"
+        fixed
+        pagination
+        class="grow"
         table-class="model-alias-table"
       >
         <template #empty>
@@ -34,7 +36,7 @@
 
         <template #cell-name="{ row }">
           <div class="table-cell-inline" :title="aliasTitle(row)">
-            <span class="table-cell-inline__text text-sm font-medium text-strong">{{ row.name }}</span>
+            <span class="table-cell-inline__text text-xs font-medium text-strong">{{ row.name }}</span>
             <UTag :variant="row.enabled ? 'success' : 'error'" size="xs">
               {{ row.enabled ? "启用" : "停用" }}
             </UTag>
@@ -51,7 +53,7 @@
         </template>
 
         <template #cell-model="{ row }">
-          <span class="table-cell-wrap text-sm text-secondary" :title="row.model">{{ row.model }}</span>
+          <span class="table-cell-wrap text-xs text-secondary" :title="row.model">{{ row.model }}</span>
         </template>
 
         <template #actions="{ row }">
@@ -67,8 +69,7 @@
             />
           </div>
         </template>
-      </UTable>
-    </div>
+    </UTable>
 
     <UModal
       v-model:open="modalOpen"
@@ -76,7 +77,7 @@
       width="560px"
       @close="store.resetForm"
     >
-      <form id="alias-form" class="space-y-3" @submit.prevent="submitAlias">
+      <form id="alias-form" class="space-y-2" @submit.prevent="submitAlias">
         <UInput v-model="store.form.name" label="别名名称" placeholder="例如：fast-model" />
 
         <USelect
@@ -93,7 +94,7 @@
           :options="store.upstreamProtocolOptions"
         />
 
-        <div class="flex items-end gap-2">
+        <div class="flex items-end gap-1.5">
           <USelect
             v-model="store.form.model"
             label="目标模型"
@@ -114,16 +115,17 @@
             获取模型
           </UButton>
         </div>
-        <p v-if="store.form.supplier_id && !store.modelOptions.length" class="text-[11px] text-muted">
+        <p v-if="store.form.supplier_id && !store.modelOptions.length" class="text-xs text-muted">
           所选供应商暂无模型，可直接输入模型名或点击「获取模型」从上游拉取。
         </p>
 
         <USwitch v-model="store.form.enabled" label="启用该模型别名" />
       </form>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="closeModal">取消</UButton>
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" variant="secondary" @click="closeModal">取消</UButton>
           <UButton
+            size="sm"
             form="alias-form"
             variant="primary"
             native-type="submit"

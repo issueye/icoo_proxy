@@ -3,6 +3,7 @@
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
         <UButton
+          size="sm"
           variant="secondary"
           :loading="store.loading"
           :disabled="store.loading || store.saving"
@@ -11,6 +12,7 @@
           {{ store.loading ? "刷新中..." : "重新读取" }}
         </UButton>
         <UButton
+          size="sm"
           variant="primary"
           :loading="store.saving"
           :disabled="store.loading || store.saving"
@@ -40,7 +42,7 @@
         <PanelBlock
           v-if="activeSection === 'appearance'"
           title="外观设置"
-          description="主题与控件尺寸"
+          description="主题、界面密度与控件尺寸"
         >
           <div class="settings-field-group">
             <div class="settings-field-copy">
@@ -64,14 +66,46 @@
 
           <div class="settings-field-group">
             <div class="settings-field-copy">
+              <p class="settings-field-title">界面密度</p>
+              <p class="settings-field-desc">
+                宽松加大页面留白与表格行高；紧缩适合宽表与运维台。
+              </p>
+            </div>
+            <div class="settings-control-stack">
+              <div class="density-mode-grid">
+                <button
+                  v-for="opt in uiPrefs.densityOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="density-mode-card"
+                  :class="{ 'density-mode-card--active': uiPrefs.density === opt.value }"
+                  @click="uiPrefs.setDensity(opt.value)"
+                >
+                  <span class="density-mode-card__preview" :data-mode="opt.value" aria-hidden="true">
+                    <i /><i /><i />
+                  </span>
+                  <span class="density-mode-card__title">{{ opt.label }}</span>
+                  <span class="density-mode-card__desc">{{ opt.description }}</span>
+                </button>
+              </div>
+              <p class="settings-field-desc">
+                当前：{{ uiPrefs.density === "comfortable" ? "宽松" : "紧缩" }}
+                · 页面 {{ densityPreview.page }} · 表行 {{ densityPreview.row }}
+              </p>
+            </div>
+          </div>
+
+          <div class="settings-field-group">
+            <div class="settings-field-copy">
               <p class="settings-field-title">按钮尺寸</p>
-              <p class="settings-field-desc">控制按钮、输入框和选择器的整体高度。</p>
+              <p class="settings-field-desc">在密度模式之上微调按钮、输入框高度。</p>
             </div>
             <div class="settings-control-stack">
               <div class="settings-control-grid">
                 <UButton
                   v-for="opt in uiPrefs.buttonSizeOptions"
                   :key="opt.value"
+                  size="sm"
                   :variant="uiPrefs.buttonSize === opt.value ? 'primary' : 'secondary'"
                   @click="uiPrefs.setButtonSize(opt.value)"
                 >
@@ -79,9 +113,10 @@
                 </UButton>
               </div>
               <div class="settings-preview-row">
-                <UButton size="sm">示例按钮 SM</UButton>
-                <UButton size="md">示例按钮 MD</UButton>
-                <UButton size="lg">示例按钮 LG</UButton>
+                <UButton size="xs">XS</UButton>
+                <UButton size="sm">SM</UButton>
+                <UButton size="md">MD</UButton>
+                <UButton size="lg">LG</UButton>
               </div>
             </div>
           </div>
@@ -127,7 +162,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import PanelBlock from "../components/PanelBlock.vue";
 import UButton from "../components/ued/UButton.vue";
 import UInput from "../components/ued/UInput.vue";
@@ -142,11 +177,18 @@ useStoreError(store);
 const uiPrefs = useUiPrefsStore();
 const activeSection = ref("appearance");
 
+const densityPreview = computed(() => {
+  if (uiPrefs.density === "comfortable") {
+    return { page: "12px", row: "36px" };
+  }
+  return { page: "8px", row: "30px" };
+});
+
 const settingSections = [
   {
     key: "appearance",
     title: "外观",
-    description: "主题颜色、控件尺寸",
+    description: "主题、密度、控件尺寸",
   },
   {
     key: "runtime",

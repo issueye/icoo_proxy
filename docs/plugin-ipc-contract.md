@@ -11,6 +11,34 @@
 | Host | `github.com/issueye/icoo_proxy/bridge` | `github.com/issueye/icoo_proxy/bridge/internal/pluginhost` |
 | Grok plugin | `github.com/issueye/icoo_proxy/plugins/grokbuild` | own module; **must not** import `bridge/internal/...` |
 
+## Package layout (discovery)
+
+Bridge / desktop look for a top-level **`plugins/`** directory (next to `bridge.exe` and under cwd). Each plugin is one subdirectory with `info.toml`:
+
+```text
+plugins/
+  grokbuild/
+    info.toml              # name, version, description, executable, …
+    plugin-grokbuild.exe
+  mock/
+    info.toml
+    mockplugin.exe
+```
+
+Example `info.toml`:
+
+```toml
+id = "grokbuild"
+name = "GrokBuild / SuperGrok Proxy"
+version = "0.3.2"
+description = "…"
+executable = "plugin-grokbuild.exe"
+capabilities = ["proxy.complete", "proxy.stream", "models.list", "health", "ui"]
+supported_ingress = ["anthropic", "openai-responses", "openai-chat"]
+```
+
+Runtime state (registry.json, credentials) remains under **`data_dir/plugins/`**, not the package tree. Legacy flat `plugin-*.exe` next to bridge is still scanned as a fallback.
+
 Plugin `go.mod` (workspace-aware):
 
 ```go

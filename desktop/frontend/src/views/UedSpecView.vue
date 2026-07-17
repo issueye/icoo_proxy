@@ -3,42 +3,131 @@
     <div class="page-header">
       <h2 class="page-title">UED 组件规范</h2>
       <p class="page-description">
-        面向本地代理控制台的组件样例，覆盖按钮、表单、状态反馈、表格和弹窗。
+        面向本地代理控制台的组件样例：Token、间距（padding/margin/gap）、按钮、表单、状态反馈、表格与弹窗。
       </p>
     </div>
 
     <PanelBlock title="设计 Token">
-      <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <div class="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
         <div class="sub-card">
-          <p class="text-sm font-medium text-strong">主色</p>
-          <div class="mt-3 flex items-center gap-2">
-            <span class="h-6 w-10 rounded bg-[var(--ued-color-primary)]"></span>
+          <p class="text-xs font-medium text-strong">主色</p>
+          <div class="mt-1.5 flex items-center gap-1.5">
+            <span class="h-5 w-8 rounded bg-[var(--ued-color-primary)]"></span>
             <span class="font-mono text-xs text-muted">var(--ued-color-primary)</span>
           </div>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-strong">圆角</p>
-          <p class="mt-3 text-sm text-muted">控件 6px，面板 8px，标签 4px。</p>
+          <p class="text-xs font-medium text-strong">圆角</p>
+          <p class="mt-1.5 text-xs text-muted">控件 3–4px，面板 6px，胶囊 9999px。</p>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-strong">控件高度</p>
-          <p class="mt-3 text-sm text-muted">XS 24 / SM 28 / MD 32 / LG 40。</p>
+          <p class="text-xs font-medium text-strong">控件高度</p>
+          <p class="mt-1.5 text-xs text-muted">XS 20 / SM 24 / MD 26 / LG 32（默认 SM）。</p>
         </div>
         <div class="sub-card">
-          <p class="text-sm font-medium text-strong">状态色</p>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <UTag variant="success" dot>Success</UTag>
-            <UTag variant="warning" dot>Warning</UTag>
-            <UTag variant="error" dot>Error</UTag>
-            <UTag variant="info" dot>Info</UTag>
+          <p class="text-xs font-medium text-strong">状态色</p>
+          <div class="mt-1.5 flex flex-wrap gap-1.5">
+            <UTag variant="success" size="xs" dot>Success</UTag>
+            <UTag variant="warning" size="xs" dot>Warning</UTag>
+            <UTag variant="error" size="xs" dot>Error</UTag>
+            <UTag variant="info" size="xs" dot>Info</UTag>
           </div>
+        </div>
+      </div>
+    </PanelBlock>
+
+    <PanelBlock
+      title="间距规范"
+      description="4px 基准刻度 + 语义别名 + 工具类（ued-p / ued-m / ued-gap）。业务样式禁止硬编码任意 px。"
+    >
+      <div class="ued-stack ued-stack--lg">
+        <div>
+          <p class="text-sm font-medium text-strong ued-mb-3">刻度 Scale</p>
+          <div class="ued-space-demo-row">
+            <div v-for="step in spaceScale" :key="step.token" class="ued-space-swatch">
+              <div class="ued-space-swatch__bar" :style="{ width: step.px + 'px', minWidth: '4px' }" />
+              <div class="ued-space-swatch__meta">
+                <span class="ued-space-swatch__name">{{ step.token }}</span>
+                <span>{{ step.px }}px · {{ step.use }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-grid lg:grid-cols-2">
+          <div>
+            <p class="text-sm font-medium text-strong ued-mb-3">语义别名 Semantic</p>
+            <div class="ued-space-semantic">
+              <div v-for="item in spaceSemantic" :key="item.token" class="ued-space-semantic__item">
+                <code>{{ item.token }}</code>
+                <span class="text-muted">{{ item.value }} · {{ item.use }}</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-strong ued-mb-3">工具类示例</p>
+            <div class="ued-stack">
+              <div class="sub-card ued-p-4">
+                <p class="font-mono text-xs text-muted ued-mb-2">.ued-p-4 / .ued-stack</p>
+                <div class="ued-stack ued-stack--sm">
+                  <div class="rounded border border-[var(--ued-color-border-light)] bg-white ued-px-3 ued-py-2 text-xs">字段 A</div>
+                  <div class="rounded border border-[var(--ued-color-border-light)] bg-white ued-px-3 ued-py-2 text-xs">字段 B</div>
+                </div>
+              </div>
+              <div class="sub-card ued-p-4">
+                <p class="font-mono text-xs text-muted ued-mb-2">.ued-inline .ued-gap-3</p>
+                <div class="ued-inline ued-inline--md">
+                  <UTag size="xs" variant="info">协议</UTag>
+                  <UTag size="xs" variant="success">启用</UTag>
+                  <UButton size="xs" variant="secondary">操作</UButton>
+                </div>
+              </div>
+              <div class="sub-card ued-p-4">
+                <p class="font-mono text-xs text-muted ued-mb-2">.ued-mx-4 .ued-my-2</p>
+                <div class="rounded border border-dashed border-[var(--ued-color-border)] bg-[var(--ued-color-muted)] ued-p-2">
+                  <div class="rounded bg-white ued-mx-4 ued-my-2 ued-px-3 ued-py-2 text-xs text-secondary">
+                    外边距示例块
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-card ued-p-4">
+          <p class="text-sm font-medium text-strong ued-mb-2">密度模式 Density</p>
+          <div class="density-mode-grid ued-mb-3">
+            <div class="density-mode-card" :class="{ 'density-mode-card--active': true }">
+              <span class="density-mode-card__preview" data-mode="compact" aria-hidden="true"><i /><i /><i /></span>
+              <span class="density-mode-card__title">紧缩 compact</span>
+              <span class="density-mode-card__desc">page 8 · row 30 · stack 6 · 默认运维台</span>
+            </div>
+            <div class="density-mode-card">
+              <span class="density-mode-card__preview" data-mode="comfortable" aria-hidden="true"><i /><i /><i /></span>
+              <span class="density-mode-card__title">宽松 comfortable</span>
+              <span class="density-mode-card__desc">page 12 · row 36 · stack 8 · 相对更易读</span>
+            </div>
+          </div>
+          <p class="text-xs text-muted ued-mb-3">
+            设置页「外观 → 界面密度」切换；HTML 属性 <code class="font-mono">data-density</code>；
+            变量含 <code class="font-mono">--ued-table-row-height</code> 等。
+          </p>
+          <p class="text-sm font-medium text-strong ued-mb-2">使用约定</p>
+          <ul class="ued-stack ued-stack--sm text-sm text-muted" style="list-style: disc; padding-left: 1.1rem; margin: 0">
+            <li>组件/页面优先写 <code class="font-mono text-xs">var(--ued-space-*)</code> 或语义 token，其次工具类。</li>
+            <li>页面级：内容区 <code class="font-mono text-xs">page</code>，块间距 <code class="font-mono text-xs">section</code>（随密度变化）。</li>
+            <li>控件级：按钮组 <code class="font-mono text-xs">control</code>，字段纵排 <code class="font-mono text-xs">stack</code>，图标行 <code class="font-mono text-xs">inline</code>。</li>
+            <li>表格：行高用 <code class="font-mono text-xs">--ued-table-row-height</code>；内容溢出用省略 + title。</li>
+            <li>禁止随意 <code class="font-mono text-xs">13px / 15px / 18px</code> 等非刻度值；优先 token。</li>
+            <li>Shell 与业务视图避免硬编码大 padding；用 <code class="font-mono text-xs">--ued-space-page/section/panel</code>。</li>
+          </ul>
         </div>
       </div>
     </PanelBlock>
 
     <div class="section-grid lg:grid-cols-2">
       <PanelBlock title="按钮">
-        <div class="space-y-3">
+        <div class="space-y-2">
           <div class="flex flex-wrap gap-2">
             <UButton variant="primary">Primary</UButton>
             <UButton variant="success">Success</UButton>
@@ -59,7 +148,7 @@
       </PanelBlock>
 
       <PanelBlock title="开关">
-        <div class="space-y-3">
+        <div class="space-y-2">
           <USwitch v-model="switchValue" label="启用自动健康检查" hint="用于开关型参数。" />
           <USwitch :model-value="true" label="保留系统默认路由" hint="禁用态示例" disabled />
         </div>
@@ -68,7 +157,7 @@
 
     <div class="section-grid lg:grid-cols-2">
       <PanelBlock title="提示">
-        <div class="space-y-3">
+        <div class="space-y-2">
           <UAlert type="success" message="保存成功，配置已写入本地代理。" />
           <UAlert type="info" message="提示信息" description="用于承载页面内常驻说明或轻量引导。" />
           <UAlert type="warning" message="代理尚未重载" description="保存端点后需要重载代理。" closable />
@@ -89,16 +178,16 @@
 
     <div class="section-grid lg:grid-cols-2">
       <PanelBlock title="加载">
-        <div class="space-y-4">
-          <div class="flex flex-wrap items-center gap-5">
+        <div class="space-y-2">
+          <div class="flex flex-wrap items-center gap-3">
             <ULoading size="sm" />
             <ULoading />
             <ULoading size="lg" tip="加载中" />
           </div>
           <ULoading tip="正在加载端点数据..." :spinning="true">
-            <div class="rounded-md border border-[var(--ued-color-divider)] bg-[var(--ued-color-muted)] p-4">
-              <p class="text-sm font-medium text-strong">代理端点</p>
-              <p class="mt-2 text-sm leading-6 text-muted">
+            <div class="rounded-md border border-[var(--ued-color-divider)] bg-[var(--ued-color-muted)] p-2">
+              <p class="text-xs font-medium text-strong">代理端点</p>
+              <p class="mt-1 text-xs leading-4 text-muted">
                 区域加载用于表格、详情面板或配置块刷新。
               </p>
             </div>
@@ -108,7 +197,7 @@
       </PanelBlock>
 
       <PanelBlock title="标签">
-        <div class="space-y-3">
+        <div class="space-y-2">
           <div class="flex flex-wrap gap-2">
             <UTag variant="primary" dot>primary</UTag>
             <UTag variant="success" dot>success</UTag>
@@ -131,7 +220,7 @@
 
     <div class="section-grid lg:grid-cols-2">
       <PanelBlock title="输入与下拉">
-        <div class="space-y-3">
+        <div class="space-y-2">
           <UInput v-model="form.name" label="名称" placeholder="请输入供应商名称" hint="表单项采用上 label、下控件布局。" required />
           <USelect v-model="form.protocol" label="协议" :options="protocolOptions" required />
           <UInput v-model="form.description" label="描述" placeholder="请输入用途说明" textarea />
@@ -239,7 +328,7 @@
           </div>
         </template>
       </UTable>
-      <div class="mt-3 flex flex-wrap items-center gap-2">
+      <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <UButton variant="secondary" size="sm" @click="toggleInteractiveLoading">
           {{ interactiveLoading ? "停止加载" : "模拟加载" }}
         </UButton>
@@ -250,7 +339,7 @@
     </PanelBlock>
 
     <PanelBlock title="Tooltip">
-      <div class="flex flex-wrap items-center gap-4">
+      <div class="flex flex-wrap items-center gap-2">
         <UTooltip content="这是一个基础提示。">
           <UButton size="sm" variant="secondary">悬停查看提示</UButton>
         </UTooltip>
@@ -261,13 +350,13 @@
     </PanelBlock>
 
     <UModal v-model:open="showModal" title="普通弹窗">
-      <p class="text-sm leading-6 text-secondary">
+      <p class="text-xs leading-5 text-secondary">
         用于承载说明、预览或表单内容。
       </p>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="showModal = false">关闭</UButton>
-          <UButton @click="showModal = false">确认</UButton>
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" variant="secondary" @click="showModal = false">关闭</UButton>
+          <UButton size="sm" @click="showModal = false">确认</UButton>
         </div>
       </template>
     </UModal>
@@ -306,6 +395,33 @@ import { message } from "../components/ued/message";
 
 const showModal = ref(false);
 const showConfirm = ref(false);
+
+/** Spacing scale for UED docs (keep in sync with main.css --ued-space-*). */
+const spaceScale = [
+  { token: "--ued-space-1", px: 2, use: "微偏移" },
+  { token: "--ued-space-2", px: 3, use: "紧凑 inline" },
+  { token: "--ued-space-3", px: 4, use: "图标+文案" },
+  { token: "--ued-space-4", px: 6, use: "默认间距" },
+  { token: "--ued-space-5", px: 8, use: "页面/面板" },
+  { token: "--ued-space-6", px: 10, use: "区块" },
+  { token: "--ued-space-7", px: 10, use: "表单元格" },
+  { token: "--ued-space-8", px: 12, use: "卡片" },
+  { token: "--ued-space-10", px: 14, use: "空状态" },
+  { token: "--ued-space-12", px: 16, use: "大区块" },
+  { token: "--ued-space-16", px: 24, use: "页面级" },
+];
+
+const spaceSemantic = [
+  { token: "--ued-space-page", value: "8px", use: "主内容区内边距（紧缩）" },
+  { token: "--ued-space-section", value: "8px", use: "页面块间距" },
+  { token: "--ued-space-panel", value: "8px", use: "面板 body" },
+  { token: "--ued-space-panel-sm", value: "6px", use: "面板 header" },
+  { token: "--ued-space-stack", value: "6px", use: "表单纵排" },
+  { token: "--ued-space-inline", value: "4px", use: "横排标签/图标" },
+  { token: "--ued-space-control", value: "6px", use: "按钮组" },
+  { token: "--ued-space-table-x", value: "6px", use: "表格左右外边距" },
+  { token: "--ued-space-table-cell-x", value: "8px", use: "单元格水平内边距" },
+];
 const fullscreenLoading = ref(false);
 const switchValue = ref(true);
 const interactiveSelected = ref([]);

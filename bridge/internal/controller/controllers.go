@@ -15,6 +15,7 @@ type Controllers struct {
 	Traffic       *TrafficController
 	UIPreference  *UIPreferenceController
 	Plugin        *PluginController
+	ModelList     *ModelListController
 }
 
 func NewControllers(services service.Services) Controllers {
@@ -31,5 +32,6 @@ func NewControllers(services service.Services) Controllers {
 		Traffic:       NewTrafficController(services.Traffic),
 		UIPreference:  NewUIPreferenceController(services.UIPreference),
 		Plugin:        NewPluginController(services.Plugins),
+		ModelList:     NewModelListController(services.ModelList),
 	}
 }

@@ -14,16 +14,16 @@
 
     <PanelBlock
       title="进程插件"
-      description="通过桌面端动态安装 / 启停插件，无需改 TOML 或重启 bridge。扩展页由 handshake 声明后自动出现在侧栏。"
+      description="安装并启用后可一键创建 Vendor=plugin 供应商。凭据在扩展页管理，路由在「规则设置」绑定。"
     >
       <div v-if="error" class="plugins-error">{{ error }}</div>
-      <UTable :columns="tableColumns" :rows="rows" action-width="360px">
+      <UTable :columns="tableColumns" :rows="rows" action-width="360px" size="sm" fixed>
         <template #empty>
-          <div class="plugins-empty">
-            <p>当前没有已注册的插件。</p>
-            <p>1. 把 <code>plugin-*.exe</code> 放到 bridge 同目录</p>
-            <p>2. 点击「发现插件」扫描，再「安装并启用」</p>
-            <p>3. 或用「手动安装」填写可执行文件路径</p>
+          <div class="empty-action">
+            <p class="empty-action__title">当前没有已注册的插件</p>
+            <p class="empty-action__desc">
+              将插件放到 plugins/&lt;插件ID&gt;/（含 info.toml 与可执行文件），点「发现插件」扫描后安装。
+            </p>
           </div>
         </template>
         <template #cell-enabled="{ row }">
@@ -38,17 +38,27 @@
           <UTag :variant="statusVariant(row.status)" size="xs">{{ row.status || "-" }}</UTag>
         </template>
         <template #cell-meta="{ row }">
-          <p class="text-sm">{{ row.plugin_version || "-" }}</p>
-          <p class="text-sm text-secondary" :title="row.executable">{{ row.executable || "-" }}</p>
-          <p v-if="row.last_error" class="text-sm plugins-error" :title="row.last_error">{{ row.last_error }}</p>
+          <span
+            class="table-cell-wrap text-xs"
+            :title="pluginMetaTitle(row)"
+          >{{ pluginMetaLine(row) }}</span>
         </template>
         <template #actions="{ row }">
           <div class="plugins-actions">
             <UButton size="xs" variant="secondary" :disabled="busyId === row.id" @click="doStart(row.id)">启动</UButton>
             <UButton size="xs" variant="secondary" :disabled="busyId === row.id" @click="doRestart(row.id)">重启</UButton>
             <UButton size="xs" variant="ghost" :disabled="busyId === row.id" @click="doStop(row.id)">停止</UButton>
+            <UButton
+              size="xs"
+              variant="primary"
+              :disabled="busyId === row.id"
+              :loading="busyId === `ensure:${row.id}`"
+              @click="doEnsureProvider(row)"
+            >
+              接入路由
+            </UButton>
             <UButton v-if="row.ui_pages?.length" size="xs" @click="openPage(row)">扩展页</UButton>
-            <UButton size="xs" variant="ghost" :disabled="busyId === row.id" @click="doUnregister(row.id)">卸载</UButton>
+            <UButton size="xs" variant="ghost" :disabled="busyId === row.id" @click="openUnregisterConfirm(row)">卸载</UButton>
           </div>
         </template>
       </UTable>
@@ -57,19 +67,19 @@
     <PanelBlock
       v-if="candidates.length"
       title="可安装插件"
-      description="扫描 bridge 目录、当前工作目录与 data_dir/plugins 得到的候选；安装后写入 registry.json，无需改配置文件。"
-      class="mt-4"
+      description="优先扫描 plugins/&lt;id&gt;/info.toml；安装后写入 data 目录 registry.json。"
     >
-      <UTable :columns="candidateColumns" :rows="candidates" action-width="200px">
+      <UTable :columns="candidateColumns" :rows="candidates" action-width="180px" size="sm" fixed>
         <template #cell-registered="{ row }">
           <UTag :variant="row.registered ? 'success' : 'neutral'" size="xs">
             {{ row.registered ? "已注册" : "未注册" }}
           </UTag>
         </template>
         <template #cell-meta="{ row }">
-          <p class="text-sm">{{ row.name || row.id }}{{ row.version ? ` · v${row.version}` : "" }}</p>
-          <p class="text-sm text-secondary" :title="row.executable">{{ row.executable }}</p>
-          <p class="text-sm text-secondary">来源: {{ row.source }}</p>
+          <span
+            class="table-cell-wrap text-xs"
+            :title="candidateMetaTitle(row)"
+          >{{ candidateMetaLine(row) }}</span>
         </template>
         <template #actions="{ row }">
           <div class="plugins-actions">
@@ -96,8 +106,7 @@
     <PanelBlock
       v-if="uiPages.length"
       title="扩展页面"
-      description="来自运行中插件的桌面扩展入口（iframe 经 bridge 反代）。"
-      class="mt-4"
+      description="运行中插件的桌面扩展入口（iframe 经 bridge 反代）。"
     >
       <div class="plugins-pages">
         <button
@@ -114,7 +123,7 @@
       </div>
     </PanelBlock>
 
-    <UModal v-model:open="registerOpen" title="手动安装插件" width="520px">
+    <UModal v-model:open="registerOpen" title="手动安装插件" width="480px">
       <div class="register-form">
         <UInput v-model="registerForm.id" label="插件 ID" placeholder="例如：grokbuild" required />
         <UInput
@@ -126,18 +135,33 @@
         <USwitch v-model="registerForm.enabled" label="安装后启用并启动" />
       </div>
       <template #footer>
-        <UButton variant="secondary" @click="registerOpen = false">取消</UButton>
-        <UButton :loading="registering" @click="doRegister">安装</UButton>
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" variant="secondary" @click="registerOpen = false">取消</UButton>
+          <UButton size="sm" :loading="registering" @click="doRegister">安装</UButton>
+        </div>
       </template>
     </UModal>
+
+    <UConfirmDialog
+      v-model:open="unregisterConfirm.open"
+      title="确认卸载插件"
+      :message="unregisterConfirm.message"
+      description="将停止进程并从目录中移除（不会删除 exe 文件，也不会删除已创建的供应商）。"
+      confirm-text="确认卸载"
+      cancel-text="取消"
+      :loading="Boolean(busyId) && busyId === unregisterConfirm.id"
+      danger
+      @confirm="confirmUnregister"
+    />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import PanelBlock from "../components/PanelBlock.vue";
 import UButton from "../components/ued/UButton.vue";
+import UConfirmDialog from "../components/ued/UConfirmDialog.vue";
 import UInput from "../components/ued/UInput.vue";
 import UModal from "../components/ued/UModal.vue";
 import USwitch from "../components/ued/USwitch.vue";
@@ -146,6 +170,7 @@ import UTag from "../components/ued/UTag.vue";
 import { message } from "../components/ued/message";
 import {
   DiscoverPlugins,
+  EnsurePluginProvider,
   InstallPlugin,
   ListPlugins,
   ListPluginUIPages,
@@ -168,6 +193,11 @@ const uiPages = ref([]);
 const candidates = ref([]);
 const registerOpen = ref(false);
 const registerForm = ref({ id: "", executable: "", enabled: true });
+const unregisterConfirm = reactive({
+  open: false,
+  id: "",
+  message: "",
+});
 
 const tableColumns = [
   { key: "id", title: "插件 ID", width: "14%" },
@@ -200,6 +230,73 @@ function statusVariant(status) {
   }
 }
 
+function pluginMetaLine(row) {
+  const parts = [row.plugin_version || "-", row.executable || ""].filter(Boolean);
+  if (row.last_error) parts.push(row.last_error);
+  return parts.join(" · ");
+}
+
+function pluginMetaTitle(row) {
+  return pluginMetaLine(row);
+}
+
+function candidateMetaLine(row) {
+  const head = `${row.name || row.id || ""}${row.version ? ` · v${row.version}` : ""}`;
+  const bits = [head];
+  if (row.description) bits.push(row.description);
+  if (row.executable) bits.push(row.executable);
+  return bits.filter(Boolean).join(" · ");
+}
+
+function candidateMetaTitle(row) {
+  const line = candidateMetaLine(row);
+  const extra = [row.source, row.manifest_path].filter(Boolean).join(" · ");
+  return extra ? `${line}\n${extra}` : line;
+}
+
+/**
+ * Create or refresh Vendor=plugin provider + default models.
+ * @param {string} pluginId
+ * @param {{ quiet?: boolean, navigate?: boolean }} opts
+ */
+async function ensureProviderForPlugin(pluginId, opts = {}) {
+  const id = String(pluginId || "").trim();
+  if (!id) return null;
+  const result = await EnsurePluginProvider({
+    plugin_id: id,
+    fetch_models: true,
+  });
+  const name = result.provider?.name || id;
+  if (!opts.quiet) {
+    if (result.created) {
+      message.success(
+        `已创建供应商「${name}」（plugin://${id}）。请在扩展页配置凭据，并在规则设置中绑定路由。`,
+      );
+    } else if (result.models_added > 0) {
+      message.success(`供应商「${name}」已存在，已补充 ${result.models_added} 个模型。`);
+    } else {
+      message.info(`供应商「${name}」已就绪（plugin://${id}）。`);
+    }
+  }
+  if (opts.navigate) {
+    router.push({ name: "suppliers" });
+  }
+  return result;
+}
+
+async function doEnsureProvider(row) {
+  const id = row?.id;
+  if (!id) return;
+  busyId.value = `ensure:${id}`;
+  try {
+    await ensureProviderForPlugin(id, { navigate: false });
+  } catch (e) {
+    message.error(e.message || String(e));
+  } finally {
+    busyId.value = "";
+  }
+}
+
 async function reload() {
   loading.value = true;
   error.value = "";
@@ -220,7 +317,7 @@ async function doDiscover() {
     const res = await DiscoverPlugins();
     candidates.value = Array.isArray(res) ? res : res?.items || [];
     if (!candidates.value.length) {
-      message.info("未发现插件二进制（请把 plugin-*.exe 放到 bridge 同目录）");
+      message.info("未发现插件（请将插件放到 plugins/<id>/ 并包含 info.toml 与可执行文件）");
     } else {
       message.success(`发现 ${candidates.value.length} 个候选`);
     }
@@ -269,7 +366,22 @@ async function doSetEnabled(id, enabled) {
   busyId.value = id;
   try {
     await SetPluginEnabled(id, enabled);
-    message.success(enabled ? "已启用并启动" : "已停用并停止");
+    if (enabled) {
+      try {
+        const result = await ensureProviderForPlugin(id, { quiet: true });
+        const name = result?.provider?.name || id;
+        message.success(
+          result?.created
+            ? `已启用并启动；已创建供应商「${name}」。`
+            : `已启用并启动；供应商「${name}」已同步。`,
+        );
+      } catch (ensureErr) {
+        message.success("已启用并启动");
+        message.error(`接入路由失败：${ensureErr.message || ensureErr}`);
+      }
+    } else {
+      message.success("已停用并停止");
+    }
     await reload();
   } catch (e) {
     message.error(e.message || String(e));
@@ -283,9 +395,24 @@ async function doInstall(id, enabled) {
   busyId.value = id;
   try {
     await InstallPlugin({ id, enabled });
-    message.success(enabled ? "已安装并启用" : "已注册（未启动）");
     await reload();
     await refreshCandidatesQuiet();
+    if (enabled) {
+      try {
+        const result = await ensureProviderForPlugin(id, { quiet: true });
+        const name = result?.provider?.name || id;
+        message.success(
+          result?.created
+            ? `已安装并启用；已创建供应商「${name}」。请打开扩展页配置凭据，并在规则设置绑定路由。`
+            : `已安装并启用；供应商「${name}」已就绪。`,
+        );
+      } catch (ensureErr) {
+        message.success("已安装并启用");
+        message.error(`接入路由失败：${ensureErr.message || ensureErr}（可稍后点「接入路由」重试）`);
+      }
+    } else {
+      message.success("已注册（未启动）。启用后可点「接入路由」创建供应商。");
+    }
   } catch (e) {
     message.error(e.message || String(e));
   } finally {
@@ -293,11 +420,31 @@ async function doInstall(id, enabled) {
   }
 }
 
-async function doUnregister(id) {
-  if (!window.confirm(`确定卸载插件「${id}」？将停止进程并从目录中移除（不会删除 exe 文件）。`)) {
-    return;
+function openUnregisterConfirm(row) {
+  const id = row?.id || "";
+  if (!id) return;
+  unregisterConfirm.open = true;
+  unregisterConfirm.id = id;
+  unregisterConfirm.message = `确定要卸载插件「${id}」吗？`;
+}
+
+async function confirmUnregister() {
+  const id = unregisterConfirm.id;
+  if (!id) return;
+  busyId.value = id;
+  try {
+    await UnregisterPlugin(id);
+    message.success("已卸载");
+    unregisterConfirm.open = false;
+    unregisterConfirm.id = "";
+    unregisterConfirm.message = "";
+    await reload();
+    await refreshCandidatesQuiet();
+  } catch (e) {
+    message.error(e.message || String(e));
+  } finally {
+    busyId.value = "";
   }
-  return runAction(id, UnregisterPlugin, "已卸载");
 }
 
 function openRegister() {
@@ -312,18 +459,34 @@ async function doRegister() {
     message.error("请填写插件 ID 与可执行文件路径");
     return;
   }
+  const shouldEnsure = !!registerForm.value.enabled;
   registering.value = true;
   try {
     await RegisterPlugin({
       id,
       executable,
-      enabled: !!registerForm.value.enabled,
-      auto_start: !!registerForm.value.enabled,
+      enabled: shouldEnsure,
+      auto_start: shouldEnsure,
     });
-    message.success("安装成功");
     registerOpen.value = false;
     await reload();
     await refreshCandidatesQuiet();
+    if (shouldEnsure) {
+      try {
+        const result = await ensureProviderForPlugin(id, { quiet: true });
+        const name = result?.provider?.name || id;
+        message.success(
+          result?.created
+            ? `安装成功；已创建供应商「${name}」。请配置凭据并绑定路由。`
+            : `安装成功；供应商「${name}」已就绪。`,
+        );
+      } catch (ensureErr) {
+        message.success("安装成功");
+        message.error(`接入路由失败：${ensureErr.message || ensureErr}`);
+      }
+    } else {
+      message.success("安装成功（未启动）");
+    }
   } catch (e) {
     message.error(e.message || String(e));
   } finally {
@@ -355,51 +518,42 @@ onMounted(async () => {
 
 <style scoped>
 .plugins-error {
-  color: #f87171;
-  margin-bottom: 12px;
-}
-.plugins-empty {
-  color: #9aa7b8;
-  font-size: 14px;
-  line-height: 1.6;
-  padding: 12px;
+  color: var(--ued-color-destructive, #dc2626);
+  margin-bottom: var(--ued-space-4, 6px);
 }
 .plugins-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--ued-space-2, 3px);
 }
 .plugins-pages {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--ued-space-5, 8px);
 }
 .plugins-page-card {
   text-align: left;
-  border: 1px solid var(--border-color, #2a3544);
-  background: var(--panel-bg, #121820);
-  border-radius: 12px;
-  padding: 14px;
+  border: 1px solid var(--ued-color-border, #d4d7dc);
+  background: var(--ued-color-bg-card, #ffffff);
+  border-radius: var(--ued-radius-lg, 6px);
+  padding: var(--ued-space-5, 8px);
   cursor: pointer;
   color: inherit;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ued-space-2, 3px);
 }
 .plugins-page-card:hover {
-  border-color: #3b82f6;
+  border-color: color-mix(in srgb, var(--ued-color-primary, #2563eb) 45%, transparent);
 }
 .plugins-page-card__desc {
-  font-size: 12px;
-  color: #9aa7b8;
+  font-size: var(--ued-font-size-xs, 11px);
+  color: var(--ued-color-text-muted, #6b7280);
   word-break: break-all;
 }
 .register-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-.mt-4 {
-  margin-top: 16px;
+  gap: var(--ued-space-stack, 6px);
 }
 </style>

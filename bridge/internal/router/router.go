@@ -23,6 +23,9 @@ func New(controllers controller.Controllers, middlewares middleware.Middlewares)
 	engine.POST("/v1/messages", controllers.Proxy.Handle(constants.ProtocolAnthropic))
 	engine.POST("/v1/chat/completions", controllers.Proxy.Handle(constants.ProtocolOpenAIChat))
 	engine.POST("/v1/responses", controllers.Proxy.Handle(constants.ProtocolOpenAIResponses))
+	// OpenAI-compatible model list for clients / tools (Cursor, OpenAI SDK, etc.).
+	engine.GET("/v1/models", controllers.ModelList.List)
+	engine.GET("/models", controllers.ModelList.List)
 
 	api := engine.Group("/api/v1", middlewares.AdminAuth)
 	api.GET("/runtime/state", controllers.Runtime.State)

@@ -3,6 +3,7 @@
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
         <UButton
+          size="sm"
           variant="primary"
           :loading="store.refreshing"
           :disabled="store.refreshing || store.clearing"
@@ -11,6 +12,7 @@
           {{ store.refreshing ? "刷新中..." : "刷新流量" }}
         </UButton>
         <UButton
+          size="sm"
           variant="secondary"
           class="ued-button--danger-subtle"
           :loading="store.clearing"
@@ -66,34 +68,40 @@
           </div>
         </template>
         <template #query>
-          <div class="query-form">
-            <USelect class="query-form__field query-form__field--protocol" label="协议筛选" hide-label
-              :model-value="store.filter" :options="normalizedProtocolOptions" @update:model-value="store.setFilter" />
+          <div class="table-query-form">
+            <USelect
+              class="table-query-form__field table-query-form__field--compact"
+              label="协议筛选"
+              hide-label
+              :model-value="store.filter"
+              :options="normalizedProtocolOptions"
+              @update:model-value="store.setFilter"
+            />
           </div>
         </template>
         <template #cell-requestId="{ row }">
-          <p class="font-medium text-strong table-cell-wrap">{{ row.request_id }}</p>
+          <p class="font-medium text-strong table-cell-wrap text-xs">{{ row.request_id }}</p>
         </template>
         <template #cell-endpoint="{ row }">
           <UTag code size="xs">{{ row.endpoint || "-" }}</UTag>
         </template>
         <template #cell-requestInfo="{ row }">
-          <p class="table-cell-wrap text-sm text-strong" :title="requestInfoTitle(row)">
+          <p class="table-cell-wrap text-xs text-strong" :title="requestInfoTitle(row)">
             {{ row.method || "-" }} · {{ row.client_ip || "-" }} · {{ row.user_agent || "无 User-Agent" }}
           </p>
         </template>
         <template #cell-route="{ row }">
-          <p class="table-cell-wrap text-sm text-secondary" :title="routeTitle(row)">
+          <p class="table-cell-wrap text-xs text-secondary" :title="routeTitle(row)">
             {{ row.downstream || "-" }} → {{ row.upstream || "-" }}<span v-if="routeHint(row)"> · {{ routeHint(row) }}</span>
           </p>
         </template>
         <template #cell-model="{ row }">
-          <p class="table-cell-wrap text-sm text-strong" :title="modelTitle(row)">
+          <p class="table-cell-wrap text-xs text-strong" :title="modelTitle(row)">
             {{ row.requested_model || "-" }} → {{ row.model || "-" }}
           </p>
         </template>
         <template #cell-requestBody="{ row }">
-          <p class="table-cell-wrap text-sm text-secondary" :title="requestBodyTitle(row)">
+          <p class="table-cell-wrap text-xs text-secondary" :title="requestBodyTitle(row)">
             {{ requestBodyPreview(row) }} · {{ formatBytes(row.request_body_bytes) }}{{ row.request_body_truncated ? "，已截断" : "" }}
           </p>
         </template>
@@ -116,7 +124,7 @@
           <span class="table-meta">{{ formatDateTime(row.created_at) }}</span>
         </template>
         <template #cell-error="{ row }">
-          <p v-if="row.error" class="table-cell-wrap text-sm"
+          <p v-if="row.error" class="table-cell-wrap text-xs"
             :class="row.status_code === 499 ? 'text-warning' : 'text-error'" :title="row.error">{{ row.error }}</p>
           <span v-else class="table-meta">无</span>
         </template>

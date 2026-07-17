@@ -70,6 +70,11 @@ func (a *App) showMainWindow() {
 }
 
 func (a *App) quitFromTray() {
+	// Stop bridge (+ plugins) before tearing down the UI so orphans are not left
+	// if OnShutdown is delayed or skipped.
+	if a != nil {
+		_ = a.StopServer()
+	}
 	if a == nil || a.ctx == nil {
 		systray.Quit()
 		return

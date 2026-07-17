@@ -22,6 +22,7 @@ type Services struct {
 	UIPreference  UIPreferenceService
 	Proxy         ProxyService
 	Plugins       PluginService
+	ModelList     ModelListService
 }
 
 type Deps struct {
@@ -58,6 +59,7 @@ func NewServices(deps Deps) Services {
 	runtime := NewRuntimeService(deps.Config, endpoints)
 	proxy := NewProxyService(deps.Config, deps.Logger, deps.Converter, auth, resolver, traffic, tracker, deps.Plugins)
 	plugins := NewPluginService(deps.Plugins)
+	modelList := NewModelListService(deps.Config, auth, deps.Repos.Provider, deps.Repos.ProviderModel)
 	return Services{
 		Auth:          auth,
 		Runtime:       runtime,
@@ -72,5 +74,6 @@ func NewServices(deps Deps) Services {
 		UIPreference:  uiPreference,
 		Proxy:         proxy,
 		Plugins:       plugins,
+		ModelList:     modelList,
 	}
 }

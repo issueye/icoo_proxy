@@ -26,13 +26,14 @@ type PluginRuntime interface {
 	InstallCandidate(ctx context.Context, id string, enabled bool) error
 }
 
-// PluginDiscoverCandidate is a plugin binary found on disk.
+// PluginDiscoverCandidate is a plugin package found on disk (plugins/<id>/info.toml).
 type PluginDiscoverCandidate struct {
 	ID               string   `json:"id"`
 	Name             string   `json:"name,omitempty"`
 	Version          string   `json:"version,omitempty"`
+	Description      string   `json:"description,omitempty"`
 	Executable       string   `json:"executable"`
-	ManifestPath     string   `json:"manifest_path,omitempty"`
+	ManifestPath     string   `json:"manifest_path,omitempty"` // info.toml or legacy manifest
 	Capabilities     []string `json:"capabilities,omitempty"`
 	SupportedIngress []string `json:"supported_ingress,omitempty"`
 	Registered       bool     `json:"registered"`

@@ -340,20 +340,33 @@ func (s *Server) handleCredentials(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
+		id := strings.TrimSpace(body.ID)
 		enabled := true
 		if body.Enabled != nil {
 			enabled = *body.Enabled
 		}
-		if strings.TrimSpace(body.AccessToken) == "" && strings.TrimSpace(body.ID) == "" {
+		if strings.TrimSpace(body.AccessToken) == "" && id == "" {
 			http.Error(w, "access_token required", http.StatusBadRequest)
 			return
 		}
+		// Partial update (toggle/priority): preserve label/tokens from existing row.
 		label := strings.TrimSpace(body.Label)
+		if id != "" {
+			if prev, err := s.store.Get(id); err == nil {
+				if label == "" {
+					label = prev.Label
+				}
+				// If caller omits enabled, keep previous when only refreshing meta.
+				if body.Enabled == nil {
+					enabled = prev.Enabled
+				}
+			}
+		}
 		if label == "" {
 			label = "SuperGrok"
 		}
 		if err := s.store.Upsert(store.Credential{
-			ID:           strings.TrimSpace(body.ID),
+			ID:           id,
 			Label:        label,
 			AccessToken:  strings.TrimSpace(body.AccessToken),
 			RefreshToken: strings.TrimSpace(body.RefreshToken),

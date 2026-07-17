@@ -134,6 +134,7 @@ func (m *Manager) Discover() []service.PluginDiscoverCandidate {
 			ID:               c.ID,
 			Name:             c.Name,
 			Version:          c.Version,
+			Description:      c.Description,
 			Executable:       c.Executable,
 			ManifestPath:     c.ManifestPath,
 			Capabilities:     append([]string(nil), c.Capabilities...),

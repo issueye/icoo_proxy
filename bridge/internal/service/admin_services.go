@@ -666,6 +666,7 @@ func (s *uiPreferenceService) Save(ctx context.Context, input UIPrefsInput) (UIP
 	prefs := normalizeUIPrefs(UIPrefsView{
 		Theme:      input.Theme,
 		ButtonSize: input.ButtonSize,
+		Density:    input.Density,
 	})
 	value, err := json.Marshal(prefs)
 	if err != nil {
@@ -694,7 +695,8 @@ func (s *uiPreferenceService) Save(ctx context.Context, input UIPrefsInput) (UIP
 func defaultUIPrefs() UIPrefsView {
 	return UIPrefsView{
 		Theme:      "blue",
-		ButtonSize: "md",
+		ButtonSize: "sm",
+		Density:    "compact",
 	}
 }
 
@@ -707,6 +709,10 @@ func normalizeUIPrefs(input UIPrefsView) UIPrefsView {
 	switch strings.TrimSpace(input.ButtonSize) {
 	case "xs", "sm", "md", "lg":
 		prefs.ButtonSize = strings.TrimSpace(input.ButtonSize)
+	}
+	switch strings.TrimSpace(input.Density) {
+	case "compact", "comfortable":
+		prefs.Density = strings.TrimSpace(input.Density)
 	}
 	return prefs
 }

@@ -70,6 +70,7 @@
               :key="column.uid"
               :class="getCellClasses(column, row, rowIndex)"
               :style="getStickyStyle(column)"
+              :title="resolveCellTitle(column, row, rowIndex)"
               @click.stop="column.isSelection ? toggleRowSelection(row, rowIndex) : undefined"
             >
               <slot
@@ -92,27 +93,30 @@
                 <slot name="actions" :row="row" :index="rowIndex" />
               </div>
 
-              <template v-else-if="column.ellipsis && !cellSlotMap[column.key]">
-                <UTooltip
-                  :content="resolveTooltipContent(column, row, rowIndex)"
-                  :disabled="!column.tooltip"
-                >
-                  <span class="table-cell-ellipsis">
+              <!-- Default & custom cells: single-line ellipsis; full text via title/tooltip -->
+              <div v-else class="table-cell-content">
+                <template v-if="!cellSlotMap[column.key]">
+                  <UTooltip
+                    v-if="column.tooltip"
+                    :content="resolveTooltipContent(column, row, rowIndex)"
+                  >
+                    <span class="table-cell-ellipsis">
+                      {{ formatCellValue(resolveCellValue(column, row, rowIndex)) }}
+                    </span>
+                  </UTooltip>
+                  <span v-else class="table-cell-ellipsis">
                     {{ formatCellValue(resolveCellValue(column, row, rowIndex)) }}
                   </span>
-                </UTooltip>
-              </template>
-
-              <slot
-                v-else
-                :name="`cell-${column.key}`"
-                :row="row"
-                :value="resolveCellValue(column, row, rowIndex)"
-                :column="column.raw"
-                :index="rowIndex"
-              >
-                {{ formatCellValue(resolveCellValue(column, row, rowIndex)) }}
-              </slot>
+                </template>
+                <slot
+                  v-else
+                  :name="`cell-${column.key}`"
+                  :row="row"
+                  :value="resolveCellValue(column, row, rowIndex)"
+                  :column="column.raw"
+                  :index="rowIndex"
+                />
+              </div>
             </td>
           </tr>
         </tbody>
@@ -257,7 +261,8 @@ const props = defineProps({
   actionWidth: { type: [String, Number], default: "96px" },
   actionAlign: { type: String, default: "center" },
   emptyText: { type: String, default: "暂无数据。" },
-  fixed: { type: Boolean, default: false },
+  /** Fixed layout improves ellipsis stability across columns. */
+  fixed: { type: Boolean, default: true },
   fixedField: { type: String, default: "fixed" },
   tableClass: { type: [String, Array, Object], default: "" },
   stripe: { type: Boolean, default: false },
@@ -534,6 +539,8 @@ watch([totalRows, currentPageSize], () => {
 function normalizeColumn(column, index) {
   const key = String(column.key ?? column.dataIndex ?? `column-${index}`);
   const fixedValue = resolveColumnOption(column, props.fixedField, "fixed");
+  // Ellipsis is on by default; set column.ellipsis = false to allow wrap/grow.
+  const ellipsis = column.ellipsis !== false;
   return {
     uid: `${key}-${index}`,
     key,
@@ -543,7 +550,7 @@ function normalizeColumn(column, index) {
     minWidth: normalizeCssSize(column.minWidth),
     align: normalizeAlign(column.align),
     fixed: normalizeFixed(fixedValue),
-    ellipsis: Boolean(column.ellipsis),
+    ellipsis,
     tooltip: column.tooltip,
     className: column.className,
     headerClass: column.headerClass,
@@ -580,7 +587,38 @@ function resolveCellValue(column, row, rowIndex) {
 
 function resolveTooltipContent(column, row, rowIndex) {
   if (typeof column.tooltip === "function") return column.tooltip(row, rowIndex);
+  if (typeof column.raw?.titleText === "function") {
+    return column.raw.titleText(row, rowIndex);
+  }
   return formatCellValue(resolveCellValue(column, row, rowIndex));
+}
+
+/** Native title on <td> for overflow; empty for action/selection cells. */
+function resolveCellTitle(column, row, rowIndex) {
+  if (column.isAction || column.isSelection || column.ellipsis === false) {
+    return undefined;
+  }
+  if (column.raw?.title === false || column.raw?.nativeTitle === false) {
+    return undefined;
+  }
+  if (typeof column.raw?.titleText === "function") {
+    const text = column.raw.titleText(row, rowIndex);
+    return text ? String(text) : undefined;
+  }
+  if (typeof column.tooltip === "function") {
+    const text = column.tooltip(row, rowIndex);
+    return text ? String(text) : undefined;
+  }
+  // Custom slots: prefer explicit titleText; else data field string.
+  const value = resolveCellValue(column, row, rowIndex);
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+  if (typeof value === "object") {
+    return undefined;
+  }
+  const text = formatCellValue(value);
+  return text === "-" ? undefined : text;
 }
 
 function isStickyColumn(column) {
@@ -684,22 +722,11 @@ function handlePageSizeChange(value) {
 </script>
 
 <style scoped>
-.table-shell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid var(--ued-color-border);
-  border-radius: var(--ued-radius-md, 8px);
-  background: var(--ued-color-bg-card);
-}
-
 .table-query {
   flex: 0 0 auto;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--ued-color-divider);
-  background: var(--ued-color-bg-card);
+  padding: var(--ued-space-panel-sm, 6px) var(--ued-space-panel, 8px);
+  border-bottom: 1px solid var(--ued-table-border, var(--ued-color-divider));
+  background: color-mix(in srgb, var(--ued-color-primary) 3%, var(--ued-color-bg-card));
 }
 
 .table-scroll {
@@ -708,7 +735,7 @@ function handlePageSizeChange(value) {
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--ued-color-border) 80%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--ued-color-primary) 22%, var(--ued-color-border)) transparent;
 }
 
 .table-scroll::-webkit-scrollbar {
@@ -717,7 +744,7 @@ function handlePageSizeChange(value) {
 }
 
 .table-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--ued-color-border) 90%, #94a3b8);
+  background: color-mix(in srgb, var(--ued-color-primary) 22%, var(--ued-color-border));
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
@@ -729,12 +756,12 @@ function handlePageSizeChange(value) {
 
 .table-empty-state {
   display: grid;
-  flex: 1 0 140px;
+  flex: 1 0 96px;
   width: 100%;
-  min-height: 140px;
+  min-height: 96px;
   place-items: center;
-  padding: 20px 12px;
-  background: var(--ued-color-muted, #f8fafc);
+  padding: var(--ued-space-8, 12px) var(--ued-space-5, 8px);
+  background: var(--ued-table-row-stripe, var(--ued-color-muted));
   color: var(--ued-color-text-muted);
   font-size: var(--ued-font-size-sm);
 }
@@ -746,7 +773,7 @@ function handlePageSizeChange(value) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--ued-space-3, 4px);
   background: color-mix(in srgb, var(--ued-color-bg-card) 72%, transparent);
   backdrop-filter: blur(1px);
   color: var(--ued-color-primary);
@@ -754,8 +781,8 @@ function handlePageSizeChange(value) {
 }
 
 .table-loading__spinner {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: 999px;
@@ -773,10 +800,10 @@ function handlePageSizeChange(value) {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
-  border-top: 1px solid var(--ued-color-divider);
-  background: var(--ued-color-bg-card);
+  gap: var(--ued-space-control, 6px);
+  padding: var(--ued-space-panel-sm, 6px) var(--ued-space-panel, 8px);
+  border-top: 1px solid var(--ued-table-border, var(--ued-color-divider));
+  background: color-mix(in srgb, var(--ued-color-primary) 3%, var(--ued-color-bg-card));
 }
 
 .table-pagination__summary {
@@ -791,7 +818,7 @@ function handlePageSizeChange(value) {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--ued-space-3, 4px);
   flex-wrap: wrap;
   margin-left: auto;
 }
@@ -799,34 +826,34 @@ function handlePageSizeChange(value) {
 .table-pagination__size {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ued-space-2, 3px);
   color: var(--ued-color-text-muted);
   font-size: var(--ued-font-size-sm);
 }
 
 .table-pagination__size > span {
-  width: 28px;
+  width: 24px;
 }
 
 .table-pagination__ued-select :deep(.ued-select__control) {
-  min-width: 78px;
-  min-height: 26px;
+  min-width: 70px;
+  min-height: 22px;
   padding-top: 0;
   padding-bottom: 0;
-  font-size: var(--ued-font-size-sm);
+  font-size: var(--ued-font-size-xs);
 }
 
 .table-pagination__pages {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   flex-wrap: wrap;
 }
 
 .table-pagination__button {
-  min-width: 28px;
-  min-height: 26px;
-  padding: 0 7px;
+  min-width: 24px;
+  min-height: 22px;
+  padding: 0 5px;
   box-shadow: none;
 }
 
@@ -852,20 +879,20 @@ function handlePageSizeChange(value) {
 .table-pagination__left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ued-space-3, 4px);
   min-width: 0;
 }
 
 .table-pagination__selected {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  padding: 0 8px;
+  height: 18px;
+  padding: 0 6px;
   border: 1px solid color-mix(in srgb, var(--ued-color-primary) 30%, transparent);
   border-radius: var(--ued-radius-pill, 999px);
   background: var(--ued-color-primary-soft);
   color: var(--ued-color-primary);
-  font-size: var(--ued-font-size-sm);
+  font-size: var(--ued-font-size-xs);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -889,26 +916,26 @@ function handlePageSizeChange(value) {
   min-width: 0;
 }
 
-/* Local table surface (complements global .admin-table tokens). */
+/* Local table surface — colors come from theme tokens in main.css. */
 :deep(.admin-table) {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  background: var(--ued-color-bg-card);
+  background: var(--ued-table-row-bg, var(--ued-color-bg-card));
   color: var(--ued-color-text-secondary);
 }
 
 :deep(.admin-table th),
 :deep(.admin-table td) {
-  border-bottom: 1px solid var(--ued-color-divider, #eef0f3);
   vertical-align: middle;
 }
 
 :deep(.admin-table th) {
   position: relative;
   font-weight: 600;
-  color: var(--ued-color-text-muted);
-  background: var(--ued-color-muted, #f8fafc);
+  color: var(--ued-table-header-fg, var(--ued-color-text-muted));
+  background: var(--ued-table-header-bg, var(--ued-color-muted));
+  border-bottom: 1px solid var(--ued-table-border, var(--ued-color-border));
   user-select: none;
   white-space: nowrap;
   overflow: hidden;
@@ -916,6 +943,8 @@ function handlePageSizeChange(value) {
 }
 
 :deep(.admin-table td) {
+  background: var(--ued-table-row-bg, var(--ued-color-bg-card));
+  border-bottom: 1px solid var(--ued-table-border-row, var(--ued-color-divider));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -941,15 +970,32 @@ function handlePageSizeChange(value) {
 }
 
 :deep(.admin-table tbody tr:hover td) {
-  background: var(--ued-color-muted, #f3f4f6);
+  background: var(--ued-table-row-hover, var(--ued-color-primary-soft));
 }
 
 :deep(.admin-table tbody tr.is-selected td) {
-  background: var(--ued-color-primary-soft);
+  background: var(--ued-table-row-selected, var(--ued-color-primary-soft));
 }
 
 :deep(.admin-table tbody tr.is-selected:hover td) {
-  background: color-mix(in srgb, var(--ued-color-primary) 12%, transparent);
+  background: var(--ued-table-row-selected-hover);
+}
+
+:deep(.admin-table--stripe tbody tr:nth-child(even) td) {
+  background: var(--ued-table-row-stripe);
+}
+
+:deep(.admin-table--stripe tbody tr:nth-child(even):hover td) {
+  background: var(--ued-table-row-hover);
+}
+
+:deep(.admin-table--stripe tbody tr.is-selected td),
+:deep(.admin-table--stripe tbody tr.is-selected:nth-child(even) td) {
+  background: var(--ued-table-row-selected);
+}
+
+:deep(.admin-table--stripe tbody tr.is-selected:hover td) {
+  background: var(--ued-table-row-selected-hover);
 }
 
 :deep(.admin-table tbody tr.is-clickable) {
@@ -957,7 +1003,7 @@ function handlePageSizeChange(value) {
 }
 
 :deep(.admin-table tbody tr.is-clickable:focus-visible) {
-  outline: 2px solid color-mix(in srgb, var(--ued-color-primary) 45%, transparent);
+  outline: 2px solid var(--ued-color-focus-ring);
   outline-offset: -2px;
 }
 
@@ -976,27 +1022,31 @@ function handlePageSizeChange(value) {
 
 :deep(.admin-table thead th.is-sticky) {
   z-index: 30;
-  background: var(--ued-color-muted, #f8fafc);
+  background: var(--ued-table-header-bg);
 }
 
 :deep(.admin-table tbody td.is-sticky) {
-  background: var(--ued-color-bg-card);
+  background: var(--ued-table-row-bg);
 }
 
 :deep(.admin-table tbody tr:hover td.is-sticky) {
-  background: var(--ued-color-muted, #f3f4f6);
+  background: var(--ued-table-row-hover);
 }
 
 :deep(.admin-table tbody tr.is-selected td.is-sticky) {
-  background: var(--ued-color-primary-soft);
+  background: var(--ued-table-row-selected);
+}
+
+:deep(.admin-table--stripe tbody tr:nth-child(even) td.is-sticky) {
+  background: var(--ued-table-row-stripe);
 }
 
 :deep(.admin-table .is-sticky-left-last) {
-  box-shadow: 8px 0 10px -10px rgba(15, 23, 42, 0.28);
+  box-shadow: 8px 0 10px -10px var(--ued-table-sticky-shadow);
 }
 
 :deep(.admin-table .is-sticky-right-first) {
-  box-shadow: -8px 0 10px -10px rgba(15, 23, 42, 0.28);
+  box-shadow: -8px 0 10px -10px var(--ued-table-sticky-shadow);
 }
 
 :deep(.admin-table .is-align-center) {
@@ -1011,52 +1061,98 @@ function handlePageSizeChange(value) {
   text-align: left;
 }
 
-:deep(.table-cell-ellipsis) {
+:deep(.table-cell-content) {
   display: block;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Density */
+:deep(.table-cell-ellipsis) {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keep custom slot content single-line so multi-block markup cannot grow rows. */
+:deep(.admin-table td:not(.actions-cell):not(.selection-cell) .table-cell-content > *) {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.admin-table td:not(.actions-cell):not(.selection-cell) .table-cell-content p),
+:deep(
+    .admin-table
+      td:not(.actions-cell):not(.selection-cell)
+      .table-cell-content
+      > div:not(.table-cell-inline):not(.table-actions)
+  ) {
+  display: block;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inline flex rows (tags + text) stay one line and clip. */
+:deep(.admin-table td:not(.actions-cell) .table-cell-inline) {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Density — prefer CSS tokens so global density mode stays consistent */
 :deep(.admin-table--xs th) {
-  height: 28px;
-  padding: 4px 8px;
-  font-size: 11px;
+  height: calc(var(--ued-table-header-height, 28px) - 2px);
+  padding: 0 var(--ued-space-3, 4px);
+  font-size: var(--ued-font-size-xs);
 }
 :deep(.admin-table--xs td) {
-  height: 30px;
-  padding: 4px 8px;
-  font-size: 12px;
+  height: calc(var(--ued-table-row-height, 30px) - 2px);
+  padding: 0 var(--ued-space-3, 4px);
+  font-size: var(--ued-font-size-sm);
 }
 :deep(.admin-table--sm th) {
-  height: 30px;
-  padding: 5px 10px;
-  font-size: 12px;
+  height: var(--ued-table-header-height, 28px);
+  padding: 0 var(--ued-space-table-cell-x, 8px);
+  font-size: var(--ued-font-size-xs);
 }
 :deep(.admin-table--sm td) {
-  height: 34px;
-  padding: 5px 10px;
-  font-size: 13px;
+  height: var(--ued-table-row-height, 30px);
+  padding: 0 var(--ued-space-table-cell-x, 8px);
+  font-size: var(--ued-font-size-sm);
 }
 :deep(.admin-table--md th) {
-  height: 32px;
-  padding: 6px 12px;
-  font-size: 12px;
+  height: calc(var(--ued-table-header-height, 28px) + 2px);
+  padding: 0 var(--ued-space-table-cell-x, 8px);
+  font-size: var(--ued-font-size-sm);
 }
 :deep(.admin-table--md td) {
-  height: 38px;
-  padding: 6px 12px;
-  font-size: 13px;
+  height: calc(var(--ued-table-row-height, 30px) + 2px);
+  padding: 0 var(--ued-space-table-cell-x, 8px);
+  font-size: var(--ued-font-size-sm);
 }
 :deep(.admin-table--lg th) {
-  height: 36px;
-  padding: 8px 14px;
+  height: calc(var(--ued-table-header-height, 28px) + 4px);
+  padding: 0 var(--ued-space-5, 8px);
+  font-size: var(--ued-font-size-sm);
 }
 :deep(.admin-table--lg td) {
-  height: 44px;
-  padding: 8px 14px;
+  height: calc(var(--ued-table-row-height, 30px) + 6px);
+  padding: 0 var(--ued-space-5, 8px);
+  font-size: var(--ued-font-size-base);
 }
 
 @media (max-width: 760px) {

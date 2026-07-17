@@ -38,19 +38,19 @@ const normalizedIcon = computed(() => ["gpt", "deepseek", "glm", "claude"].inclu
 <style scoped>
 .model-brand-icon {
   display: inline-grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   place-items: center;
   border: 1px solid var(--ued-color-border-light);
-  border-radius: var(--ued-radius-lg);
+  border-radius: var(--ued-radius-md);
   background: var(--ued-color-muted);
   color: var(--ued-color-text-secondary);
 }
 
 .model-brand-icon svg {
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;

@@ -1,12 +1,12 @@
-﻿<template>
+<template>
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <UButton variant="primary" @click="openSupplierCreate">新建</UButton>
+        <UButton size="sm" variant="primary" @click="openSupplierCreate">新建</UButton>
       </div>
     </Teleport>
 
-    <div class="section-grid grid-cols-2 lg:grid-cols-4">
+    <div class="stat-grid stat-grid--4">
       <StatCard icon="server" label="供应商总数" :value="String(store.totalCount)" tone="info" />
       <StatCard icon="check" label="健康可达" :value="String(reachableCount)" tone="success" />
       <StatCard icon="alert" label="警告 / 异常" :value="String(attentionCount)" :tone="attentionCount ? 'danger' : 'neutral'" />
@@ -19,6 +19,7 @@
       action-width="148px"
       fixed
       fixed-field="freeze"
+      size="sm"
       min-width="1640px"
       table-class="supplier-table"
       pagination
@@ -44,15 +45,18 @@
           <USelect v-model="queryForm.protocol" label="协议" hide-label :options="supplierFilterOptions"
             class="table-query-form__field table-query-form__field--compact" />
           <div class="table-query-form__actions">
-            <UButton type="button" variant="secondary" @click="resetQuery">重置</UButton>
-            <UButton type="button" variant="primary" @click="submitQuery">查询</UButton>
+            <UButton size="sm" type="button" variant="secondary" @click="resetQuery">重置</UButton>
+            <UButton size="sm" type="button" variant="primary" @click="submitQuery">查询</UButton>
           </div>
         </div>
       </template>
       <template #cell-supplier="{ row }">
-        <p class="table-cell-wrap font-medium text-strong" :title="supplierTitle(row)">
-          {{ row.name }}<span v-if="row.description" class="text-secondary"> · {{ row.description }}</span>
-        </p>
+        <div class="table-cell-inline" :title="supplierTitle(row)">
+          <p class="table-cell-wrap font-medium text-strong">
+            {{ row.name }}<span v-if="row.description" class="text-secondary"> · {{ row.description }}</span>
+          </p>
+          <UTag v-if="isPluginVendor(row.vendor)" variant="info" size="xs">进程插件</UTag>
+        </div>
       </template>
       <template #cell-protocol="{ row }">
         <div class="table-cell-inline">
@@ -61,17 +65,28 @@
         </div>
       </template>
       <template #cell-address="{ row }">
-        <p class="table-meta table-cell-wrap" :title="row.base_url">{{ row.base_url }}</p>
+        <p
+          v-if="isPluginVendor(row.vendor)"
+          class="table-meta table-cell-wrap"
+          :title="pluginAddressTitle(row)"
+        >
+          {{ pluginAddressLabel(row) }}
+        </p>
+        <p v-else class="table-meta table-cell-wrap" :title="row.base_url">{{ row.base_url }}</p>
       </template>
       <template #cell-user_agent="{ row }">
-        <div class="table-cell-inline" :title="row.proxy_url || row.user_agent">
+        <div v-if="isPluginVendor(row.vendor)" class="table-cell-inline">
+          <span class="table-meta">IPC 托管</span>
+        </div>
+        <div v-else class="table-cell-inline" :title="row.proxy_url || row.user_agent">
           <span v-if="row.user_agent" class="table-meta table-cell-inline__text">UA: {{ row.user_agent }}</span>
           <span v-else class="table-meta">默认 UA</span>
           <UTag v-if="row.proxy_url" variant="info" size="xs">代理</UTag>
         </div>
       </template>
       <template #cell-key="{ row }">
-        <UTag code size="xs">{{ row.api_key_masked || "未保存 API Key" }}</UTag>
+        <UTag v-if="isPluginVendor(row.vendor)" variant="neutral" size="xs">插件凭据</UTag>
+        <UTag v-else code size="xs">{{ row.api_key_masked || "未保存 API Key" }}</UTag>
       </template>
       <template #cell-models="{ row }">
         <div v-if="(row.models || []).length" class="table-cell-inline" :title="formatModelList(row.models)">
@@ -113,39 +128,76 @@
 
     <UModal v-model:open="supplierModalOpen" :title="store.form.id ? '编辑供应商' : '新建供应商'" width="640px"
       @close="store.resetForm">
-      <form id="supplier-form" class="space-y-3" @submit.prevent="submitSupplier">
+      <form id="supplier-form" class="space-y-2" @submit.prevent="submitSupplier">
         <div class="form-grid">
           <UInput v-model="store.form.name" label="名称" placeholder="例如：OpenAI 生产环境" />
           <USelect v-model="store.form.protocol" label="协议" :options="protocolOptions" />
         </div>
 
         <div class="form-grid">
-          <USelect v-model="store.form.vendor" label="类型" :options="vendorOptions" />
+          <USelect v-model="store.form.vendor" label="类型" :options="vendorOptions" @update:model-value="onVendorChange" />
         </div>
 
-        <UInput v-model="store.form.base_url" label="基础地址" placeholder="https://api.openai.com" />
+        <template v-if="isPluginForm">
+          <USelect
+            v-if="pluginSelectOptions.length"
+            v-model="store.form.plugin_id"
+            label="进程插件"
+            placeholder="选择已注册的插件"
+            :options="pluginSelectOptions"
+            @update:model-value="onPluginIdChange"
+          />
+          <UInput
+            v-model="store.form.plugin_id"
+            label="插件 ID"
+            :placeholder="pluginSelectOptions.length ? '或手动填写 plugin_id' : '例如：grokbuild'"
+            required
+            @update:model-value="onPluginIdChange"
+          />
+          <UInput
+            :model-value="pluginBaseURLPreview"
+            label="路由地址"
+            disabled
+            hint="进程插件不走 HTTP BaseURL，由 bridge 通过 IPC 转发。"
+          />
+          <UAlert
+            type="info"
+            message="凭据与 OAuth 在插件扩展页管理（侧栏「插件」）。保存后请配置模型与路由规则；健康检查会探测插件 health。"
+          />
+          <p v-if="!pluginSelectOptions.length && !pluginsLoading" class="text-xs text-muted">
+            当前没有已注册插件。请先到「插件」页安装并启动（例如 plugin-grokbuild.exe）。
+          </p>
+        </template>
 
-        <UInput v-model="store.form.models_url" label="模型列表地址" placeholder="留空则用基础地址 + /v1/models" />
+        <template v-else>
+          <UInput v-model="store.form.base_url" label="基础地址" placeholder="https://api.openai.com" />
 
-        <UInput v-model="store.form.proxy_url" label="网络代理" placeholder="例如：http://127.0.0.1:7890，留空则使用默认网络" />
+          <UInput v-model="store.form.models_url" label="模型列表地址" placeholder="留空则用基础地址 + /v1/models" />
 
-        <UInput v-model="store.form.api_key" label="API Key" placeholder="编辑时留空则保留已有密钥" />
+          <UInput v-model="store.form.proxy_url" label="网络代理" placeholder="例如：http://127.0.0.1:7890，留空则使用默认网络" />
 
-        <UInput v-model="store.form.user_agent" label="User-Agent" placeholder="留空则使用默认上游 UA" />
+          <UInput v-model="store.form.api_key" label="API Key" placeholder="编辑时留空则保留已有密钥" />
+
+          <UInput v-model="store.form.user_agent" label="User-Agent" placeholder="留空则使用默认上游 UA" />
+        </template>
 
         <UInput v-model="store.form.description" label="描述" textarea placeholder="填写该供应商配置的用途说明" />
 
-        <UAlert type="info" message="模型已拆分为独立资源。保存供应商后，请在列表中点击“管理模型”添加候选模型；填写“模型列表地址”可自定义从上游获取模型时使用的接口。" />
+        <UAlert
+          v-if="!isPluginForm"
+          type="info"
+          message="模型已拆分为独立资源。保存供应商后，请在列表中点击“管理模型”添加候选模型；填写“模型列表地址”可自定义从上游获取模型时使用的接口。"
+        />
 
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-2 md:grid-cols-2">
           <USwitch v-model="store.form.enabled" label="启用该供应商" />
           <USwitch v-model="store.form.only_stream" label="仅使用流式请求" />
         </div>
       </form>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton type="button" variant="secondary" @click="closeSupplierModal">取消</UButton>
-          <UButton form="supplier-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" type="button" variant="secondary" @click="closeSupplierModal">取消</UButton>
+          <UButton size="sm" form="supplier-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
             {{ store.saving ? "保存中..." : store.form.id ? "更新供应商" : "创建供应商" }}
           </UButton>
         </div>
@@ -154,15 +206,15 @@
 
     <UModal v-model:open="modelModalOpen" :title="store.modelForm.id ? `管理模型 - ${store.modelForm.name}` : '管理模型'"
       width="760px" @close="store.resetModelForm">
-      <form id="model-form" class="space-y-3" @submit.prevent="submitModelEditor">
-        <div class="flex items-center justify-between gap-3">
+      <form id="model-form" class="space-y-2" @submit.prevent="submitModelEditor">
+        <div class="flex items-center justify-between gap-2">
           <div>
-            <p class="text-sm font-medium text-strong">候选模型列表</p>
-            <p class="mt-0.5 text-[11px] text-muted">未填写 max_tokens 时会回退到 32768。</p>
+            <p class="text-xs font-medium text-strong">候选模型列表</p>
+            <p class="mt-0.5 text-xs text-muted">未填写 max_tokens 时会回退到 32768。</p>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5">
             <UButton type="button" variant="secondary" size="xs" :loading="store.fetchingModels" :disabled="store.fetchingModels" @click="fetchModelsForSupplier">
-              从上游获取模型
+              {{ isPluginVendor(store.modelForm.vendor) ? "从插件获取模型" : "从上游获取模型" }}
             </UButton>
           </div>
         </div>
@@ -174,7 +226,7 @@
             添加到供应商
           </UButton>
         </div>
-        <p class="text-[11px] text-muted">模型目录提供 GPT、DeepSeek、GLM、Claude 图标，也可在“模型管理”中新增具体版本。</p>
+        <p class="text-xs text-muted">模型目录提供 GPT、DeepSeek、GLM、Claude 图标，也可在“模型管理”中新增具体版本。</p>
 
         <div class="space-y-2">
           <div v-for="model in configuredModels" :key="`${model.name}-${model.sourceIndex}`" class="supplier-model-row">
@@ -199,9 +251,9 @@
         </div>
       </form>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton type="button" variant="secondary" @click="closeModelModal">取消</UButton>
-          <UButton form="model-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" type="button" variant="secondary" @click="closeModelModal">取消</UButton>
+          <UButton size="sm" form="model-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
             {{ store.saving ? "保存中..." : "保存模型设置" }}
           </UButton>
         </div>
@@ -215,10 +267,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useSuppliersStore } from "../stores/suppliers";
 import { useModelCatalogStore } from "../stores/modelCatalog";
 import { useStoreError } from "../composables/useStoreError";
+import { isPluginVendor } from "../lib/api/providers_models";
+import { ListPlugins } from "../lib/apiClient";
 
 import StatCard from "../components/StatCard.vue";
 import ModelBrandIcon from "../components/ModelBrandIcon.vue";
@@ -243,6 +297,8 @@ useStoreError(catalogStore);
 const supplierModalOpen = ref(false);
 const modelModalOpen = ref(false);
 const catalogSelection = ref("");
+const pluginsLoading = ref(false);
+const registeredPlugins = ref([]);
 const queryForm = reactive({
   keyword: "",
   protocol: "all",
@@ -265,6 +321,25 @@ const availableCatalogOptions = computed(() => {
     .filter((item) => !assigned.has(item.name))
     .map((item) => ({ label: item.family ? `${item.name} · ${item.family}` : item.name, value: item.id }));
 });
+const isPluginForm = computed(() => isPluginVendor(store.form.vendor));
+const pluginSelectOptions = computed(() => {
+  const list = registeredPlugins.value.map((p) => {
+    const id = p.id || p.plugin_id;
+    const status = p.status ? ` · ${p.status}` : "";
+    const version = p.plugin_version || p.version || "";
+    const label = version ? `${id}${status} (${version})` : `${id}${status}`;
+    return { label, value: id };
+  }).filter((item) => item.value);
+  const current = String(store.form.plugin_id || "").trim();
+  if (current && !list.some((item) => item.value === current)) {
+    list.unshift({ label: `${current}（当前）`, value: current });
+  }
+  return list;
+});
+const pluginBaseURLPreview = computed(() => {
+  const id = String(store.form.plugin_id || "").trim();
+  return id ? `plugin://${id}` : "plugin://<plugin_id>";
+});
 
 const protocolOptions = [
   { label: "anthropic", value: "anthropic" },
@@ -283,9 +358,8 @@ const vendorOptions = [
   { label: "glm", value: "glm" },
   { label: "anthropic", value: "anthropic" },
   { label: "custom", value: "custom" },
+  { label: "plugin（进程插件）", value: "plugin" },
 ];
-
-
 
 const supplierTableColumns = [
   { key: "supplier", title: "供应商", width: "12%", freeze: "left" },
@@ -323,6 +397,16 @@ function supplierTitle(row) {
   return [row.name, row.description].filter(Boolean).join(" · ");
 }
 
+function pluginAddressLabel(row) {
+  const id = String(row.plugin_id || "").trim() ||
+    String(row.base_url || "").replace(/^plugin:\/\//i, "").trim();
+  return id ? `plugin://${id}` : row.base_url || "plugin://?";
+}
+
+function pluginAddressTitle(row) {
+  return pluginAddressLabel(row);
+}
+
 function healthTone(record) {
   if (!record) {
     return "neutral";
@@ -334,6 +418,50 @@ function healthTone(record) {
     return "warning";
   }
   return "error";
+}
+
+function syncPluginBaseURL() {
+  if (!isPluginVendor(store.form.vendor)) {
+    return;
+  }
+  const id = String(store.form.plugin_id || "").trim();
+  store.form.base_url = id ? `plugin://${id}` : "";
+}
+
+function onVendorChange(value) {
+  if (isPluginVendor(value)) {
+    store.form.api_key = "";
+    store.form.models_url = "";
+    store.form.proxy_url = "";
+    store.form.user_agent = "";
+    if (!store.form.plugin_id && registeredPlugins.value.length === 1) {
+      store.form.plugin_id = registeredPlugins.value[0].id || registeredPlugins.value[0].plugin_id || "";
+    }
+    syncPluginBaseURL();
+    loadRegisteredPlugins();
+  } else {
+    store.form.plugin_id = "";
+    if (String(store.form.base_url || "").toLowerCase().startsWith("plugin://")) {
+      store.form.base_url = "";
+    }
+  }
+}
+
+function onPluginIdChange() {
+  syncPluginBaseURL();
+}
+
+async function loadRegisteredPlugins() {
+  pluginsLoading.value = true;
+  try {
+    const raw = await ListPlugins();
+    const list = Array.isArray(raw) ? raw : raw?.items || [];
+    registeredPlugins.value = list;
+  } catch {
+    registeredPlugins.value = [];
+  } finally {
+    pluginsLoading.value = false;
+  }
 }
 
 function openDeleteConfirm(item) {
@@ -355,17 +483,28 @@ async function resetQuery() {
 function openSupplierCreate() {
   store.resetForm();
   supplierModalOpen.value = true;
+  loadRegisteredPlugins();
 }
 
 function openSupplierEdit(item) {
   store.select(item);
   supplierModalOpen.value = true;
+  loadRegisteredPlugins();
 }
 
 function closeSupplierModal() {
   supplierModalOpen.value = false;
   store.resetForm();
 }
+
+watch(
+  () => store.form.plugin_id,
+  () => {
+    if (isPluginForm.value) {
+      syncPluginBaseURL();
+    }
+  },
+);
 
 function openModelEditor(item) {
   store.selectModelEditor(item);
@@ -422,11 +561,27 @@ function removeModelRow(form, index) {
 }
 
 async function submitSupplier() {
+  const wasPlugin = isPluginForm.value;
+  if (wasPlugin) {
+    const pluginId = String(store.form.plugin_id || "").trim();
+    if (!pluginId) {
+      message.error("进程插件供应商必须填写插件 ID（例如 grokbuild）。");
+      return;
+    }
+    store.form.plugin_id = pluginId;
+    syncPluginBaseURL();
+  }
   const isEdit = Boolean(store.form.id);
   await store.save();
   if (!store.error) {
     supplierModalOpen.value = false;
-    message.success(isEdit ? "供应商已更新。" : "供应商已新增。请继续配置模型。");
+    message.success(
+      isEdit
+        ? "供应商已更新。"
+        : wasPlugin
+          ? "插件供应商已新增。请添加模型并配置路由；凭据在插件扩展页管理。"
+          : "供应商已新增。请继续配置模型。",
+    );
   }
 }
 
@@ -463,10 +618,11 @@ async function fetchModelsForSupplier() {
     return;
   }
   const count = await store.fetchModels(store.modelForm.id);
+  const fromPlugin = isPluginVendor(store.modelForm.vendor);
   if (count > 0) {
-    message.success(`已从上游获取 ${count} 个新模型。`);
+    message.success(fromPlugin ? `已从插件获取 ${count} 个新模型。` : `已从上游获取 ${count} 个新模型。`);
   } else {
-    message.info("暂无新模型或该供应商不支持自动获取。");
+    message.info(fromPlugin ? "插件未返回新模型，或插件未运行。" : "暂无新模型或该供应商不支持自动获取。");
   }
 }
 

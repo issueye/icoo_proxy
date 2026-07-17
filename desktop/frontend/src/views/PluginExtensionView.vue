@@ -1,8 +1,10 @@
 <template>
   <div class="plugin-ext">
     <div v-if="!embedUrl" class="plugin-ext__empty">
-      <p>未找到插件扩展页。</p>
-      <p class="plugin-ext__hint">请确认插件已启动，并在 handshake 中声明 ui_pages。</p>
+      <p class="plugin-ext__title">未找到插件扩展页</p>
+      <p class="plugin-ext__hint">
+        请确认插件已启动，并在 handshake 中声明 <code>ui_pages</code>。可在「插件」页检查状态后重试。
+      </p>
     </div>
     <iframe
       v-else
@@ -36,26 +38,43 @@ const embedUrl = computed(() => {
 
 <style scoped>
 .plugin-ext {
-  height: calc(100vh - 180px);
-  min-height: 480px;
-  border-radius: 12px;
+  /* Fill the main content area under topbar; light shell matches desktop UED. */
+  height: calc(100vh - 132px);
+  min-height: 420px;
+  border-radius: var(--ued-radius-lg, 6px);
   overflow: hidden;
-  border: 1px solid var(--border-color, #2a3544);
-  background: #0f1419;
+  border: 1px solid var(--ued-color-border, #d4d7dc);
+  background: var(--ued-color-bg-page, #f3f4f6);
+  box-shadow: none;
 }
 .plugin-ext__frame {
   width: 100%;
   height: 100%;
   border: 0;
   display: block;
-  background: #0f1419;
+  background: var(--ued-color-bg-page, #f3f4f6);
 }
 .plugin-ext__empty {
-  padding: 32px;
-  color: #9aa7b8;
+  padding: var(--ued-space-12, 16px) var(--ued-space-8, 12px);
+  color: var(--ued-color-text-muted, #6b7280);
+}
+.plugin-ext__title {
+  margin: 0;
+  font-size: var(--ued-font-size-base, 13px);
+  font-weight: 600;
+  color: var(--ued-color-text, #1f2329);
 }
 .plugin-ext__hint {
-  font-size: 13px;
-  margin-top: 8px;
+  font-size: var(--ued-font-size-sm, 12px);
+  margin-top: var(--ued-space-3, 4px);
+  line-height: 1.45;
+  max-width: 36rem;
+}
+.plugin-ext__hint code {
+  font-size: var(--ued-font-size-xs, 11px);
+  padding: 1px 4px;
+  border-radius: var(--ued-radius-sm, 3px);
+  background: var(--ued-color-secondary, #eef0f3);
+  border: 1px solid var(--ued-color-border-light, #e4e6ea);
 }
 </style>

@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/issueye/icoo_proxy/common/constants"
 	"github.com/issueye/icoo_proxy/bridge/internal/model/entity"
 	"github.com/issueye/icoo_proxy/bridge/internal/repository"
+	"github.com/issueye/icoo_proxy/common/constants"
+	"github.com/issueye/icoo_proxy/common/pluginipc"
 )
 
 var providerChatClient = &http.Client{Timeout: 120 * time.Second}
@@ -175,9 +176,6 @@ func (s *providerChatService) Chat(ctx context.Context, providerID string, input
 	if err != nil {
 		return ProviderChatResult{}, fmt.Errorf("provider not found: %w", err)
 	}
-	if provider.Vendor == constants.VendorPlugin {
-		return ProviderChatResult{}, fmt.Errorf("admin chat is not supported for plugin providers in v1; use the proxy endpoints or plugin CLI")
-	}
 	model := strings.TrimSpace(input.Model)
 	if model == "" {
 		return ProviderChatResult{}, fmt.Errorf("model is required")
@@ -185,6 +183,12 @@ func (s *providerChatService) Chat(ctx context.Context, providerID string, input
 	messages := normalizeChatMessages(input.Messages)
 	if len(messages) == 0 {
 		return ProviderChatResult{}, fmt.Errorf("message is required")
+	}
+
+	// Process plugin providers: build the preferred-ingress body and call
+	// proxy.complete over IPC (same path as the gateway hot path).
+	if provider.Vendor == constants.VendorPlugin {
+		return s.chatPluginProvider(ctx, provider, model, messages, input)
 	}
 
 	body, err := buildProviderChatRequest(provider.Protocol, model, messages, input)
@@ -241,6 +245,117 @@ func (s *providerChatService) Chat(ctx context.Context, providerID string, input
 		StatusCode: resp.StatusCode,
 		DurationMS: duration,
 	}, nil
+}
+
+func (s *providerChatService) chatPluginProvider(
+	ctx context.Context,
+	provider entity.Provider,
+	model string,
+	messages []ProviderChatMessage,
+	input ProviderChatInput,
+) (ProviderChatResult, error) {
+	pluginID := ResolveProviderPluginID(provider.Vendor, provider.PluginID, provider.BaseURL)
+	if pluginID == "" {
+		return ProviderChatResult{}, fmt.Errorf("plugin_id is not configured")
+	}
+	if s.plugins == nil {
+		return ProviderChatResult{}, fmt.Errorf("plugin runtime is not configured")
+	}
+	if provider.OnlyStream {
+		return ProviderChatResult{}, fmt.Errorf("provider only_stream is enabled; non-stream admin chat is not allowed")
+	}
+
+	protocol := provider.Protocol
+	if protocol == "" {
+		protocol = constants.ProtocolOpenAIResponses
+	}
+	body, err := buildProviderChatRequest(protocol, model, messages, input)
+	if err != nil {
+		return ProviderChatResult{}, err
+	}
+
+	cli, err := s.plugins.Client(pluginID)
+	if err != nil {
+		return ProviderChatResult{}, fmt.Errorf("plugin %q unavailable: %w", pluginID, err)
+	}
+
+	headers := map[string]string{"content-type": "application/json"}
+	if protocol == constants.ProtocolAnthropic {
+		headers["anthropic-version"] = "2023-06-01"
+	}
+	req := pluginipc.ProxyRequest{
+		Ingress: protocol.String(),
+		Path:    providerChatIngressPath(protocol),
+		Method:  http.MethodPost,
+		Headers: headers,
+		Body:    body,
+		Model:   model,
+		Stream:  false,
+	}
+
+	start := time.Now()
+	resp, err := cli.Complete(ctx, req)
+	duration := time.Since(start).Milliseconds()
+	if err != nil {
+		_, msg := mapPluginCallError(err)
+		return ProviderChatResult{}, fmt.Errorf("plugin chat failed: %s", msg)
+	}
+	if resp == nil {
+		return ProviderChatResult{}, fmt.Errorf("empty plugin response")
+	}
+	status := resp.Status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	if !isHTTPSuccess(status) {
+		return ProviderChatResult{}, errors.New(upstreamErrorMessage(status, resp.Body))
+	}
+
+	content := extractProviderChatText(protocol, resp.Body)
+	if strings.TrimSpace(content) == "" {
+		// Plugin may respond in Responses shape even when ingress was Chat/Anthropic
+		// conversion failed partial; try sibling extractors before giving up.
+		for _, p := range []constants.Protocol{
+			constants.ProtocolOpenAIResponses,
+			constants.ProtocolOpenAIChat,
+			constants.ProtocolAnthropic,
+		} {
+			if p == protocol {
+				continue
+			}
+			if text := extractProviderChatText(p, resp.Body); strings.TrimSpace(text) != "" {
+				content = text
+				break
+			}
+		}
+	}
+	if strings.TrimSpace(content) == "" {
+		return ProviderChatResult{}, fmt.Errorf("plugin returned no text content")
+	}
+
+	return ProviderChatResult{
+		SupplierID: provider.ID,
+		Model:      model,
+		Message: ProviderChatMessage{
+			Role:    "assistant",
+			Content: content,
+		},
+		StatusCode: status,
+		DurationMS: duration,
+	}, nil
+}
+
+func providerChatIngressPath(protocol constants.Protocol) string {
+	switch protocol {
+	case constants.ProtocolAnthropic:
+		return "/v1/messages"
+	case constants.ProtocolOpenAIChat:
+		return "/v1/chat/completions"
+	case constants.ProtocolOpenAIResponses:
+		return "/v1/responses"
+	default:
+		return "/v1/responses"
+	}
 }
 
 func normalizeChatMessages(messages []ProviderChatMessage) []ProviderChatMessage {

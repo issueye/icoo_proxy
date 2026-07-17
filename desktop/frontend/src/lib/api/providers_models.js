@@ -8,13 +8,34 @@ import {
   valueOf,
 } from "./normalize";
 
+/** Process-plugin vendor: traffic goes over IPC, not HTTP BaseURL. */
+export function isPluginVendor(vendor) {
+  return String(vendor || "").trim().toLowerCase() === "plugin";
+}
+
+function pluginIdFromBaseURL(baseURL) {
+  const value = String(baseURL || "").trim();
+  const prefix = "plugin://";
+  if (value.toLowerCase().startsWith(prefix)) {
+    return value.slice(prefix.length).trim();
+  }
+  return "";
+}
+
 function normalizeProvider(raw) {
+  const vendor = valueOf(raw, "vendor", "Vendor", "custom");
+  let pluginId = valueOf(raw, "plugin_id", "PluginID");
+  const baseURL = valueOf(raw, "base_url", "BaseURL");
+  if (isPluginVendor(vendor) && !pluginId) {
+    pluginId = pluginIdFromBaseURL(baseURL);
+  }
   return {
     id: valueOf(raw, "id", "ID"),
     name: valueOf(raw, "name", "Name"),
     protocol: valueOf(raw, "protocol", "Protocol"),
-    vendor: valueOf(raw, "vendor", "Vendor", "custom"),
-    base_url: valueOf(raw, "base_url", "BaseURL"),
+    vendor,
+    plugin_id: pluginId,
+    base_url: baseURL,
     models_url: valueOf(raw, "models_url", "ModelsURL"),
     proxy_url: valueOf(raw, "proxy_url", "ProxyURL"),
     api_key_masked:
@@ -105,12 +126,26 @@ export async function listProvidersWithModels() {
   return providers;
 }
 function providerPayload(input) {
+  const vendor = String(input.vendor || "custom").trim() || "custom";
+  let pluginId = String(input.plugin_id || "").trim();
+  let baseURL = String(input.base_url || "").trim();
+  if (isPluginVendor(vendor)) {
+    if (!pluginId) {
+      pluginId = pluginIdFromBaseURL(baseURL);
+    }
+    if (pluginId && !baseURL) {
+      baseURL = `plugin://${pluginId}`;
+    }
+  } else {
+    pluginId = "";
+  }
   return {
     id: input.id || undefined,
     name: String(input.name || "").trim(),
     protocol: input.protocol,
-    vendor: input.vendor || "custom",
-    base_url: String(input.base_url || "").trim(),
+    vendor,
+    plugin_id: pluginId,
+    base_url: baseURL,
     models_url: String(input.models_url || "").trim(),
     proxy_url: String(input.proxy_url || "").trim(),
     api_key: String(input.api_key || "").trim(),
@@ -156,7 +191,13 @@ export async function GetSuppliersPage(page, pageSize, keyword, protocol) {
   const items = (await listProvidersWithModels()).filter(
     (i) =>
       (protocol === "all" || !protocol || i.protocol === protocol) &&
-      matchesKeyword(i, keyword, ["name", "base_url", "description"]),
+      matchesKeyword(i, keyword, [
+        "name",
+        "base_url",
+        "description",
+        "plugin_id",
+        "vendor",
+      ]),
   );
   const result = pageItems(items, page, pageSize);
   result.total_count = items.length;
@@ -176,6 +217,158 @@ export async function SaveSupplier(input) {
     await syncProviderModels(provider.id, input.models);
   return provider;
 }
+
+/**
+ * Default display name / models for known process plugins.
+ * Unknown plugins get a generic name and empty model list
+ * (caller may still try FetchModelsFromProvider).
+ */
+export function pluginProviderDefaults(pluginId) {
+  const id = String(pluginId || "").trim();
+  switch (id) {
+    case "grokbuild":
+      return {
+        name: "GrokBuild / SuperGrok",
+        protocol: "openai-responses",
+        description:
+          "进程插件 grokbuild：凭据在插件扩展页管理，流量经 IPC 转发到 Grok Build。",
+        models: [
+          { name: "grok-4", max_tokens: 131072 },
+          { name: "grok-4.5", max_tokens: 131072 },
+          { name: "grok-build-0.1", max_tokens: 131072 },
+        ],
+      };
+    case "mock":
+      return {
+        name: "Mock Plugin",
+        protocol: "openai-responses",
+        description: "进程插件 mock：集成测试用。",
+        models: [{ name: "mock-model", max_tokens: 8192 }],
+      };
+    default:
+      return {
+        name: id ? `Plugin ${id}` : "Process Plugin",
+        protocol: "openai-responses",
+        description: id
+          ? `进程插件 ${id}：流量经 IPC 转发。`
+          : "进程插件供应商。",
+        models: [],
+      };
+  }
+}
+
+function findPluginProvider(providers, pluginId) {
+  const id = String(pluginId || "").trim();
+  if (!id) return null;
+  return (
+    (providers || []).find(
+      (p) =>
+        isPluginVendor(p.vendor) &&
+        (String(p.plugin_id || "").trim() === id ||
+          pluginIdFromBaseURL(p.base_url) === id),
+    ) || null
+  );
+}
+
+/** Add models that are missing; never deletes existing models. */
+async function addMissingProviderModels(providerID, models = []) {
+  if (!providerID || !models.length) return 0;
+  const existing = await listProviderModels(providerID);
+  const have = new Set(existing.map((m) => String(m.name || "").trim()).filter(Boolean));
+  let added = 0;
+  for (const model of models) {
+    const name = String(model?.name || "").trim();
+    if (!name || have.has(name)) continue;
+    await client.post(`${API_PREFIX}/providers/${providerID}/models`, {
+      name,
+      max_tokens: Number(model?.max_tokens || 32768),
+      enabled: model?.enabled ?? true,
+    });
+    have.add(name);
+    added += 1;
+  }
+  return added;
+}
+
+/**
+ * Ensure a Vendor=plugin provider exists for the given plugin_id.
+ * Idempotent: reuses existing provider; only appends missing default models.
+ *
+ * @param {{ plugin_id: string, name?: string, protocol?: string, description?: string, models?: Array<{name:string,max_tokens?:number}>, fetch_models?: boolean }} options
+ * @returns {Promise<{ provider: object, created: boolean, models_added: number, fetched_models: number }>}
+ */
+export async function EnsurePluginProvider(options = {}) {
+  const pluginId = String(options.plugin_id || options.pluginId || "").trim();
+  if (!pluginId) {
+    throw new Error("plugin_id is required");
+  }
+  const defaults = pluginProviderDefaults(pluginId);
+  const name = String(options.name || defaults.name).trim() || defaults.name;
+  const protocol = options.protocol || defaults.protocol;
+  const description =
+    options.description != null ? String(options.description) : defaults.description;
+  const seedModels =
+    Array.isArray(options.models) && options.models.length
+      ? options.models
+      : defaults.models;
+  const shouldFetch = options.fetch_models !== false;
+
+  const providers = await listProvidersWithModels();
+  let provider = findPluginProvider(providers, pluginId);
+  let created = false;
+  let modelsAdded = 0;
+
+  if (!provider) {
+    provider = await SaveSupplier({
+      name,
+      protocol,
+      vendor: "plugin",
+      plugin_id: pluginId,
+      base_url: `plugin://${pluginId}`,
+      enabled: true,
+      description,
+      models: seedModels,
+    });
+    created = true;
+    modelsAdded = seedModels.length;
+  } else {
+    modelsAdded = await addMissingProviderModels(provider.id, seedModels);
+  }
+
+  let fetchedModels = 0;
+  if (shouldFetch && provider?.id) {
+    try {
+      const fetched = await FetchModelsFromProvider(provider.id);
+      const toAdd = (fetched || [])
+        .filter((m) => m?.name && !m.exists)
+        .map((m) => ({
+          name: m.name,
+          max_tokens: Number(m.max_tokens || 32768),
+        }));
+      if (toAdd.length) {
+        const n = await addMissingProviderModels(provider.id, toAdd);
+        fetchedModels = n;
+        modelsAdded += n;
+      }
+    } catch {
+      // Plugin may be stopped or models.list unavailable — seed models are enough.
+    }
+  }
+
+  // Refresh models on the returned provider snapshot.
+  if (provider?.id) {
+    provider.models = await listProviderModels(provider.id);
+    provider.plugin_id = provider.plugin_id || pluginId;
+  }
+
+  return {
+    provider,
+    created,
+    models_added: modelsAdded,
+    fetched_models: fetchedModels,
+  };
+}
+
 export function DeleteSupplier(id) {
   return client.delete(`${API_PREFIX}/providers/${id}`);
 }

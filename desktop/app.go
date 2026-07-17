@@ -26,6 +26,13 @@ type App struct {
 	serverLogPath   string
 	serverLog       *os.File
 	serverLastError string
+	// ownsServer is true only when this desktop instance spawned bridge.
+	// External/orphan listeners are not killed on exit.
+	ownsServer bool
+	// bridgeJob (Windows) KILL_ON_JOB_CLOSE: desktop crash also kills bridge.
+	bridgeJob *processJob
+	// managedPID is the bridge PID we started (for tree kill after Wait clears cmd).
+	managedPID int
 }
 
 type ServerProcessInfo struct {
@@ -61,6 +68,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	// Desktop owns bridge (+ plugins as bridge children). Always force-stop on exit.
 	_ = a.StopServer()
 }
 
@@ -73,6 +81,7 @@ func isRunning(cmd *exec.Cmd) bool {
 }
 
 // StartServer starts the icoo_llm_bridge child process.
+// Plugins are spawned by bridge; desktop kills the whole tree on Stop/exit.
 func (a *App) StartServer() error {
 	a.mu.Lock()
 
@@ -92,10 +101,13 @@ func (a *App) StartServer() error {
 
 	listenAddr := fmt.Sprintf("%s:%d", a.config.Host, a.config.Port)
 	if serverHealthOK(a.config.URL()) {
+		// Port already served — do not claim ownership (won't kill on exit).
 		a.serverExe = findServerExecutable(exeDir)
 		a.serverDir = exeDir
 		a.serverArgs = []string{"-data-dir", ".", "-addr", listenAddr}
 		a.serverLastError = ""
+		a.ownsServer = false
+		a.managedPID = 0
 		a.mu.Unlock()
 		return nil
 	}
@@ -125,6 +137,21 @@ func (a *App) StartServer() error {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 
+	pid := 0
+	if cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+
+	// Bind bridge to a Job Object (Windows) so desktop crash also reaps bridge.
+	var job *processJob
+	if j, jerr := newManagedProcessJob(); jerr == nil {
+		if aerr := j.assign(pid); aerr != nil {
+			j.close()
+		} else {
+			job = j
+		}
+	}
+
 	a.serverCmd = cmd
 	a.serverExe = serverExe
 	a.serverDir = exeDir
@@ -133,6 +160,9 @@ func (a *App) StartServer() error {
 	a.serverLogPath = logPath
 	a.serverLog = logFile
 	a.serverLastError = ""
+	a.ownsServer = true
+	a.managedPID = pid
+	a.bridgeJob = job
 	a.mu.Unlock()
 
 	// goroutine to clean up after process exits
@@ -145,6 +175,12 @@ func (a *App) StartServer() error {
 				a.serverLog = nil
 			}
 			a.serverStartedAt = time.Time{}
+			a.ownsServer = false
+			a.managedPID = 0
+			if a.bridgeJob != nil {
+				a.bridgeJob.close()
+				a.bridgeJob = nil
+			}
 			if cmd.ProcessState != nil && !cmd.ProcessState.Success() {
 				a.serverLastError = fmt.Sprintf("server exited: %s", cmd.ProcessState.String())
 			}
@@ -154,6 +190,8 @@ func (a *App) StartServer() error {
 	}()
 
 	if err := waitForServerHealth(a.config.URL(), cmd, 3*time.Second); err != nil {
+		// Bridge failed readiness — tear down so we don't leave orphans.
+		_ = a.StopServer()
 		a.mu.Lock()
 		a.serverLastError = err.Error()
 		a.mu.Unlock()
@@ -251,22 +289,36 @@ func isUsableServerExecutable(path string) bool {
 	return header == [2]byte{'M', 'Z'}
 }
 
-// StopServer stops the icoo_llm_bridge child process.
+// StopServer stops the icoo_llm_bridge child process and its plugin tree.
+// Plugins are children of bridge (host Job Object / process group); killing the
+// tree ensures they do not outlive the desktop session.
 func (a *App) StopServer() error {
 	a.mu.Lock()
 	cmd := a.serverCmd
+	pid := a.managedPID
+	if pid <= 0 && cmd != nil && cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+	owns := a.ownsServer
+	job := a.bridgeJob
 	listenAddr := fmt.Sprintf("%s:%d", a.config.Host, a.config.Port)
 	serverURL := a.config.URL()
-	if isRunning(cmd) {
-		if err := cmd.Process.Kill(); err != nil {
+
+	if !owns && !isRunning(cmd) {
+		// Not our process. Refuse to kill a foreign listener.
+		if serverHealthOK(serverURL) {
 			a.mu.Unlock()
-			return err
+			return fmt.Errorf("refusing to stop server on %s because it was not started by icoo_desktop", listenAddr)
 		}
-	} else if serverHealthOK(serverURL) {
 		a.mu.Unlock()
-		return fmt.Errorf("refusing to stop server on %s because it was not started by icoo_desktop", listenAddr)
+		return nil
 	}
+
+	// Clear ownership first so concurrent StartServer does not race.
 	a.serverCmd = nil
+	a.ownsServer = false
+	a.managedPID = 0
+	a.bridgeJob = nil
 	a.serverStartedAt = time.Time{}
 	a.serverLastError = ""
 	if a.serverLog != nil {
@@ -275,9 +327,24 @@ func (a *App) StopServer() error {
 	}
 	a.mu.Unlock()
 
-	for i := 0; i < 20; i++ {
+	// 1) Force-kill process tree (bridge + plugin children).
+	_ = killProcessTree(pid)
+	// 2) Close Job Object (Windows KILL_ON_JOB_CLOSE) if still holding processes.
+	if job != nil {
+		job.close()
+	}
+	// 3) Best-effort direct kill if Wait has not finished.
+	if cmd != nil && cmd.Process != nil && isRunning(cmd) {
+		_ = cmd.Process.Kill()
+	}
+
+	for i := 0; i < 30; i++ {
 		if !serverHealthOK(serverURL) {
 			return nil
+		}
+		// Re-issue tree kill while health still answers (slow plugin teardown).
+		if i == 10 || i == 20 {
+			_ = killProcessTree(pid)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

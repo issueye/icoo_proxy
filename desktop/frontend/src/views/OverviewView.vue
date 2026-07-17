@@ -2,10 +2,10 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <UButton variant="primary" :loading="store.refreshing" @click="reloadProxy">
+        <UButton size="sm" variant="primary" :loading="store.refreshing" @click="reloadProxy">
           {{ store.refreshing ? "重载中..." : "重载代理" }}
         </UButton>
-        <UTag :variant="store.data?.running ? 'success' : 'error'">
+        <UTag size="xs" :variant="store.data?.running ? 'success' : 'error'">
           {{ store.data?.running ? "运行中" : "已停止" }}
         </UTag>
       </div>
@@ -16,14 +16,14 @@
     </div>
 
     <template v-else>
-      <div class="section-grid grid-cols-2 lg:grid-cols-4">
+      <div class="stat-grid stat-grid--4">
         <StatCard icon="wifi" label="监听地址" :value="store.data?.listen_addr || '-'" />
         <StatCard icon="server" label="供应商总数" :value="String(store.supplierCount)" tone="info" />
         <StatCard icon="check" label="健康可达" :value="String(store.reachableSupplierCount)" tone="success" />
         <StatCard icon="alert" label="需要关注" :value="String(store.warningSupplierCount)" :tone="store.warningSupplierCount ? 'danger' : 'neutral'" />
       </div>
 
-      <div class="section-grid lg:grid-cols-2">
+      <div class="stat-grid stat-grid--2">
         <PanelBlock title="供应商健康汇总">
           <div class="overview-health-list">
             <div class="overview-health-row">
@@ -52,9 +52,9 @@
 
         <PanelBlock title="上游就绪状态">
           <div class="divide-y divide-[var(--ued-color-divider)]">
-            <div v-for="upstream in store.data?.upstreams || []" :key="upstream.protocol" class="grid gap-2 py-2 grid-cols-[1fr_auto] items-center">
+            <div v-for="upstream in store.data?.upstreams || []" :key="upstream.protocol" class="grid gap-1.5 py-1.5 grid-cols-[1fr_auto] items-center">
               <div class="min-w-0">
-                <p class="text-[13px] font-medium text-strong">{{ upstream.protocol }}</p>
+                <p class="text-xs font-medium text-strong">{{ upstream.protocol }}</p>
                 <p class="mt-0.5 truncate text-xs text-muted">{{ upstream.base_url || "-" }}</p>
               </div>
               <UTag :variant="upstream.configured ? 'success' : 'warning'" size="xs">
@@ -65,7 +65,7 @@
         </PanelBlock>
       </div>
 
-      <div class="section-grid lg:grid-cols-2">
+      <div class="stat-grid stat-grid--2">
         <PanelBlock title="运行检查">
           <div class="flex flex-wrap gap-1.5">
             <UTag

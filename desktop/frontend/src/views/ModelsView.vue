@@ -2,7 +2,7 @@
   <section class="page-section">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
-        <UButton variant="primary" @click="openCreate">新建模型</UButton>
+        <UButton size="sm" variant="primary" @click="openCreate">新建模型</UButton>
       </div>
     </Teleport>
 
@@ -48,7 +48,7 @@
     </div>
 
     <UModal v-model:open="modalOpen" :title="store.form.id ? '编辑模型' : '新建模型'" width="560px" @close="store.resetForm">
-      <form id="catalog-model-form" class="space-y-3" @submit.prevent="submit">
+      <form id="catalog-model-form" class="space-y-2" @submit.prevent="submit">
         <div class="form-grid">
           <UInput v-model="store.form.name" label="模型名称" placeholder="例如：gpt-4.1-mini" required />
           <UInput v-model="store.form.family" label="模型家族" placeholder="例如：OpenAI" />
@@ -64,9 +64,9 @@
         <UInput v-model="store.form.description" label="说明" textarea placeholder="填写模型用途或版本说明" />
       </form>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="secondary" @click="closeModal">取消</UButton>
-          <UButton form="catalog-model-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
+        <div class="flex justify-end gap-1.5">
+          <UButton size="sm" variant="secondary" @click="closeModal">取消</UButton>
+          <UButton size="sm" form="catalog-model-form" variant="primary" native-type="submit" :loading="store.saving" :disabled="store.saving">
             {{ store.saving ? "保存中..." : "保存模型" }}
           </UButton>
         </div>

@@ -26,7 +26,7 @@ cd plugins/grokbuild
 go build -o build/plugin-grokbuild.exe ./cmd/plugin-grokbuild
 ```
 
-Or via monorepo packaging (also copies next to bridge/desktop bins):
+Or via monorepo packaging:
 
 ```powershell
 # from repo root
@@ -34,14 +34,28 @@ Or via monorepo packaging (also copies next to bridge/desktop bins):
 # or skip plugins: .\build-all.ps1 -SkipPlugins
 ```
 
-Copy next to `bridge.exe` or set absolute `executable` in config.
+Packaged layout (preferred):
+
+```text
+icoo_proxy/
+  bridge.exe
+  icoo_desktop.exe
+  plugins/
+    grokbuild/
+      info.toml
+      plugin-grokbuild.exe
+```
 
 ## Configure bridge
+
+Desktop: **插件 → 发现插件 → 安装并启用**（读取 `plugins/grokbuild/info.toml`）。
+
+Or TOML:
 
 ```toml
 [plugins.entries.grokbuild]
 enabled = true
-executable = "plugin-grokbuild.exe"
+executable = "plugins/grokbuild/plugin-grokbuild.exe"
 data_dir = ".data/plugins/grokbuild"
 ```
 
