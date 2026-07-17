@@ -25,14 +25,11 @@
       </div>
     </Teleport>
 
-    <div class="stat-grid stat-grid--4">
+    <div class="stat-grid stat-grid--4 traffic-stats">
       <StatCard icon="activity" label="最近请求数" :value="String(store.totalRequests)" tone="info" />
       <StatCard icon="alert" label="错误请求" :value="String(store.errorCount)" tone="danger" />
       <StatCard icon="timer" label="平均耗时" :value="`${store.averageLatency} ms`" />
       <StatCard icon="key" label="总 Token" :value="formatTokenCount(store.tokenStats.total_tokens)" tone="info" />
-    </div>
-
-    <div class="stat-grid stat-grid--4">
       <StatCard icon="check" label="成功请求" :value="String(store.successCount)" tone="success" />
       <StatCard icon="timer" label="客户端取消" :value="String(store.canceledCount)" tone="warning" />
       <StatCard icon="layers" label="总输入 Token" :value="formatTokenCount(store.tokenStats.input_tokens)"

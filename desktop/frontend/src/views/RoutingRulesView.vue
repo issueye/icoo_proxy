@@ -42,10 +42,7 @@
 
         <template #cell-protocol="{ row }">
           <div class="route-map__protocol-main" :title="routeProtocolTitle(row)">
-            <p class="route-map__name">{{ row.label }}</p>
             <UTag code size="xs">{{ row.key }}</UTag>
-            <span class="route-map__helper">{{ row.helperText }}</span>
-            <span v-if="row.warningText" class="route-map__warning">{{ row.warningText }}</span>
           </div>
         </template>
 

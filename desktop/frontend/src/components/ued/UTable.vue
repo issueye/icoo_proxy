@@ -4,130 +4,134 @@
       <slot name="query" />
     </div>
 
+    <!-- Outer frame (padding when query+pagination). Scroll lives on the INNER pane. -->
     <div
-      class="table-scroll"
-      :class="{ 'table-scroll--empty': !hasRows && !loading }"
-      :style="scrollStyle"
+      class="table-body"
+      :class="{ 'table-body--padded': hasQueryAndPagination }"
     >
-      <table :class="tableClasses" :style="tableStyle">
-        <colgroup v-if="tableColumns.length">
-          <col
-            v-for="column in tableColumns"
-            :key="column.uid"
-            :style="getColStyle(column)"
-          />
-        </colgroup>
-
-        <thead v-if="showHeader">
-          <tr>
-            <th
+      <div
+        class="table-scroll"
+        :class="{ 'table-scroll--empty': !hasRows && !loading }"
+        :style="scrollStyle"
+      >
+        <table :class="tableClasses" :style="tableStyle">
+          <colgroup v-if="tableColumns.length">
+            <col
               v-for="column in tableColumns"
               :key="column.uid"
-              scope="col"
-              :class="getHeaderClasses(column)"
-              :style="getStickyStyle(column)"
-              :title="column.title || undefined"
+              :style="getColStyle(column)"
+            />
+          </colgroup>
+
+          <thead v-if="showHeader">
+            <tr>
+              <th
+                v-for="column in tableColumns"
+                :key="column.uid"
+                scope="col"
+                :class="getHeaderClasses(column)"
+                :style="getStickyStyle(column)"
+                :title="column.title || undefined"
+              >
+                <slot
+                  v-if="column.isSelection"
+                  name="header-selection"
+                  :selected="allVisibleSelected"
+                  :indeterminate="someVisibleSelected"
+                  :select="onSelectAllVisible"
+                >
+                  <input
+                    type="checkbox"
+                    class="table-selection__checkbox"
+                    :checked="allVisibleSelected"
+                    :indeterminate.prop="someVisibleSelected"
+                    :aria-label="allVisibleSelected ? '取消全选' : '全选当前页'"
+                    @click.prevent="onSelectAllVisible(!allVisibleSelected)"
+                  />
+                </slot>
+                <slot
+                  v-else-if="!column.isAction"
+                  :name="`header-${column.key}`"
+                  :column="column.raw"
+                >
+                  {{ column.title }}
+                </slot>
+                <template v-else>{{ column.title }}</template>
+              </th>
+            </tr>
+          </thead>
+
+          <tbody v-if="hasRows">
+            <tr
+              v-for="(row, rowIndex) in visibleRows"
+              :key="resolveRowKey(row, rowIndex)"
+              :class="getRowClasses(row, rowIndex)"
+              :tabindex="rowClickable ? 0 : undefined"
+              @click="handleRowClick(row, rowIndex, $event)"
+              @keydown.enter.prevent="handleRowClick(row, rowIndex, $event)"
             >
-              <slot
-                v-if="column.isSelection"
-                name="header-selection"
-                :selected="allVisibleSelected"
-                :indeterminate="someVisibleSelected"
-                :select="onSelectAllVisible"
+              <td
+                v-for="column in tableColumns"
+                :key="column.uid"
+                :class="getCellClasses(column, row, rowIndex)"
+                :style="getStickyStyle(column)"
+                :title="resolveCellTitle(column, row, rowIndex)"
+                @click.stop="column.isSelection ? toggleRowSelection(row, rowIndex) : undefined"
               >
-                <input
-                  type="checkbox"
-                  class="table-selection__checkbox"
-                  :checked="allVisibleSelected"
-                  :indeterminate.prop="someVisibleSelected"
-                  :aria-label="allVisibleSelected ? '取消全选' : '全选当前页'"
-                  @click.prevent="onSelectAllVisible(!allVisibleSelected)"
-                />
-              </slot>
-              <slot
-                v-else-if="!column.isAction"
-                :name="`header-${column.key}`"
-                :column="column.raw"
-              >
-                {{ column.title }}
-              </slot>
-              <template v-else>{{ column.title }}</template>
-            </th>
-          </tr>
-        </thead>
+                <slot
+                  v-if="column.isSelection"
+                  name="cell-selection"
+                  :row="row"
+                  :selected="isRowSelectedByIndex(rowIndex)"
+                >
+                  <input
+                    type="checkbox"
+                    class="table-selection__checkbox"
+                    :checked="isRowSelectedByIndex(rowIndex)"
+                    :aria-label="`选择行 ${resolveRowKey(row, rowIndex)}`"
+                    readonly
+                    tabindex="-1"
+                  />
+                </slot>
 
-        <tbody v-if="hasRows">
-          <tr
-            v-for="(row, rowIndex) in visibleRows"
-            :key="resolveRowKey(row, rowIndex)"
-            :class="getRowClasses(row, rowIndex)"
-            :tabindex="rowClickable ? 0 : undefined"
-            @click="handleRowClick(row, rowIndex, $event)"
-            @keydown.enter.prevent="handleRowClick(row, rowIndex, $event)"
-          >
-            <td
-              v-for="column in tableColumns"
-              :key="column.uid"
-              :class="getCellClasses(column, row, rowIndex)"
-              :style="getStickyStyle(column)"
-              :title="resolveCellTitle(column, row, rowIndex)"
-              @click.stop="column.isSelection ? toggleRowSelection(row, rowIndex) : undefined"
-            >
-              <slot
-                v-if="column.isSelection"
-                name="cell-selection"
-                :row="row"
-                :selected="isRowSelectedByIndex(rowIndex)"
-              >
-                <input
-                  type="checkbox"
-                  class="table-selection__checkbox"
-                  :checked="isRowSelectedByIndex(rowIndex)"
-                  :aria-label="`选择行 ${resolveRowKey(row, rowIndex)}`"
-                  readonly
-                  tabindex="-1"
-                />
-              </slot>
+                <div v-else-if="column.isAction" class="table-actions">
+                  <slot name="actions" :row="row" :index="rowIndex" />
+                </div>
 
-              <div v-else-if="column.isAction" class="table-actions">
-                <slot name="actions" :row="row" :index="rowIndex" />
-              </div>
-
-              <!-- Default & custom cells: single-line ellipsis; full text via title/tooltip -->
-              <div v-else class="table-cell-content">
-                <template v-if="!cellSlotMap[column.key]">
-                  <UTooltip
-                    v-if="column.tooltip"
-                    :content="resolveTooltipContent(column, row, rowIndex)"
-                  >
-                    <span class="table-cell-ellipsis">
+                <div v-else class="table-cell-content">
+                  <template v-if="!cellSlotMap[column.key]">
+                    <UTooltip
+                      v-if="column.tooltip"
+                      :content="resolveTooltipContent(column, row, rowIndex)"
+                    >
+                      <span class="table-cell-ellipsis">
+                        {{ formatCellValue(resolveCellValue(column, row, rowIndex)) }}
+                      </span>
+                    </UTooltip>
+                    <span v-else class="table-cell-ellipsis">
                       {{ formatCellValue(resolveCellValue(column, row, rowIndex)) }}
                     </span>
-                  </UTooltip>
-                  <span v-else class="table-cell-ellipsis">
-                    {{ formatCellValue(resolveCellValue(column, row, rowIndex)) }}
-                  </span>
-                </template>
-                <slot
-                  v-else
-                  :name="`cell-${column.key}`"
-                  :row="row"
-                  :value="resolveCellValue(column, row, rowIndex)"
-                  :column="column.raw"
-                  :index="rowIndex"
-                />
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                  </template>
+                  <slot
+                    v-else
+                    :name="`cell-${column.key}`"
+                    :row="row"
+                    :value="resolveCellValue(column, row, rowIndex)"
+                    :column="column.raw"
+                    :index="rowIndex"
+                  />
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-      <div
-        v-if="!hasRows && !loading"
-        class="table-empty-state empty-state rounded-none border-0"
-        :style="emptyStateStyle"
-      >
-        <slot name="empty">{{ emptyText }}</slot>
+        <div
+          v-if="!hasRows && !loading"
+          class="table-empty-state empty-state rounded-none border-0"
+        >
+          <slot name="empty">{{ emptyText }}</slot>
+        </div>
       </div>
     </div>
 
@@ -441,6 +445,9 @@ function handleRowClick(row, rowIndex, event) {
 }
 
 const showPagination = computed(() => props.pagination);
+const hasQuery = computed(() => Boolean(slots.query));
+/** Query + pagination together: inset the table body for clearer framing. */
+const hasQueryAndPagination = computed(() => hasQuery.value && showPagination.value);
 
 const hasColumnSizing = computed(() =>
   tableColumns.value.some((column) => Boolean(column.width || column.minWidth)),
@@ -451,7 +458,8 @@ const shellClasses = computed(() => ({
   "table-shell--fixed": props.fixed,
   "table-shell--sticky-header": props.stickyHeader,
   "table-shell--with-pagination": showPagination.value,
-  "table-shell--with-query": Boolean(slots.query),
+  "table-shell--with-query": hasQuery.value,
+  "table-shell--with-query-pagination": hasQueryAndPagination.value,
   "table-shell--loading": props.loading,
   "table-shell--selectable": props.selectable,
   [`table-shell--size-${normalizeSize(props.size)}`]: true,
@@ -480,12 +488,6 @@ const tableStyle = computed(() => {
   const style = {};
   const minWidth = resolveTableMinWidth();
   if (minWidth) style.minWidth = minWidth;
-  return style;
-});
-
-const emptyStateStyle = computed(() => {
-  const style = {};
-  if (tableStyle.value?.minWidth) style.minWidth = tableStyle.value.minWidth;
   return style;
 });
 
@@ -722,6 +724,16 @@ function handlePageSizeChange(value) {
 </script>
 
 <style scoped>
+/* Shell fills remaining page height when parent uses .grow / flex. */
+.table-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  position: relative;
+}
+
 .table-query {
   flex: 0 0 auto;
   padding: var(--ued-space-panel-sm, 6px) var(--ued-space-panel, 8px);
@@ -729,13 +741,46 @@ function handlePageSizeChange(value) {
   background: color-mix(in srgb, var(--ued-color-primary) 3%, var(--ued-color-bg-card));
 }
 
+/* Outer body frame: owns padding; does NOT scroll. */
+.table-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ued-table-body-bg, var(--ued-table-row-bg));
+}
+
+.table-body--padded {
+  padding: var(--ued-space-4, 6px) var(--ued-space-5, 8px);
+  box-sizing: border-box;
+}
+
+/* Inner pane: all scrollbars live here (inside the table frame). */
 .table-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   overscroll-behavior: contain;
+  background: var(--ued-table-row-bg, var(--ued-color-bg-card));
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--ued-color-primary) 22%, var(--ued-color-border)) transparent;
+}
+
+.table-body--padded .table-scroll {
+  border: 1px solid var(--ued-table-border, var(--ued-color-border));
+  border-radius: var(--ued-radius-md, 4px);
+}
+
+.table-scroll :deep(.admin-table) {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.table-body--padded .table-scroll :deep(.admin-table thead th) {
+  background: var(--ued-table-header-bg);
 }
 
 .table-scroll::-webkit-scrollbar {
@@ -751,19 +796,21 @@ function handlePageSizeChange(value) {
 }
 
 .table-scroll--empty {
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .table-empty-state {
   display: grid;
-  flex: 1 0 96px;
+  flex: 1 1 auto;
   width: 100%;
-  min-height: 96px;
+  min-height: 120px;
   place-items: center;
+  place-content: center;
   padding: var(--ued-space-8, 12px) var(--ued-space-5, 8px);
-  background: var(--ued-table-row-stripe, var(--ued-color-muted));
+  background: var(--ued-table-body-bg, var(--ued-table-row-bg));
   color: var(--ued-color-text-muted);
   font-size: var(--ued-font-size-sm);
+  box-sizing: border-box;
 }
 
 .table-loading {
@@ -832,7 +879,7 @@ function handlePageSizeChange(value) {
 }
 
 .table-pagination__size > span {
-  width: 24px;
+  width: 35px;
 }
 
 .table-pagination__ued-select :deep(.ued-select__control) {
@@ -921,8 +968,12 @@ function handlePageSizeChange(value) {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  background: var(--ued-table-row-bg, var(--ued-color-bg-card));
+  background: var(--ued-table-body-bg, var(--ued-table-row-bg, var(--ued-color-bg-card)));
   color: var(--ued-color-text-secondary);
+}
+
+:deep(.admin-table tbody) {
+  background: var(--ued-table-body-bg, var(--ued-table-row-bg));
 }
 
 :deep(.admin-table th),
@@ -965,8 +1016,9 @@ function handlePageSizeChange(value) {
   text-align: center;
 }
 
+/* Keep bottom hairline on last row so the table body is visually closed. */
 :deep(.admin-table tbody tr:last-child td) {
-  border-bottom: 0;
+  border-bottom: 1px solid var(--ued-table-border-row, var(--ued-color-divider));
 }
 
 :deep(.admin-table tbody tr:hover td) {

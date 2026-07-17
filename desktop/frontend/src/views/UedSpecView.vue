@@ -1,5 +1,5 @@
 <template>
-  <section class="page-section">
+  <section class="page-section page-section--scroll">
     <div class="page-header">
       <h2 class="page-title">UED 组件规范</h2>
       <p class="page-description">

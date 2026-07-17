@@ -49,21 +49,23 @@ defineProps({
 
 <style scoped>
 .stat-card {
-  @apply relative flex min-h-[52px] items-center gap-2 rounded border bg-white p-2 transition;
-  border-color: var(--ued-color-border);
+  @apply relative flex min-h-[48px] items-center gap-2 rounded border p-2 transition;
+  border-color: color-mix(in srgb, var(--ued-color-primary) 12%, var(--ued-color-border));
   border-radius: var(--ued-radius-lg);
+  background: color-mix(in srgb, var(--ued-color-primary) 2.5%, var(--ued-color-bg-card));
   box-shadow: none;
 }
 .stat-card:hover {
   border-color: color-mix(in srgb, var(--ued-color-primary) 30%, transparent);
+  background: color-mix(in srgb, var(--ued-color-primary) 5%, var(--ued-color-bg-card));
   box-shadow: none;
   transform: none;
 }
 .stat-card__icon {
   @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border;
-  border-color: var(--ued-color-border-light);
+  border-color: color-mix(in srgb, var(--ued-color-primary) 14%, var(--ued-color-border-light));
   border-radius: var(--ued-radius-md);
-  background: var(--ued-color-muted);
+  background: color-mix(in srgb, var(--ued-color-primary) 6%, var(--ued-color-bg-card));
   color: var(--ued-color-text-secondary);
 }
 .stat-card__body {

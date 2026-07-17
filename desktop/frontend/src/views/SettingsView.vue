@@ -1,5 +1,5 @@
 <template>
-  <section class="page-section">
+  <section class="page-section page-section--scroll">
     <Teleport to="#app-topbar-actions">
       <div class="app-topbar-actions__group">
         <UButton

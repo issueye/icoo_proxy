@@ -115,9 +115,11 @@
   --ued-table-header-fg: color-mix(in srgb, var(--ued-color-primary) 42%, var(--ued-color-text-secondary));
   --ued-table-border: color-mix(in srgb, var(--ued-color-primary) 14%, var(--ued-color-border));
   --ued-table-border-row: color-mix(in srgb, var(--ued-color-primary) 8%, var(--ued-color-divider));
-  --ued-table-row-bg: var(--ued-color-bg-card);
-  --ued-table-row-stripe: color-mix(in srgb, var(--ued-color-primary) 4%, var(--ued-color-bg-card));
-  --ued-table-row-hover: color-mix(in srgb, var(--ued-color-primary) 8%, var(--ued-color-bg-card));
+  /* Body rows: soft primary wash so the grid feels themed, not pure white. */
+  --ued-table-body-bg: color-mix(in srgb, var(--ued-color-primary) 3.5%, var(--ued-color-bg-card));
+  --ued-table-row-bg: color-mix(in srgb, var(--ued-color-primary) 2.5%, var(--ued-color-bg-card));
+  --ued-table-row-stripe: color-mix(in srgb, var(--ued-color-primary) 5.5%, var(--ued-color-bg-card));
+  --ued-table-row-hover: color-mix(in srgb, var(--ued-color-primary) 9%, var(--ued-color-bg-card));
   --ued-table-row-selected: var(--ued-color-primary-soft);
   --ued-table-row-selected-hover: color-mix(in srgb, var(--ued-color-primary) 16%, var(--ued-color-bg-card));
   --ued-table-shell-border: color-mix(in srgb, var(--ued-color-primary) 18%, var(--ued-color-border));
@@ -476,7 +478,8 @@ button:disabled {
   }
 
   .app-sidebar__header {
-    @apply flex h-8 shrink-0 items-center gap-1.5 border-b border-slate-200 px-2;
+    height: 2.25rem;
+    @apply flex shrink-0 items-center gap-1.5 border-b border-slate-200 px-2;
   }
 
   .app-sidebar-toggle {
@@ -609,10 +612,20 @@ button:disabled {
   }
 
   .app-content {
-    @apply min-h-0 flex-1 overflow-y-auto bg-[var(--ued-color-bg-page)];
+    @apply min-h-0 flex-1 bg-[var(--ued-color-bg-page)];
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     padding: var(--ued-space-page);
     scrollbar-color: #c4c8cf transparent;
     scrollbar-width: thin;
+  }
+
+  /* Router view root should stretch so page-section can fill height. */
+  .app-content > * {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
   }
 
   .app-content::-webkit-scrollbar,
@@ -712,7 +725,22 @@ button:disabled {
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0;
     gap: var(--ued-space-section, 8px);
+    overflow: hidden;
+  }
+
+  /* Long form / gallery pages scroll the whole section. */
+  .page-section--scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* List pages: let UTable .grow fill remaining height. */
+  .page-section > .grow,
+  .page-section > .table-shell {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .page-header {
@@ -1005,26 +1033,44 @@ button:disabled {
   .table-shell {
     @apply overflow-hidden rounded flex flex-col;
     border: 1px solid var(--ued-table-shell-border, var(--ued-color-border));
-    background: var(--ued-table-row-bg, var(--ued-color-bg-card));
-    /* Consistent outer breathing room so tables align visually with sibling
-       panels regardless of whether they sit inside .section-grid or directly
-       under .page-section. Horizontal inset keeps the grid off the content edge. */
-    margin-block: var(--ued-space-1);
-    margin-inline: var(--ued-space-table-x);
-    max-width: calc(100% - 2 * var(--ued-space-table-x));
+    background: var(--ued-table-body-bg, var(--ued-table-row-bg, var(--ued-color-bg-card)));
     box-sizing: border-box;
     align-self: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
-  .table-scroll {
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scrollbar-color: #cbd5e1 transparent;
-    scrollbar-width: thin;
-    flex: 1;
+  .table-body {
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    background: var(--ued-table-body-bg, var(--ued-table-row-bg));
+  }
+
+  .table-body--padded {
+    padding: var(--ued-space-4, 6px) var(--ued-space-5, 8px);
+    box-sizing: border-box;
+  }
+
+  /* Scroll only inside the framed table pane (not the padded outer frame). */
+  .table-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: var(--ued-table-row-bg, var(--ued-color-bg-card));
+    scrollbar-color: color-mix(in srgb, var(--ued-color-primary) 22%, var(--ued-color-border)) transparent;
+    scrollbar-width: thin;
+  }
+
+  .table-body--padded .table-scroll,
+  .table-shell--with-query-pagination .table-body--padded .table-scroll {
+    border: 1px solid var(--ued-table-border, var(--ued-color-border));
+    border-radius: var(--ued-radius-md, 4px);
   }
 
   .table-scroll::-webkit-scrollbar {
@@ -1054,8 +1100,12 @@ button:disabled {
 
   .admin-table {
     @apply min-w-full border-separate border-spacing-0;
-    background: var(--ued-table-row-bg, var(--ued-color-bg-card));
+    background: var(--ued-table-body-bg, var(--ued-table-row-bg));
     color: var(--ued-color-text-secondary);
+  }
+
+  .admin-table tbody {
+    background: var(--ued-table-body-bg, var(--ued-table-row-bg));
   }
 
   .admin-table-fixed {
@@ -1161,8 +1211,9 @@ button:disabled {
     background: var(--ued-table-row-selected-hover);
   }
 
+  /* Keep a bottom hairline on the last data row so the grid is closed. */
   .admin-table tbody tr:last-child td {
-    border-bottom: 0;
+    border-bottom: 1px solid var(--ued-table-border-row);
   }
 
   .admin-table--sticky-header thead {
@@ -2352,6 +2403,21 @@ button:disabled {
 
 .table-shell {
   border-color: var(--ued-table-shell-border);
+  background: var(--ued-table-body-bg, var(--ued-table-row-bg));
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: 1px solid var(--ued-table-border-row);
+}
+
+/* Sticky header scrolls with the inner table pane only. */
+.admin-table--sticky-header thead,
+.table-scroll .admin-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .table-actions .ued-button {
@@ -3802,7 +3868,13 @@ button:disabled {
 
 /* Stat card grid */
 .stat-grid {
-  @apply grid gap-1.5;
+  @apply grid gap-2;
+  flex: 0 0 auto;
+}
+
+/* Traffic / multi-row stats: slightly tighter row rhythm, no extra page gap. */
+.traffic-stats {
+  gap: var(--ued-space-3, 4px);
 }
 
 .stat-grid--2 {
