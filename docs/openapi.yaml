@@ -28,6 +28,7 @@ tags:
     description: |
       Process-plugin lifecycle, health, model discovery, and UI reverse-proxy over IPC.
       Host reliability: plugins.auto_restart (default true), plugins.auto_restart_fail_threshold (default 3).
+      Per-plugin admin_enabled (default false in TOML; install sets true when package has ui capability) gates list ui-pages, PluginView UI fields, and ANY /plugins/{id}/ui reverse-proxy (403 PLUGIN_UI_DISABLED when off).
       Plugin admin HTTP uses ephemeral handshake admin_token injected by the UI reverse-proxy
       as X-ICOO-Plugin-Admin-Token (never returned from management list/ui-pages APIs).
 security:
@@ -506,6 +507,7 @@ paths:
       summary: List desktop extension pages advertised by running plugins
       description: |
         Pages are embedded via bridge reverse-proxy (`embed_url`).
+        Only plugins with admin_enabled=true and status running/unhealthy are included.
         Plugin admin secrets are injected server-side and never returned here.
       responses:
         "200":
@@ -810,6 +812,7 @@ components:
           type: boolean
         admin_enabled:
           type: boolean
+          description: Host policy to expose plugin admin UI reverse-proxy and ui-pages.
         auto_start:
           type: boolean
     PluginInstallRequest:

@@ -147,6 +147,8 @@ func (m *Manager) Discover() []service.PluginDiscoverCandidate {
 }
 
 // InstallCandidate registers a discovered plugin by id (from Discover results).
+// Plugins that advertise the "ui" capability get admin_enabled=true by default
+// so desktop install surfaces extension pages; headless TOML can set false.
 func (m *Manager) InstallCandidate(ctx context.Context, id string, enabled bool) error {
 	cands := m.Discover()
 	var found *service.PluginDiscoverCandidate
@@ -159,11 +161,22 @@ func (m *Manager) InstallCandidate(ctx context.Context, id string, enabled bool)
 	if found == nil {
 		return fmt.Errorf("pluginhost: candidate %q not found on disk", id)
 	}
+	adminEnabled := hasCapability(found.Capabilities, "ui")
 	return m.Register(ctx, id, service.PluginRegisterInput{
-		ID:         id,
-		Executable: found.Executable,
-		Enabled:    enabled,
-		DataDir:    filepath.Join(m.cfg.DataDir, "plugins", id),
-		AutoStart:  enabled,
+		ID:           id,
+		Executable:   found.Executable,
+		Enabled:      enabled,
+		DataDir:      filepath.Join(m.cfg.DataDir, "plugins", id),
+		AdminEnabled: adminEnabled,
+		AutoStart:    enabled,
 	}, enabled)
+}
+
+func hasCapability(caps []string, want string) bool {
+	for _, c := range caps {
+		if strings.EqualFold(strings.TrimSpace(c), want) {
+			return true
+		}
+	}
+	return false
 }

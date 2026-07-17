@@ -15,6 +15,7 @@ type Server struct {
 	handshakeResult HandshakeResult
 	inlineBodyLimit int
 	onShutdown      func()
+	onStreamCancel  func(streamID string, found bool)
 }
 
 // ServerOptions configures the plugin server.
@@ -24,6 +25,9 @@ type ServerOptions struct {
 	HostToken       string
 	Handshake       HandshakeResult
 	OnShutdown      func()
+	// OnStreamCancel is invoked after stream.cancel is handled (found=true when
+	// an active run was cancelled). Optional observability hook.
+	OnStreamCancel func(streamID string, found bool)
 }
 
 // NewServer wraps an accepted connection as a plugin server.
@@ -34,6 +38,7 @@ func NewServer(raw net.Conn, opts ServerOptions) *Server {
 		handshakeResult: opts.Handshake,
 		inlineBodyLimit: opts.InlineBodyLimit,
 		onShutdown:      opts.OnShutdown,
+		onStreamCancel:  opts.OnStreamCancel,
 	}
 	if s.inlineBodyLimit <= 0 {
 		s.inlineBodyLimit = DefaultInlineBodyLimit
@@ -202,6 +207,7 @@ func (s *Server) RegisterProxyStream(
 ) {
 	// streamID → context.CancelFunc for active runs (and pending AfterWrite).
 	var cancels sync.Map
+	onCancel := s.onStreamCancel
 
 	s.conn.RegisterHandler(MethodStreamCancel, func(ctx context.Context, params json.RawMessage, body []byte) (any, []byte, error) {
 		var p StreamCancelParams
@@ -211,11 +217,15 @@ func (s *Server) RegisterProxyStream(
 		if p.StreamID == "" {
 			return nil, nil, NewRPCError(CodeInvalidParams, "stream_id is required", nil)
 		}
+		found := false
 		if v, ok := cancels.LoadAndDelete(p.StreamID); ok {
+			found = true
 			if cancel, ok := v.(context.CancelFunc); ok && cancel != nil {
 				cancel()
 			}
-			return map[string]string{"status": "ok"}, nil, nil
+		}
+		if onCancel != nil {
+			onCancel(p.StreamID, found)
 		}
 		// Idempotent: unknown / already finished streams are not hard errors.
 		return map[string]string{"status": "ok"}, nil, nil

@@ -65,6 +65,8 @@ Root `go.work` lists `./common`, `./bridge`, `./desktop`, `./plugins/*`.
 - Random 8-hex suffix is **required** every spawn.
 - Windows SDDL default: `D:P(A;;GA;;;OW)` (owner only).
 - Unix: parent dir `0700`, socket `0600`.
+- `stream.cancel` cancels the **post-open** run context only; prepare uses an independent context.
+- Host demux must not block on full stream buffers (drop + count) so cancel RPCs remain servable.
 
 ## Process spawn contract
 

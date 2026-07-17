@@ -11,11 +11,12 @@ import (
 	"github.com/Microsoft/go-winio"
 )
 
-// DefaultWindowsPipeSDDL allows the creating owner, interactive users, admins,
-// and SYSTEM. OW-only descriptors have been observed to reject same-user dials
-// from a parent process (desktop → bridge → plugin) on some Windows builds.
-// Pipes remain local-only (named pipe namespace); not exposed on the network.
-const DefaultWindowsPipeSDDL = "D:P(A;;GA;;;OW)(A;;GA;;;IU)(A;;GA;;;BA)(A;;GA;;;SY)"
+// DefaultWindowsPipeSDDL grants the creating owner full access only.
+// Matches Plugin IPC Contract v1 (owner-only). Host and plugin run as the
+// same local user; the host token remains the second auth factor.
+// Pipes stay in the local named-pipe namespace (not network-exposed).
+// Override via ListenConfig.SecurityDescriptor when a broader ACL is required.
+const DefaultWindowsPipeSDDL = "D:P(A;;GA;;;OW)"
 
 // Listen creates a Windows named pipe listener.
 func Listen(ctx context.Context, cfg ListenConfig) (net.Listener, error) {

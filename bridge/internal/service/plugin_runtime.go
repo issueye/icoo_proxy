@@ -66,6 +66,8 @@ type PluginEnabledInput struct {
 type PluginRuntimeInstance struct {
 	ID               string
 	Enabled          bool
+	// AdminEnabled is host policy for exposing plugin admin UI / reverse proxy.
+	AdminEnabled     bool
 	Executable       string
 	Status           string
 	LastError        string
@@ -95,18 +97,19 @@ type PluginUIPageView struct {
 
 // PluginView is the admin API representation of a process plugin.
 type PluginView struct {
-	ID               string              `json:"id"`
-	Enabled          bool                `json:"enabled"`
-	Executable       string              `json:"executable,omitempty"`
-	Status           string              `json:"status"`
-	LastError        string              `json:"last_error,omitempty"`
-	Endpoint         string              `json:"endpoint,omitempty"`
-	PluginVersion    string              `json:"plugin_version,omitempty"`
-	Capabilities     []string            `json:"capabilities,omitempty"`
-	SupportedIngress []string            `json:"supported_ingress,omitempty"`
-	StartedAt        string              `json:"started_at,omitempty"`
-	AdminBaseURL     string              `json:"admin_base_url,omitempty"`
-	UIPages          []PluginUIPageView  `json:"ui_pages,omitempty"`
+	ID               string             `json:"id"`
+	Enabled          bool               `json:"enabled"`
+	AdminEnabled     bool               `json:"admin_enabled"`
+	Executable       string             `json:"executable,omitempty"`
+	Status           string             `json:"status"`
+	LastError        string             `json:"last_error,omitempty"`
+	Endpoint         string             `json:"endpoint,omitempty"`
+	PluginVersion    string             `json:"plugin_version,omitempty"`
+	Capabilities     []string           `json:"capabilities,omitempty"`
+	SupportedIngress []string           `json:"supported_ingress,omitempty"`
+	StartedAt        string             `json:"started_at,omitempty"`
+	AdminBaseURL     string             `json:"admin_base_url,omitempty"`
+	UIPages          []PluginUIPageView `json:"ui_pages,omitempty"`
 }
 
 // PluginService manages process plugins via PluginRuntime.
@@ -160,6 +163,9 @@ func (s *pluginService) ListUIPages(ctx context.Context) ([]PluginUIPageView, er
 	}
 	var pages []PluginUIPageView
 	for _, item := range s.runtime.List() {
+		if !item.AdminEnabled {
+			continue
+		}
 		if item.Status != "running" && item.Status != "unhealthy" {
 			continue
 		}
@@ -181,20 +187,25 @@ func (s *pluginService) AdminProxyTarget(id string) (string, string, error) {
 		return "", "", errPluginRuntimeUnavailable
 	}
 	for _, item := range s.runtime.List() {
-		if item.ID == id {
-			if item.AdminBaseURL == "" {
-				return "", "", fmt.Errorf("plugin %q has no admin UI", id)
-			}
-			return item.AdminBaseURL, item.AdminToken, nil
+		if item.ID != id {
+			continue
 		}
+		if !item.AdminEnabled {
+			return "", "", errPluginUIDisabled
+		}
+		if item.AdminBaseURL == "" {
+			return "", "", fmt.Errorf("plugin %q has no admin UI", id)
+		}
+		return item.AdminBaseURL, item.AdminToken, nil
 	}
 	return "", "", fmt.Errorf("plugin %q not found", id)
 }
 
 func toPluginView(item PluginRuntimeInstance) PluginView {
-	return PluginView{
+	view := PluginView{
 		ID:               item.ID,
 		Enabled:          item.Enabled,
+		AdminEnabled:     item.AdminEnabled,
 		Executable:       item.Executable,
 		Status:           item.Status,
 		LastError:        item.LastError,
@@ -203,13 +214,17 @@ func toPluginView(item PluginRuntimeInstance) PluginView {
 		Capabilities:     item.Capabilities,
 		SupportedIngress: item.SupportedIngress,
 		StartedAt:        item.StartedAt,
-		AdminBaseURL:     item.AdminBaseURL,
-		UIPages:          toPluginUIPages(item),
 	}
+	// Only expose UI fields when host policy allows admin UI.
+	if item.AdminEnabled {
+		view.AdminBaseURL = item.AdminBaseURL
+		view.UIPages = toPluginUIPages(item)
+	}
+	return view
 }
 
 func toPluginUIPages(item PluginRuntimeInstance) []PluginUIPageView {
-	if len(item.UIPages) == 0 {
+	if !item.AdminEnabled || len(item.UIPages) == 0 {
 		return nil
 	}
 	out := make([]PluginUIPageView, 0, len(item.UIPages))

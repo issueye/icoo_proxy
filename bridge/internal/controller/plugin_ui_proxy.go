@@ -1,12 +1,14 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/issueye/icoo_proxy/bridge/internal/service"
 	"github.com/issueye/icoo_proxy/common/pluginipc"
 )
 
@@ -17,6 +19,12 @@ func (c *PluginController) ProxyUI(ctx *gin.Context) {
 	id := pathID(ctx)
 	base, adminToken, err := c.service.AdminProxyTarget(id)
 	if err != nil {
+		if errors.Is(err, service.ErrPluginUIDisabled) {
+			ctx.JSON(http.StatusForbidden, gin.H{
+				"error": gin.H{"code": "PLUGIN_UI_DISABLED", "message": err.Error()},
+			})
+			return
+		}
 		ctx.JSON(http.StatusBadGateway, gin.H{
 			"error": gin.H{"code": "PLUGIN_UI_UNAVAILABLE", "message": err.Error()},
 		})

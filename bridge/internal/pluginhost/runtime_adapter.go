@@ -16,12 +16,13 @@ func (m *Manager) List() []service.PluginRuntimeInstance {
 	out := make([]service.PluginRuntimeInstance, 0, len(items))
 	for _, inst := range items {
 		view := service.PluginRuntimeInstance{
-			ID:         inst.ID,
-			Enabled:    inst.Entry.Enabled,
-			Executable: inst.Entry.Executable,
-			Status:     inst.Status,
-			LastError:  inst.LastError,
-			Endpoint:   inst.Endpoint,
+			ID:           inst.ID,
+			Enabled:      inst.Entry.Enabled,
+			AdminEnabled: inst.Entry.AdminEnabled,
+			Executable:   inst.Entry.Executable,
+			Status:       inst.Status,
+			LastError:    inst.LastError,
+			Endpoint:     inst.Endpoint,
 		}
 		if !inst.StartedAt.IsZero() {
 			view.StartedAt = inst.StartedAt.Format(time.RFC3339)
@@ -30,10 +31,13 @@ func (m *Manager) List() []service.PluginRuntimeInstance {
 			view.PluginVersion = inst.Handshake.PluginVersion
 			view.Capabilities = append([]string(nil), inst.Handshake.Capabilities...)
 			view.SupportedIngress = append([]string(nil), inst.Handshake.SupportedIngress...)
-			view.AdminBaseURL = inst.Handshake.AdminBaseURL
-			view.AdminToken = inst.Handshake.AdminToken
-			if len(inst.Handshake.UIPages) > 0 {
-				view.UIPages = append([]pluginipc.UIPage(nil), inst.Handshake.UIPages...)
+			// Host policy: only expose admin UI when admin_enabled is true.
+			if inst.Entry.AdminEnabled {
+				view.AdminBaseURL = inst.Handshake.AdminBaseURL
+				view.AdminToken = inst.Handshake.AdminToken
+				if len(inst.Handshake.UIPages) > 0 {
+					view.UIPages = append([]pluginipc.UIPage(nil), inst.Handshake.UIPages...)
+				}
 			}
 		}
 		out = append(out, view)

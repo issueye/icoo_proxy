@@ -448,7 +448,9 @@ if !stream.OK() {
 // 客户端断开时取消上游
 go func() {
     <-ctx.Done()
-    _ = stream.Cancel(context.WithoutCancel(ctx))
+    cctx, ccancel := context.WithTimeout(context.Background(), 2*time.Second)
+    if err := stream.Cancel(cctx); err != nil { /* log */ }
+    ccancel()
 }()
 
 // 仅在 OK 后写 SSE 头与 body
@@ -460,7 +462,9 @@ for {
     switch ev.Kind {
     case "chunk":
         if _, err := w.Write(ev.Chunk.Data); err != nil {
-            _ = stream.Cancel(context.WithoutCancel(ctx))
+            cctx, ccancel := context.WithTimeout(context.Background(), 2*time.Second)
+    if err := stream.Cancel(cctx); err != nil { /* log */ }
+    ccancel()
             return
         }
     case "end":
@@ -522,6 +526,16 @@ Plugin run 见 ctx.Done() → 停上游读，return
 open 前失败（`errResp` 非 2xx）不会注册 run，无需 Cancel。已 `end` / 连接断开后的 Cancel 应为幂等 no-op。
 
 ---
+
+
+### 4.1 可观测性与背压
+
+| 项 | 行为 |
+|----|------|
+| Host 取消 | `plugin_proxy` 在 client disconnect / 下游写失败时调用 `stream.Cancel`，记录成功/失败日志，RPC 超时 2s |
+| 插件 hook | `ServerOptions.OnStreamCancel(streamID, found)` 可选回调 |
+| 事件缓冲 | host 侧 stream channel 容量 64；**满时非阻塞丢弃**并 `Conn.StreamDrops()` 计数，避免堵死 demux |
+| 语义边界 | `stream.cancel` **只**取消 open 成功后的 run ctx；prepare 阶段仍用 Background |
 
 ## 5. 可靠性（SDK + Host 边界）
 
@@ -708,3 +722,8 @@ MapCallError(err) (status int, message string)
 - [Plugin extension pages](./design/2026-07-16-plugin-extension-pages.md)  
 - 示例插件：[`plugins/mock`](../plugins/mock)、[`plugins/grokbuild`](../plugins/grokbuild)  
 - OpenAPI：`docs/openapi.yaml`（管理面 REST，非 IPC）
+
+
+## Host policy: admin_enabled
+
+Per-plugin `admin_enabled` gates UI reverse-proxy and ui-pages (403 `PLUGIN_UI_DISABLED` when off). Install defaults true when package advertises `ui`. Windows pipe SDDL default is owner-only `D:P(A;;GA;;;OW)`.

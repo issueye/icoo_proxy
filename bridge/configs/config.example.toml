@@ -44,3 +44,6 @@ auto_restart_fail_threshold = 3
 # executable = "plugins/grokbuild/plugin-grokbuild.exe"
 # data_dir = ".data/plugins/grokbuild"
 # admin_enabled = false
+# When true, host exposes plugin admin UI via reverse-proxy and ui-pages.
+# Discover/install defaults admin_enabled=true if the package advertises "ui".
+# Headless operators should leave this false.

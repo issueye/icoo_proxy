@@ -144,7 +144,7 @@ func (s *proxyService) handlePluginStream(
 	ctx := r.Context()
 	go func() {
 		<-ctx.Done()
-		_ = stream.Cancel(context.WithoutCancel(ctx))
+		s.cancelPluginStream(stream, requestID, pluginID, "client_disconnect")
 	}()
 
 	hdr := http.Header{}
@@ -185,7 +185,7 @@ func (s *proxyService) handlePluginStream(
 			}
 			if _, err := writer.Write(ev.Chunk.Data); err != nil {
 				// Downstream gone — cancel plugin stream so upstream work stops.
-				_ = stream.Cancel(context.WithoutCancel(ctx))
+				s.cancelPluginStream(stream, requestID, pluginID, "downstream_write_failed")
 				errorStatus, message := proxyOperationErrorStatus(ctx, err, http.StatusBadGateway, "write downstream response failed")
 				s.recordPluginTraffic(r, requestID, downstream, route, pluginID, errorStatus, start, message, usage, requestedModel, body)
 				return
@@ -208,6 +208,34 @@ func (s *proxyService) handlePluginStream(
 			return
 		}
 	}
+}
+
+// cancelPluginStream best-effort cancels an open plugin stream and logs failures.
+// Uses a short timeout so cancel RPC cannot hang forever after client disconnect.
+func (s *proxyService) cancelPluginStream(stream *pluginipc.Stream, requestID, pluginID, reason string) {
+	if stream == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err := stream.Cancel(ctx)
+	if s.logger == nil {
+		return
+	}
+	if err != nil {
+		s.logger.Warn("plugin stream cancel failed",
+			"request_id", requestID,
+			"plugin_id", pluginID,
+			"reason", reason,
+			"error", err,
+		)
+		return
+	}
+	s.logger.Info("plugin stream cancel sent",
+		"request_id", requestID,
+		"plugin_id", pluginID,
+		"reason", reason,
+	)
 }
 
 func (s *proxyService) recordPluginTraffic(

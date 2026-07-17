@@ -35,6 +35,10 @@ type Conn struct {
 	done     chan struct{}
 	readErr  atomic.Value // error
 
+	// streamDrops counts stream events dropped due to full buffers so cancel
+	// demux is never blocked by a slow consumer (observability counter).
+	streamDrops atomic.Uint64
+
 	nextID atomic.Uint64
 }
 
@@ -95,6 +99,10 @@ func (c *Conn) Close() error {
 
 // Done returns a channel closed when the connection is closed.
 func (c *Conn) Done() <-chan struct{} { return c.done }
+
+// StreamDrops returns how many stream events were dropped because the receive
+// buffer was full (non-blocking demux). Useful for tests and diagnostics.
+func (c *Conn) StreamDrops() uint64 { return c.streamDrops.Load() }
 
 // MaxFrameBytes returns the frame size limit.
 func (c *Conn) MaxFrameBytes() int { return c.maxFrameBytes }
@@ -335,8 +343,14 @@ func (c *Conn) routeStreamNotify(msg *Message) {
 	ch, ok := c.streams[sid.StreamID]
 	if !ok {
 		// Buffer until registerStream (open-result processing on host).
+		// Cap and drop oldest so demux never blocks forever.
 		buf := c.orphanStreams[sid.StreamID]
-		if len(buf) < 64 {
+		if len(buf) >= 64 {
+			copy(buf, buf[1:])
+			buf[len(buf)-1] = ev
+			c.orphanStreams[sid.StreamID] = buf
+			c.streamDrops.Add(1)
+		} else {
 			c.orphanStreams[sid.StreamID] = append(buf, ev)
 		}
 		c.streamMu.Unlock()
@@ -344,9 +358,13 @@ func (c *Conn) routeStreamNotify(msg *Message) {
 	}
 	c.streamMu.Unlock()
 
+	// Non-blocking send: a full consumer buffer must not stall readLoop,
+	// otherwise stream.cancel and other RPCs cannot be demuxed.
 	select {
 	case ch <- ev:
 	case <-c.done:
+	default:
+		c.streamDrops.Add(1)
 	}
 }
 
