@@ -2,9 +2,14 @@
 
 Local-first LLM API bridge and desktop console.
 
-`icoo_proxy` exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages compatible endpoints, then routes each request to configured upstream providers. The backend service lives in `bridge` (`icoo/bridge`), the desktop app in `desktop` (`icoo/desktop`), and shared libraries in `common` (`icoo/common`). The monorepo uses a Go workspace (`go.work`).
+`icoo_proxy` exposes OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages compatible endpoints, then routes each request to configured upstream providers or process plugins. The backend lives in `bridge` (`github.com/issueye/icoo_proxy/bridge`), the desktop app in `desktop` (`github.com/issueye/icoo_proxy/desktop`), shared libraries in `common` (`github.com/issueye/icoo_proxy/common`), and optional process plugins under `plugins/*`. The monorepo uses a Go workspace (`go.work`, Go 1.23).
 
-Chinese documentation: [README.cn.md](README.cn.md) · Workspace guide: [docs/workspace.md](docs/workspace.md)
+- Chinese documentation: [README.cn.md](README.cn.md)
+- Documentation index: [docs/README.md](docs/README.md)
+- Workspace guide: [docs/workspace.md](docs/workspace.md)
+- Management OpenAPI: [docs/openapi.yaml](docs/openapi.yaml)
+- Plugin IPC contract / SDK: [docs/plugin-ipc-contract.md](docs/plugin-ipc-contract.md) · [docs/plugin-ipc-sdk.md](docs/plugin-ipc-sdk.md)
+- Version: root [`VERSION`](VERSION) (currently **2.0.1**) · License: [Apache-2.0](LICENSE)
 
 ## Features
 
@@ -12,68 +17,54 @@ Chinese documentation: [README.cn.md](README.cn.md) · Workspace guide: [docs/wo
   - `POST /v1/chat/completions`
   - `POST /v1/responses`
   - `POST /v1/messages`
-- Provider, model, endpoint, routing-rule, API-key, and traffic management APIs.
+  - `GET /v1/models`
+- Provider, model, endpoint, routing-rule, API-key, traffic, and process-plugin management APIs.
 - Protocol conversion across OpenAI Chat, OpenAI Responses, and Anthropic Messages.
 - Streaming SSE support, including same-protocol low-latency pass-through.
-- Desktop management console built with Wails and Vue.
-- SQLite storage with separate main and traffic databases.
-- Provider health checks from the desktop console.
-- Runtime database diagnostics for gray replacement safety.
-- Desktop pages for gateway overview, provider health, routing rules, custom endpoints, local API keys, traffic inspection, and runtime settings.
+- Process plugins over Named Pipe (Windows) / UDS (Unix) JSON-RPC (`common/pluginipc`).
+- Desktop management console built with Wails v2 and Vue 3 (does **not** link `bridge`/`common`).
+- Dual SQLite storage: main DB + traffic DB (WAL).
+- Provider health checks, runtime database diagnostics, and plugin extension pages (iframe via bridge reverse-proxy).
 
 ## Repository Layout
 
 ```text
 .
-├── go.work               # Go workspace root
-├── common/              # Shared module icoo/common (pluginipc, …)
-├── bridge/              # Backend module icoo/bridge
-├── desktop/             # Wails + Vue module icoo/desktop
-├── plugins/             # Process plugins (e.g. mock)
-├── icoo_proxy/          # Packaged executable output directory
-└── build-all.ps1        # All-in-one build script
+├── go.work                 # Go workspace root
+├── VERSION / CHANGELOG.md  # Single release version source
+├── common/                 # Shared module (ai_llm_proxy, pluginipc, …)
+├── bridge/                 # Gateway host (Gin + GORM/SQLite)
+├── desktop/                # Wails + Vue console
+├── plugins/                # Process plugins (mock, grokbuild, …)
+├── docs/                   # Index, OpenAPI, IPC contracts, design/plans
+├── icoo_proxy/             # Packaged executable output (not a source module)
+├── scripts/                # OpenAPI + package smoke tests
+└── build-all.ps1           # One-shot package script
 ```
 
 ## Requirements
 
-- Windows PowerShell
-- Go toolchain
+- Windows PowerShell (primary packaging path)
+- Go 1.23+
 - Node.js and npm
-- Wails CLI, for desktop builds
-
-Install Wails if needed:
+- Wails CLI for desktop builds
 
 ```powershell
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ```
 
-## Build The Bridge
+## Quick Start
 
 ```powershell
-cd bridge
-.\build.ps1
+# Build everything into .\icoo_proxy\
+.\build-all.ps1
+
+# Or build pieces separately
+cd bridge;  .\build.ps1
+cd desktop; .\build.ps1 -BridgePath ..\bridge\build\bridge.exe
 ```
 
-The output is:
-
-```text
-bridge\build\bridge.exe
-```
-
-Skip tests when you only need a fast build:
-
-```powershell
-.\build.ps1 -SkipTests
-```
-
-## Run The Bridge
-
-```powershell
-cd bridge
-.\build\bridge.exe
-```
-
-Health checks:
+Default bridge listen address: `127.0.0.1:18181`.
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:18181/healthz
@@ -83,23 +74,40 @@ Invoke-RestMethod http://127.0.0.1:18181/api/v1/runtime/state
 
 By default, local loopback requests can use admin APIs without an API key. Configure API keys before exposing the bridge outside localhost.
 
-## Build The Desktop App
+## Build The Bridge
 
-Build the desktop app and bundle the bridge:
+```powershell
+cd bridge
+.\build.ps1
+# .\build.ps1 -SkipTests
+```
+
+Output: `bridge\build\bridge.exe`
+
+Run:
+
+```powershell
+cd bridge
+.\build\bridge.exe
+```
+
+Config sample: [`bridge/configs/config.example.toml`](bridge/configs/config.example.toml).
+
+## Build The Desktop App
 
 ```powershell
 cd desktop
 .\build.ps1 -BridgePath ..\bridge\build\bridge.exe
 ```
 
-The output is:
+Output:
 
 ```text
 desktop\build\bin\icoo_desktop.exe
 desktop\build\bin\bridge.exe
 ```
 
-For frontend-only development:
+Frontend-only development:
 
 ```powershell
 cd desktop\frontend
@@ -107,78 +115,101 @@ npm install
 npm run dev
 ```
 
+Desktop does not import `bridge` or `common`. It spawns `bridge.exe` as a child process and talks HTTP to the management API. See [desktop/README.md](desktop/README.md).
+
 ## Desktop Console
 
-The desktop console is the recommended way to operate a local `icoo_proxy` instance. It can launch or restart the bundled bridge, show the current connection state, and manage the gateway without editing SQLite data by hand.
+The desktop console is the recommended way to operate a local `icoo_proxy` instance. It can launch or restart the bundled bridge, show connection state, manage providers/routes/keys/traffic/settings, discover process plugins, and embed plugin extension pages.
 
 ![Gateway overview](images/index.png)
-
-The overview page shows the listener address, access mode, provider count, enabled routing policies, upstream readiness, and the supported ingress paths. The screenshots in this section use `127.0.0.1:18181` in local trusted mode.
 
 ### Provider Management
 
 ![Provider management](images/provider.png)
 
-Use `Provider` to search and filter upstream providers, create new provider entries, edit credentials and base URLs, check provider health, inspect enabled models, and delete entries. Provider rows show the protocol, base URL, enabled state, and operational tags such as `only_stream`.
+Create upstream providers with protocol (`openai-responses`, `openai-chat`, `anthropic`, or plugin-backed vendors), base URL, credentials, and enabled models. Health check sends a minimal real upstream request using the first enabled model (consumes a small quota).
 
 ### Routing Rules
 
 ![Routing rules](images/rules.png)
 
-Use `规则设置` to map each downstream protocol to an upstream provider and protocol. The console currently lists Anthropic Messages, OpenAI Chat, and OpenAI Responses as downstream protocols, and shows whether each mapping is enabled, pending selection, or unconfigured.
+Map each downstream protocol to an upstream provider and protocol. Resolution order:
+
+1. Direct provider/model routing, for example `provider-name/model-name`.
+2. Enabled routing rules ordered by priority.
 
 ### Ingress Endpoints
 
 ![Ingress endpoints](images/endpoint.png)
 
-Use `端点` to view or add ingress paths. The default enabled endpoints include:
+Default enabled paths include:
 
-- `/v1/chat/completions` for OpenAI Chat compatible clients.
-- `/v1/messages` for Anthropic Messages compatible clients.
-- `/v1/responses` and `/responses` for OpenAI Responses compatible clients.
+- `/v1/chat/completions` — OpenAI Chat compatible clients
+- `/v1/messages` — Anthropic Messages compatible clients
+- `/v1/responses` and `/responses` — OpenAI Responses compatible clients
 
 ### API Keys
 
 ![API keys](images/keys.png)
 
-Use `授权 Key` to create local client keys when you need authenticated access. Clients can authenticate with either `Bearer` tokens or the `x-api-key` header. When no key is configured and the bridge is bound to localhost, local trusted mode can still allow local admin usage.
+Clients authenticate with `Authorization: Bearer …` or `x-api-key`. Local trusted mode may allow unauthenticated admin access when bound to loopback and no keys are required by policy.
 
 ### Traffic Monitor
 
 ![Traffic monitor](images/traffic.png)
 
-Use `流量监控` to inspect recent proxy requests, success and error counts, average latency, token totals, endpoints, downstream/upstream protocols, hit routing rules, status codes, and per-request timing. The page supports protocol filtering, manual refresh, auto refresh, and clearing recorded requests.
+Inspect recent proxy requests, success/error counts, latency, tokens, protocols, hit rules, status codes (including client cancel `499`), and timings.
 
 ### Runtime Settings
 
 ![Runtime settings](images/settings.png)
 
-Use `项目设置` to adjust console appearance, button density, and bridge runtime settings such as host, port, read/write timeouts, shutdown timeout, default max tokens, and chain-log parameters. Save settings and restart the bridge from the top-right action to apply runtime changes.
+Adjust console appearance and bridge runtime parameters (host, port, timeouts, default max tokens, chain-log options). Save and restart the owned bridge process to apply runtime changes.
 
-## Configure Providers
+## Process Plugins
 
-In the desktop app, open `Provider` and create a provider with:
+Plugins are **separate processes**, not shared libraries:
 
-- Name
-- Protocol: `openai-responses`, `openai-chat`, or `anthropic`
-- Base URL
-- API key
-- Enabled models
+- Discovery package: `plugins/<id>/info.toml` + executable (next to `bridge.exe` or cwd).
+- Transport: Windows Named Pipe / Unix UDS; framing: length-prefix JSON-RPC 2.0 (+ optional raw body frames).
+- Host owns lifecycle (spawn, heartbeat, auto-restart, Job Object / PGID kill-on-close).
+- Plugins import `common` only; **must not** import `bridge/internal/...`.
 
-The provider health button sends a minimal real upstream request using the first enabled model. This validates connectivity and credentials, but it also consumes a small model request.
+| Plugin | Role |
+|--------|------|
+| [`plugins/mock`](plugins/mock/README.md) | Minimal SDK sample for integration tests |
+| [`plugins/grokbuild`](plugins/grokbuild/README.md) | Optional Grok Build / SuperGrok adapter (default off; see disclaimer) |
 
-## Routing
+Bridge config sketch:
 
-The bridge resolves routes in this order:
+```toml
+[plugins.entries.grokbuild]
+enabled = true
+executable = "plugins/grokbuild/plugin-grokbuild.exe"
+data_dir = ".data/plugins/grokbuild"
+```
 
-1. Direct provider/model routing, for example `provider-name/model-name`.
-2. Enabled routing rules ordered by priority.
+Full contract: [docs/plugin-ipc-contract.md](docs/plugin-ipc-contract.md).
 
-Default protocol routing can be edited in the desktop `规则设置` page. Model-specific aliases can be configured in `模型路由`.
+## Protocol Conversion Matrix
+
+Authoritative implementation: [`common/ai_llm_proxy`](common/ai_llm_proxy/README.md). Unsupported request directions return stable `not implemented` errors.
+
+### Request (downstream → upstream)
+
+| Downstream \\ Upstream | Anthropic | OpenAI Chat | OpenAI Responses |
+| --- | --- | --- | --- |
+| Anthropic | pass-through | **not implemented** | supported |
+| OpenAI Chat | supported | pass-through | supported |
+| OpenAI Responses | supported | **not implemented** | pass-through |
+
+### Non-stream response & SSE (upstream → downstream)
+
+All 3×3 directions are supported. Same-protocol SSE is low-latency pass-through; some cross-protocol tool-call streams buffer for semantic completeness.
 
 ## Main APIs
 
-Proxy APIs:
+Proxy:
 
 ```text
 POST /v1/messages
@@ -187,86 +218,79 @@ POST /v1/responses
 GET  /v1/models
 ```
 
-Admin APIs:
+Admin (see OpenAPI for full surface, including plugins):
 
 ```text
 GET  /api/v1/runtime/state
 GET  /api/v1/providers
 POST /api/v1/providers
 POST /api/v1/providers/:id/check
-GET  /api/v1/providers/:id/models
 GET  /api/v1/ingress-endpoints
 GET  /api/v1/routing-rules
 GET  /api/v1/api-keys
 GET  /api/v1/traffic
+GET  /api/v1/plugins
+GET  /api/v1/plugins/ui-pages
 ```
 
-## Verification
+## Storage
 
-Run backend tests:
+| File | Purpose |
+|------|---------|
+| `.data/icoo_llm_bridge.db` | Providers, routes, keys, UI prefs, … |
+| `.data/icoo_llm_bridge_traffic.db` | Traffic records (separate DB, WAL) |
+| `.data/bridge-chain.log` | Optional chain log |
+| `.data/plugins/<id>/` | Plugin runtime state / credentials |
+
+## Verification
 
 ```powershell
 # from repo root (go.work)
 go test ./common/...
 go test ./bridge/...
-```
+go test ./desktop
+go test ./plugins/mock/...
+go test ./plugins/grokbuild/...
 
-Run desktop tests and frontend quality checks:
-
-```powershell
-cd desktop
-go test .
-
-cd frontend
+cd desktop\frontend
 npm ci
 npm run lint
 npm run format:check
 npm test
 npm run build
-```
 
-Validate the OpenAPI contract and packaged artifacts:
-
-```powershell
+# contracts + package
 .\scripts\Test-OpenAPI.ps1
 .\build-all.ps1
 .\scripts\Test-Package.ps1 -PackageDir .\icoo_proxy
 ```
 
-The management API contract is at [`docs/openapi.yaml`](docs/openapi.yaml), release history is tracked in [`CHANGELOG.md`](CHANGELOG.md), and both binaries read their release version from the root [`VERSION`](VERSION) file.
+## Operational Notes
 
-## Current Status
-
-The bridge supports:
-
-- OpenAI Responses to OpenAI Responses
-- OpenAI Chat to OpenAI Responses
-- OpenAI Chat to Anthropic
-- OpenAI Responses to Anthropic
-- Anthropic to OpenAI Responses
-- Anthropic to Anthropic
-- Multi-turn messages
-- Tool calls
-- Streaming responses
-- Traffic recording and desktop-side inspection
-
-Known operational notes:
-
-- Some providers may return `429 Too Many Requests` under concurrent load. Use provider-level concurrency limits, retry, or backoff in production.
-- Some cross-protocol streaming paths still buffer during conversion, while same-protocol SSE pass-through is low latency.
+- Some providers return `429` under concurrent load; use concurrency limits, retry, or backoff.
+- Cross-protocol streaming may buffer (especially tool-call reordering for Anthropic blocks).
+- Loopback-first deployment is the supported model; do not expose unauthenticated admin APIs.
+- Process plugins receive allowlisted headers only; host tokens stay out of plugin admin list APIs.
 
 ## Packaging
 
-The preferred manual package layout is:
+Preferred layout after `.\build-all.ps1`:
 
 ```text
 icoo_proxy\
 ├── icoo_desktop.exe
-└── bridge.exe
+├── bridge.exe
+└── plugins\
+    ├── mock\
+    │   ├── info.toml
+    │   └── mockplugin.exe
+    └── grokbuild\
+        ├── info.toml
+        └── plugin-grokbuild.exe
 ```
 
-Start `icoo_desktop.exe`; the desktop app can launch the bundled `bridge.exe` when it is placed in the same directory.
+Start `icoo_desktop.exe`; it can launch the bundled `bridge.exe` from the same directory.
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE).
